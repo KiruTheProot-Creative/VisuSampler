@@ -72,5 +72,8 @@ A **Pedalboard** module: a chain shown as stomp boxes, each with a footswitch (b
 ## Modulators
 LFO (more shapes, sync, retrigger per note, step mode = step sequencer), Envelope (ADSR per note), Random / Sample and hold, MIDI sources (velocity, mod wheel, aftertouch, pitch bend, key position, expression CC 11), Macro, Follower, Math (scale, invert, add, multiply).
 
+## Status
+In VisuMaker (Web Audio): all routing, time, modulation, tone, dynamics, retro and pedal modules above are playable except Varispeed, Tape Keys, Gate, De-esser, Octaver, Pitch Whammy, Reverse Delay and Freeze/Looper (later). Not yet in the C++ plugin.
+
 ## First release (about 15)
 Delay, Reverb, Convolution, Chorus, Phaser, Multi-mode filter, Parametric EQ, Distortion, Compressor, Limiter, Vintage Sampler, Tape Echo, BBD Chorus, Pedalboard (with Overdrive, Fuzz, Wah), Splitter/Mixer, plus LFO, Envelope, MIDI sources and Macro.

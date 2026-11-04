@@ -76,8 +76,11 @@ const FXT0=performance.now();
 const fxClock=()=>(performance.now()-FXT0)/1000;
 function modOut(g,n,t){
   const v=n.p;
-  if(n.type==='lfo') return .5+.5*Math.sin(2*Math.PI*v.rate*t)*(v.depth/100);
-  if(n.type==='env') return clamp(.5+.5*Math.sin(t*1.7)*Math.sin(t*.53)*(v.gain/100)*1.4,0,1);
+  if(n.type==='lfo') return lfoOut(g,n,t);
+  if(n.type==='env') return FXA.follow[n.id]!=null?clamp(FXA.follow[n.id]*(v.gain/100)*3,0,1):0;
+  if(n.type==='adsr') return .5+.5*adsrOut(v,t)*(v.depth/100);
+  if(n.type==='midisrc') return midiSrcOut(v.src);
+  if(n.type==='rand') return randOut(n,t);
   if(n.type==='macro'){const tg=n.tag.value&&tagById(n.tag.value);return tg?tg.value:v.value/100;}
   return 0;
 }
@@ -104,7 +107,10 @@ function fmtPar(q,v){
 }
 /* ---- analysis ---- */
 function nodeTailMs(g,n,t){
-  if(n.type==='reverb') return parReal(g,n,FXT.reverb.params[1],t).v*1000;
+  const dk=FXT[n.type].params.find(q=>q.k==='decay');if(dk&&n.type!=='reverb')return parReal(g,n,dk,t).v*1000;
+  if(n.type==='gatedverb')return n.p.gate;
+  if(n.type==='tapeecho'){const ms=n.p.time,fb=Math.min(.95,n.p.fb/100);return fb<=0?ms:Math.min(30000,ms*Math.ceil(Math.log(.001)/Math.log(fb)));}
+  if(n.type==='reverb') return n.p.decay*1000;
   if(n.type==='delay'){
     const ms=parReal(g,n,FXT.delay.params[0],t).v,fb=Math.min(.95,n.p.fb/100);
     return fb<=0?ms:Math.min(30000,ms*Math.ceil(Math.log(.001)/Math.log(fb)));
@@ -125,7 +131,7 @@ function fxAnalyze(g){
       const to=c.to.n;
       if(col[to]===1){
         back.add(c.id);
-        const cyc=stack.slice(stack.indexOf(to)),ok=cyc.some(x=>nodeById(g,x).type==='delay');
+        const cyc=stack.slice(stack.indexOf(to)),ok=cyc.some(x=>FXT[nodeById(g,x).type].fbOk);
         an.cycles.push({ids:cyc,ok});
       }else if(!col[to]) dfs(to);
     });

@@ -64,7 +64,7 @@ function startVoice(z,note,vel,fromRelease){
     g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(amp,now+att);
     if(pan) pan.pan.value=clamp((z.pan+cfg.pan)/100+u.pan,-1,1);
     if(u.drift>0&&src.detune){let t=now;for(let k=0;k<14;k++){t+=.6;src.detune.linearRampToValueAtTime((Math.random()*2-1)*u.drift,t);}}
-    src.connect(g); if(pan){g.connect(pan);pan.connect(sampBus());}else g.connect(sampBus());
+    const dest=z.group==='__preview'?sampBus():fxGroupIn(z.group);src.connect(g); if(pan){g.connect(pan);pan.connect(dest);}else g.connect(dest);
     src.start();
     const v={src,g,z,note,amp,t:now,dead:false,group:z.group};
     src.onended=()=>{v.dead=true;SV.list=SV.list.filter(x=>x!==v);updVoices();};
@@ -102,8 +102,8 @@ function updVoices(){const e=$('#mapVoices');if(e)e.textContent=SV.list.filter(v
 /* dispatchers: the sampler plays when zones exist, otherwise the little synth does */
 const hasSampler=()=>S.zones.length>0&&S.zones.some(z=>BUF.has(z.sample));
 function noteOn(m,vel){
-  if(!ensureAudio()) return; vel=vel||100;
+  if(!ensureAudio()) return; vel=vel||100; fxNoteOn(m,vel);
   if(hasSampler()&&sampNoteOn(m,vel)) return;
   if(!hasSampler()) synthOn(m);
 }
-function noteOff(m){sampNoteOff(m);synthOff(m);}
+function noteOff(m){fxNoteOff();sampNoteOff(m);synthOff(m);}

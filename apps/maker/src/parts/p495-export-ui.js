@@ -55,7 +55,7 @@ function exChecks(){
   const o=S.lib.export,L=S.lib,out=[];
   if(!L.name.trim()||L.name==='Untitled Library')out.push(['warn','Give the library a name.']);
   if(!S.zones.length)out.push(['bad','Nothing is mapped yet. The library would have no sound.']);
-  const un=S.samples.filter(s=>!S.zones.some(z=>z.sample===s.id)).length;
+  const keep=fxKeep(),un=S.samples.filter(s=>!S.zones.some(z=>z.sample===s.id)&&keep.indexOf(s.id)<0).length;
   if(un)out.push(['warn',un+' sample'+(un>1?'s are':' is')+' not mapped. '+(o.includeUnused?'They will be included.':'They are left out of the file.')]);
   if(!L.banner.logoImg&&L.banner.bgMode!=='image')out.push(['warn','No logo or background image yet. The banner will show only the name.']);
   Object.keys(S.fonts).forEach(f=>{const x=S.fonts[f];if(x.lic==='restricted')out.push(['warn','Font "'+f+'" forbids embedding. It is left out.']);});

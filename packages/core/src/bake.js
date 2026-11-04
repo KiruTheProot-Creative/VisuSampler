@@ -41,7 +41,7 @@ export function chooseStep(ctx,project,o){
 /** Predict the size before building. Sizes are before compression. */
 export function estimate(ctx,project,o,stepOverride){
   const step=stepOverride||chooseStep(ctx,project,o),bps=bytesPer(o.bits),res={before:0,after:0,perGroup:{},zonesBaked:0,chunks:0,skipped:[],step,over:false};
-  const used=new Set(project.zones.map(z=>z.sample)),raw=s=>s.frames*s.chn*bps,firstGroup=id=>{const z=project.zones.find(x=>x.sample===id);return z?z.group:'(unused)';};
+  const used=new Set(project.zones.map(z=>z.sample).concat(project.keep||[])),raw=s=>s.frames*s.chn*bps,firstGroup=id=>{const z=project.zones.find(x=>x.sample===id);return z?z.group:'(unused)';};
   const add=(g,n)=>{res.perGroup[g]=(res.perGroup[g]||0)+n;res.after+=n;};
   project.samples.forEach(s=>{if(o.includeUnused||used.has(s.id))res.before+=raw(s);});
   if(!o.bake){project.samples.forEach(s=>{if(o.includeUnused||used.has(s.id))add(firstGroup(s.id),raw(s));});return res;}
@@ -73,11 +73,12 @@ const yieldNow=()=>new Promise(r=>setTimeout(r,0));
 const clone=x=>JSON.parse(JSON.stringify(x));
 /**
  * Produce the final samples and zones for the file. The project is never changed.
+ * project.keep: extra sample ids to pack even though no zone uses them (for example convolution impulses).
  * Returns {samples:[{meta,ch}], zones, stats}.  `progress(text)` is optional.
  */
 export async function buildExportSet(ctx,project,o,progress){
   const step=chooseStep(ctx,project,o),zones=[],samples=new Map(),stats={chunks:0,zonesBaked:0,step,skipped:0,baked:0};
-  const used=new Set(project.zones.map(z=>z.sample)),need=new Set(),cache=new Map();let n=0,idc=1;
+  const used=new Set(project.zones.map(z=>z.sample).concat(project.keep||[])),need=new Set(),cache=new Map();let n=0,idc=1;
   for(const z of project.zones){
     n++;if(progress&&n%2===0){progress('Rendering zones '+n+' / '+project.zones.length);await yieldNow();}
     const s=ctx.sample(z.sample),b=s&&ctx.buffer(z.sample);if(!s||!b)continue;

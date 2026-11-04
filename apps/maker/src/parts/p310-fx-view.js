@@ -1,5 +1,5 @@
 /* ---------- modular FX: view ---------- */
-const PORT_LBL={out:'out',in:'in',sc:'side',dry:'dry',wet:'wet',mix:'mix'};
+const PORT_LBL={out:'out',in:'in',sc:'side',dry:'dry',wet:'wet',mix:'mix',in1:'in 1',in2:'in 2',in3:'in 3',in4:'in 4',low:'low',mid:'mid',high:'high',side:'side'};
 const portBtn=(n,p,dir,kind,extra)=>'<button type="button" class="port '+dir+' k-'+kind+'" data-n="'+n.id+'" data-p="'+p+'" data-dir="'+dir+'" aria-label="'+esc(n.name+' '+(PORT_LBL[p]||p)+' '+dir+'put')+'"'+(extra||'')+'></button>';
 function parRowHTML(g,n,q,stack){
   const tg=n.tag[q.k]&&tagById(n.tag[q.k]),r=parReal(g,n,q,fxClock());
@@ -11,7 +11,7 @@ function parRowHTML(g,n,q,stack){
     +'<output class="pv">'+fmtPar(q,r.v)+'</output></div>';
 }
 function nodeHTML(g,n,an){
-  const d=FXT[n.type],cls=['fxn','k-'+d.kind];
+  const d=FXT[n.type],cls=['fxn','k-'+d.kind];if(d.pedal||n.skin==='pedal')cls.push('pedal');
   if(n.bypass) cls.push('bypass'); if(an.idle.indexOf(n.id)>=0) cls.push('idle'); if(S.fx.sel===n.id) cls.push('sel');
   const rows=Math.max(d.ins.length,d.outs.length);let io='';
   for(let i=0;i<rows;i++){
@@ -22,7 +22,9 @@ function nodeHTML(g,n,an){
     +(d.kind==='io'?'':'<button type="button" class="fxb" data-fa="byp" data-id="'+n.id+'" title="Bypass" aria-label="Bypass '+esc(n.name)+'" aria-pressed="'+n.bypass+'">⏻</button><button type="button" class="fxb" data-fa="del" data-id="'+n.id+'" title="Remove" aria-label="Remove '+esc(n.name)+'">✕</button>')+'</div>';
   const ps=d.params.map(q=>parRowHTML(g,n,q,false)).join('')
     +(n.type==='macro'?'<div class="fxp"><span class="pl">Tag</span><select class="mtag" data-n="'+n.id+'" aria-label="Macro tag">'+tagOpts().map(o=>'<option value="'+o[0]+'"'+(o[0]===(n.tag.value||'')?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select></div>':'');
-  return '<div class="'+cls.join(' ')+'" data-id="'+n.id+'" style="left:'+n.x+'px;top:'+n.y+'px">'+hd+'<div class="fxio">'+io+'</div>'+(ps?'<div class="fxps">'+ps+'</div>':'')+'</div>';
+  const isPed=d.pedal||n.skin==='pedal',ped=isPed?'<div class="stomp"><span class="pled'+(n.bypass?'':' on')+'" aria-hidden="true"></span><button type="button" class="foot" data-fa="byp" data-id="'+n.id+'" aria-pressed="'+!n.bypass+'" aria-label="Footswitch '+esc(n.name)+'"></button></div>':'';
+  const pst=isPed?';--ped:'+(d.pedal||'#555'):'';
+  return '<div class="'+cls.join(' ')+'" data-id="'+n.id+'" style="left:'+n.x+'px;top:'+n.y+'px'+pst+'">'+hd+'<div class="fxio">'+io+'</div>'+(ps?'<div class="fxps">'+ps+'</div>':'')+ped+'</div>';
 }
 function portPos(pan,id,p,dir){
   const el=$('.port[data-n="'+id+'"][data-p="'+p+'"][data-dir="'+dir+'"]',$('#fxNodes')); if(!el) return null;
@@ -50,7 +52,7 @@ function fxReport(){
   const w=an.warn.length?an.warn.map(x=>'<li class="'+x.lvl+'">'+esc(x.t)+'</li>').join(''):'<li class="good">Looks good. No loops, nothing unreachable.</li>';
   $('#fxRep').innerHTML='<div class="rep"><div class="meter" role="img" aria-label="Estimated cost '+pct+' percent"><i style="width:'+pct+'%"></i></div>'
     +'<div class="stats"><div><small>Cost</small><b>~'+an.cost.toFixed(1)+' units</b></div><div><small>Latency</small><b>'+an.lat+' ms</b></div><div><small>Tail</small><b>'+tl+'</b></div><div><small>Nodes</small><b>'+g.nodes.length+'</b></div></div>'
-    +'<ul class="warns">'+w+'</ul><p class="hint">Cost, latency and tails are estimates from this prototype, not real DSP numbers.</p></div>';
+    +'<ul class="warns">'+w+'</ul><p class="hint">Cost, latency and tails are estimates. The audio you hear is real.</p></div>';
 }
 function fxInspHTML(){
   const g=curG(),n=S.fx.sel&&nodeById(g,S.fx.sel),c=S.fx.cable&&g.cables.find(x=>x.id===S.fx.cable);
@@ -63,6 +65,8 @@ function fxInspHTML(){
   if(!n) return '<p class="empty">Select a node or cable.<br>Double-click empty space to search and add.</p>';
   const d=FXT[n.type];
   let h='<div class="phead"><input type="text" class="pname" data-fn="name" value="'+esc(n.name)+'" aria-label="Node name"><span class="badge">'+d.label+'</span></div><p class="hint">'+d.hint+'</p>';
+  if(d.sample){const cur=(n.s&&n.s.ir)||'';h+=sec('Impulse file','<label class="f"><span>Sample</span><select data-fn="ir" aria-label="Impulse sample"><option value="">— none —</option>'+S.samples.map(s=>'<option value="'+s.id+'"'+(s.id===cur?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select></label><p class="hint">Import the impulse (a recording of a room or a cabinet) in the Samples tab. It does not need to be mapped; it is packed into the library because this node uses it.</p>');}
+  if(d.kind==='fx'&&!d.pedal)h+='<label class="f chk"><input type="checkbox" data-fn="skin"'+(n.skin==='pedal'?' checked':'')+'><span>Show as a pedal</span></label>';
   if(d.params.length){
     h+=sec('Link parameters to tags',d.params.map(q=>'<label class="f"><span>'+q.label+'</span><select data-fn="tag" data-k="'+q.k+'" aria-label="Tag for '+q.label+'"><option value="">— set by hand —</option>'+S.tags.filter(t=>t.kind!==undefined).map(t=>'<option value="'+t.id+'"'+(n.tag[q.k]===t.id?' selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select></label>').join('')
       +'<p class="hint">A linked parameter follows the tag, so a knob in the designer can drive it. Tempo-sync tags set the delay time in ms.</p>');

@@ -161,3 +161,15 @@ label.f.col textarea{width:100%;resize:vertical}
 .btn.primary{background:var(--sel);color:#fff}
 .buildlog{font-size:11px;color:var(--muted);min-height:16px}
 .report{margin-top:6px;padding:6px 8px;background:#2a2a2a;border:1px solid var(--lo);font-size:11px;line-height:1.6}
+/* ---- pedal look for FX nodes ---- */
+.fxn.pedal{background:linear-gradient(170deg,color-mix(in srgb,var(--ped) 85%,#fff 15%),var(--ped) 40%,color-mix(in srgb,var(--ped) 70%,#000 30%));border:2px solid #111;border-radius:10px;box-shadow:0 6px 14px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.25)}
+.fxn.pedal .fxh{background:transparent;border-bottom:1px solid rgba(0,0,0,.35)}
+.fxn.pedal .fxh b{font-family:var(--f-display,"Unbounded",sans-serif);letter-spacing:.04em;text-transform:uppercase;color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.6)}
+.fxn.pedal .fxps{background:rgba(0,0,0,.18)}
+.fxn.pedal .pl,.fxn.pedal .pv,.fxn.pedal .fxio i{color:#f2f2f2}
+.stomp{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 10px}
+.stomp .pled{width:9px;height:9px;border-radius:50%;background:#3a0d0d;box-shadow:inset 0 1px 2px #000}
+.stomp .pled.on{background:#ff3b30;box-shadow:0 0 8px #ff3b30,0 0 2px #fff inset}
+.stomp .foot{width:38px;height:38px;border-radius:50%;border:2px solid #222;background:radial-gradient(circle at 35% 30%,#f4f4f4,#9a9a9a 55%,#5a5a5a);cursor:pointer;box-shadow:0 3px 0 #111}
+.stomp .foot:active{transform:translateY(2px);box-shadow:0 1px 0 #111}
+.fxn.pedal.bypass{filter:saturate(.6) brightness(.85)}
