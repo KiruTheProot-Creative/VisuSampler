@@ -1,0 +1,30 @@
+{
+  "name": "visumaker-desktop",
+  "productName": "VisuMaker",
+  "version": "0.1.0",
+  "description": "VisuMaker desktop app",
+  "main": "main.js",
+  "private": true,
+  "author": "VisuSampler",
+  "homepage": "https://github.com/KiruTheProot-Creative/VisuSampler",
+  "scripts": {
+    "copy": "node copy-web.mjs",
+    "start": "npm run copy && electron .",
+    "dist": "npm run copy && electron-builder --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.visusampler.visumaker",
+    "productName": "VisuMaker",
+    "files": ["main.js", "www/**/*"],
+    "directories": { "output": "dist" },
+    "fileAssociations": [{ "ext": "vmproj", "name": "VisuMaker project", "role": "Editor" }],
+    "win": { "target": "nsis" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
+    "mac": { "target": "dmg", "category": "public.app-category.music" },
+    "linux": { "target": "AppImage", "category": "Audio" }
+  }
+}
