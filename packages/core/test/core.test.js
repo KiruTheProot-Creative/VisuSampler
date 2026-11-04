@@ -82,6 +82,6 @@ test('bake: size budget picks a bigger step',()=>{
 });
 test('the example library made by the prototype opens and verifies in core',async()=>{
   const {readFileSync}=await import('node:fs');
-  const bytes=new Uint8Array(readFileSync(new URL('../../../apps/player/examples/rompler-demo.vsamp',import.meta.url)));
+  const bytes=new Uint8Array(readFileSync(new URL('../../../examples/rompler-demo.vsamp',import.meta.url)));
   const v=await verifyVsamp(bytes);assert.ok(v.ok,v.errors.join());assert.equal(v.manifest.lib.name,'Rompler Demo');
 });

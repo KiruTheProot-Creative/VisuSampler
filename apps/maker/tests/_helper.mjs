@@ -3,7 +3,7 @@ const require=createRequire(import.meta.url);
 let pw;try{pw=require('playwright');}catch(e){pw=createRequire('/tmp/claude-0/-home-claude/a30fc208-8447-5909-8f35-21df8f80b96b/scratchpad/v4/')('playwright');}
 export const chromium=pw.chromium;
 export async function openApp(viewport){
-  const {server}=await import('../../player/serve.mjs');
+  const {server}=await import('../../../tools/serve.mjs');
   await new Promise(r=>server.listen(0,r));
   const port=server.address().port,b=await chromium.launch({args:['--autoplay-policy=no-user-gesture-required']});
   const p=await b.newPage({viewport:viewport||{width:1500,height:860}}),errs=[];

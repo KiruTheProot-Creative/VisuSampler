@@ -8,7 +8,9 @@ A lighter, friendlier Kontakt alternative.
 ## Layout
 
 - `packages/core`: the engine and the `.vsamp` format (done, tested, `npm test`)
-- `apps/player`: VisuPlayer, first version (`node apps/player/serve.mjs`)
+- `apps/plugin`: **VisuPlayer**, the VST3/AU plugin (C++ engine, JUCE). Its window (`apps/plugin/ui`) is the library browser and play view, shown in a web view
+- `examples/`: a demo library used by the tests
+- `tools/serve.mjs`: local web server for the Maker (`node tools/serve.mjs`)
 - `apps/maker`: VisuMaker (`python3 apps/maker/build.py`)
 - `prototype/`: the single-file HTML prototype all design decisions came from
 - `docs/`: format spec and roadmap

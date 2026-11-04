@@ -21,9 +21,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev libcurl4-openssl-dev
+          sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev libcurl4-openssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev
+      - name: WebView2 package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: nuget install Microsoft.Web.WebView2 -Version 1.0.1901.177 -OutputDirectory "${{ github.workspace }}/nuget"
       - name: Configure
-        run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF
+        shell: bash
+        run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
       - name: Build
         run: cmake --build build --config Release --target VisuPlayer_VST3 --parallel 4
       - name: Collect VST3

@@ -5,7 +5,7 @@ Explanations are hidden by default; the **Tips** button in the header shows them
 
 ```
 python3 apps/maker/build.py                  # builds apps/maker/app.js and index.html from src/
-node apps/player/serve.mjs                   # then open http://localhost:5173/apps/maker/
+node tools/serve.mjs                         # then open http://localhost:5173/apps/maker/
 node apps/maker/tests/modes.test.mjs         # headless browser checks
 node apps/maker/tests/export.test.mjs
 node apps/maker/tests/sound.test.mjs        # also: project, fx

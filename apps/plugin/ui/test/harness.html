@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VisuPlayer</title>
+<link rel="stylesheet" href="../ui.css">
+</head><body data-mode="browse">
+<header class="top">
+  <button class="btn back" id="btnBack" type="button" hidden>&#9664; Libraries</button>
+  <div class="logo">Visu<em>Player</em></div>
+  <div class="title" id="curTitle"></div>
+  <div class="grow"></div>
+  <span class="muted" id="voices" hidden>0 voices</span>
+  <button class="btn" id="btnFolder" type="button" title="Open the folder VisuPlayer reads libraries from">Library folder</button>
+  <button class="btn" id="btnAdd" type="button">Add library</button>
+</header>
+<section class="browse" id="browse" aria-label="Library browser">
+  <div class="search"><span aria-hidden="true">&#9906;</span><input type="search" id="q" placeholder="Search libraries" aria-label="Search libraries"><button type="button" class="x" id="qClear" hidden aria-label="Clear search">&times;</button></div>
+  <div class="ftabs" role="tablist"><button type="button" role="tab" data-ft="category" aria-selected="true">Category</button><button type="button" role="tab" data-ft="tags" aria-selected="false">Tags</button></div>
+  <div class="chiprow" id="chips"></div>
+  <div class="grid" id="grid"></div>
+  <div class="emptybox" id="emptyBox" hidden><h1>No libraries yet</h1><p>Add a <b>.vsamp</b> library, or put files in your library folder.</p><p class="muted" id="folderPath"></p><div><button class="btn" id="btnAdd2" type="button">Add library</button></div></div>
+  <footer class="bfoot"><label class="vol">Volume <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8"></label><span class="grow"></span><span id="count" class="muted"></span></footer>
+</section>
+<section class="play" id="play" aria-label="Play" hidden>
+  <div class="stage" id="stage"><div id="detail"></div></div>
+  <footer class="keys" id="keysBar">
+    <div class="kbar"><label>Volume <input type="range" id="vol2" min="0" max="1" step="0.01" value="0.8"></label><span class="muted" id="oct">Octave C2</span><span class="grow"></span><button class="btn" id="btnPanic" type="button">Panic</button></div>
+    <div class="piano" id="piano" aria-label="Piano keyboard"></div>
+  </footer>
+</section>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="mock-host.js"></script>
+</body></html>

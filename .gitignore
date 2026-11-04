@@ -2,7 +2,7 @@ node_modules/
 prototype/check.js
 *.vsamp
 build/
-!apps/player/examples/*.vsamp
+!examples/*.vsamp
 !apps/plugin/tests/golden/*.vsamp
 apps/maker-desktop/www/
 apps/maker-desktop/dist/

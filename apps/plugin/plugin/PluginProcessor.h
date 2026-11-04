@@ -9,7 +9,7 @@
 class VisuProcessor : public juce::AudioProcessor, public juce::ChangeBroadcaster
 {
 public:
-    struct Entry { juce::File file; visu::LibraryInfo info; juce::Image tile, wide; };
+    struct Entry { juce::String id; juce::File file; visu::LibraryInfo info; juce::int64 size = 0; };
 
     VisuProcessor();
     ~VisuProcessor() override;
@@ -18,13 +18,17 @@ public:
     static juce::File libraryFolder();
     void rescan();
     const std::vector<Entry>& catalog() const { return catalog_; }
-    void loadLibrary(const juce::File& file);
-    const juce::String& status() const { return status_; }
-    const Entry* currentEntry() const;
-    bool isLoading() const { return loading_; }
-    juce::File currentFile() const { return current_; }
+    const Entry* entryById(const juce::String& id) const;
+    void loadLibrary(const juce::String& id);
     void unloadLibrary();
-    void addLibraryFile(const juce::File& file);
+    int addLibraryFiles(const juce::Array<juce::File>& files);
+    void setList(int index);
+    void panic() { panicRequest_ = true; }
+    void setVolume(float v) { volume_->setValueNotifyingHost(volume_->convertTo0to1(v)); }
+    float volume() const { return volume_->get(); }
+
+    juce::var librariesVar() const;   // what the browser shows
+    juce::var statusVar() const;      // what play mode shows
 
     juce::MidiKeyboardState keyboardState;
     int activeVoices() const { return engine_.activeVoices(); }
@@ -53,9 +57,11 @@ private:
     visu::Engine engine_;
     juce::AudioParameterFloat* volume_ = nullptr;
     std::vector<Entry> catalog_;
-    juce::String status_ = "No library loaded";
-    juce::File current_;
-    std::atomic<bool> loading_{ false };
+    std::shared_ptr<const visu::Library> current_;
+    juce::String currentId_, status_ = "No library loaded", pendingId_;
+    juce::File currentFile_;
+    int list_ = -2;
+    std::atomic<bool> loading_{ false }, panicRequest_{ false };
     std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
     std::atomic<int> loadTicket_{ 0 };
 

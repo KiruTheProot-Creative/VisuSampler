@@ -6,7 +6,7 @@ on:
       - "apps/plugin/tests/**"
       - "apps/plugin/CMakeLists.txt"
       - "packages/core/**"
-      - "apps/player/examples/**"
+      - "examples/**"
       - ".github/workflows/engine.yml"
   pull_request:
     paths:
@@ -14,7 +14,7 @@ on:
       - "apps/plugin/tests/**"
       - "apps/plugin/CMakeLists.txt"
       - "packages/core/**"
-      - "apps/player/examples/**"
+      - "examples/**"
       - ".github/workflows/engine.yml"
   workflow_dispatch:
 jobs:
