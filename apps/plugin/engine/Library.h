@@ -38,9 +38,15 @@ struct Zone {
     int sample = -1, group = -1, lo = 0, hi = 127, vlo = 1, vhi = 127, root = 60, seq = 0;
     float tune = 0, vol = 0, pan = 0, start = 0, vstart = 0, attack = 0, release = 80;
     int fadeLo = 0, fadeHi = 0, vfadeLo = 0, vfadeHi = 0; std::string curve = "power";
-    bool rev = false, keytrack = true, oneshot = false, mute = false, hasInterp = false; Interp interp = Interp::Linear;
+    bool rev = false, keytrack = true, oneshot = false, mute = false, solo = false, hasInterp = false; Interp interp = Interp::Linear;
+    float humTune = 0, humVol = 0, humStart = 0;   // random variation per note (cents, dB, ms)
     ZoneAudio audio; std::string id;
 };
+
+struct ListDef { std::string name; int bank = 0; std::vector<int> groups; };
+
+// Features this engine can play (see docs/vsamp-format.md).
+const std::vector<std::string>& supportedFeatures();
 
 struct LibraryInfo {
     std::string id, name, author, version, desc, tags, category, web, licence, changelog, accent;
@@ -51,6 +57,7 @@ class Library {
 public:
     // Reads and fully decodes a library. Returns null and sets `error` on failure.
     static std::shared_ptr<Library> load(const std::string& path, std::string& error);
+    static std::shared_ptr<Library> loadBytes(std::vector<uint8_t> bytes, std::string& error);
     // Reads only the header info and banner images (fast, for the browser).
     static bool readInfo(const std::string& path, LibraryInfo& info, std::string& error);
 
@@ -59,7 +66,14 @@ public:
     std::vector<Zone> zones;
     std::vector<GroupCfg> groups;
     std::array<std::vector<int>, 128> byNote;   // zone indexes that cover each key
-    bool anySolo = false; int unsupportedZones = 0; double bpm = 120;
+    std::vector<ListDef> lists;           // empty: every group plays
+    int defaultList = -1;                 // the list the library was saved with
+    Interp projectInterp = Interp::Linear;
+    std::vector<std::string> features;    // what the file says it uses
+    std::vector<std::string> unsupported; // the ones this engine cannot play yet
+    bool anySolo = false, anyZoneSolo = false; int unsupportedZones = 0; double bpm = 120;
+private:
+    static std::shared_ptr<Library> fromFile(const VsampFile& f, std::string& error);
 };
 
 } // namespace visu

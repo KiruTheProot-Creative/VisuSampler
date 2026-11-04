@@ -80,6 +80,7 @@ static void fillInfo(const Json& lib, LibraryInfo& i) {
     i.licence = lib["licence"].str(); i.changelog = lib["changelog"].str(); i.accent = lib["accent"].str("#4f7db8");
 }
 
+#ifndef VISU_NO_FILES
 bool Library::readInfo(const std::string& path, LibraryInfo& info, std::string& error) {
     VsampFile f; if (!f.openFile(path, error)) return false;
     const Json& m = f.manifest();
@@ -89,14 +90,37 @@ bool Library::readInfo(const std::string& path, LibraryInfo& info, std::string& 
     img("wide", info.bannerWide); img("tile", info.bannerTile); img("icon", info.bannerIcon);
     return true;
 }
+#endif
 
+const std::vector<std::string>& supportedFeatures() {
+    static const std::vector<std::string> s = { "sampler", "slicer", "loop", "pingpong", "reverse", "unison", "rr", "release", "choke",
+        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp" };
+    return s;
+}
+
+#ifndef VISU_NO_FILES
 std::shared_ptr<Library> Library::load(const std::string& path, std::string& error) {
     VsampFile f; if (!f.openFile(path, error)) return nullptr;
+    return fromFile(f, error);
+}
+#endif
+
+std::shared_ptr<Library> Library::loadBytes(std::vector<uint8_t> bytes, std::string& error) {
+    VsampFile f; if (!f.openBytes(std::move(bytes), error)) return nullptr;
+    return fromFile(f, error);
+}
+
+std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& error) {
     const Json& m = f.manifest();
     if (m["format"].str() != "vsamp") { error = "Not a library file."; return nullptr; }
     auto L = std::make_shared<Library>();
     fillInfo(m["lib"], L->info);
     L->bpm = m["project"]["bpm"].num(120);
+    { bool known; L->projectInterp = parseInterp(m["project"]["interp"].str("linear"), known); }
+    for (size_t i = 0; i < m["features"].size(); ++i) {
+        std::string ft = m["features"][i].str(); L->features.push_back(ft);
+        if (std::find(supportedFeatures().begin(), supportedFeatures().end(), ft) == supportedFeatures().end()) L->unsupported.push_back(ft);
+    }
     std::map<std::string, int> sidx;
     for (size_t i = 0; i < m["samples"].size(); ++i) {
         const Json& sj = m["samples"][i]; Sample s;
@@ -128,7 +152,8 @@ std::shared_ptr<Library> Library::load(const std::string& path, std::string& err
         z.tune = (float) zj["tune"].num(); z.vol = (float) zj["vol"].num(); z.pan = (float) zj["pan"].num(); z.start = (float) zj["start"].num(); z.vstart = (float) zj["vstart"].num();
         z.attack = (float) zj["attack"].num(0); z.release = zj.has("release") ? (float) zj["release"].num(80) : 80.f;
         z.fadeLo = zj["fadeLo"].integer(); z.fadeHi = zj["fadeHi"].integer(); z.vfadeLo = zj["vfadeLo"].integer(); z.vfadeHi = zj["vfadeHi"].integer(); z.curve = zj["curve"].str("power");
-        z.rev = zj["rev"].boolean(); z.keytrack = zj.has("keytrack") ? zj["keytrack"].boolean(true) : true; z.oneshot = zj["oneshot"].boolean(); z.mute = zj["mute"].boolean(); z.id = zj["id"].str();
+        z.rev = zj["rev"].boolean(); z.keytrack = zj.has("keytrack") ? zj["keytrack"].boolean(true) : true; z.oneshot = zj["oneshot"].boolean(); z.mute = zj["mute"].boolean(); z.solo = zj["solo"].boolean(); if (z.solo) L->anyZoneSolo = true; z.id = zj["id"].str();
+        z.humTune = (float) zj["hum"]["tune"].num(); z.humVol = (float) zj["hum"]["vol"].num(); z.humStart = (float) zj["hum"]["start"].num();
         z.interp = parseInterp(zj["interp"].str("inherit"), z.hasInterp);
         const Sample& s = L->samples[(size_t) z.sample];
         if (!s.supported()) L->unsupportedZones++;
@@ -137,6 +162,14 @@ std::shared_ptr<Library> Library::load(const std::string& path, std::string& err
         const Zone& zz = L->zones.back();
         if (s.supported()) for (int n = std::max(0, zz.lo); n <= std::min(127, zz.hi); ++n) L->byNote[(size_t) n].push_back(idx);
     }
+    /* lists: which groups each one plays */
+    const Json& lj = m["project"]["lists"];
+    for (size_t i = 0; i < lj.size(); ++i) {
+        ListDef d; d.name = lj[i]["name"].str(); d.bank = lj[i]["bank"].integer(0);
+        for (size_t k = 0; k < lj[i]["groups"].size(); ++k) { auto it = gidx.find(lj[i]["groups"][k].str()); if (it != gidx.end()) d.groups.push_back(it->second); }
+        L->lists.push_back(std::move(d));
+    }
+    if (!L->lists.empty()) L->defaultList = std::min((int) L->lists.size() - 1, std::max(0, m["project"]["currentList"].integer(0)));
     return L;
 }
 

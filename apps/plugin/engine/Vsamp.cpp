@@ -1,5 +1,7 @@
 #include "Vsamp.h"
+#ifndef VISU_NO_FILES
 #include <fstream>
+#endif
 #include "Inflate.h"
 #include <cstring>
 
@@ -19,6 +21,7 @@ uint32_t crc32(const uint8_t* d, size_t n) {
 static const uint8_t kMagic[5] = { 0x56, 0x53, 0x41, 0x4d, 0x50 };
 static uint32_t rd32(const uint8_t* p) { return (uint32_t) p[0] | ((uint32_t) p[1] << 8) | ((uint32_t) p[2] << 16) | ((uint32_t) p[3] << 24); }
 
+#ifndef VISU_NO_FILES
 bool VsampFile::openFile(const std::string& path, std::string& error) {
     std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f) { error = "Could not open the file."; return false; }
@@ -27,6 +30,7 @@ bool VsampFile::openFile(const std::string& path, std::string& error) {
     if (sz && !f.read((char*) b.data(), (std::streamsize) sz)) { error = "Could not read the file."; return false; }
     return openBytes(std::move(b), error);
 }
+#endif
 
 bool VsampFile::openBytes(std::vector<uint8_t> bytes, std::string& error) {
     bytes_ = std::move(bytes);

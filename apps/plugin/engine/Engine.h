@@ -16,6 +16,9 @@ public:
     // message thread: hand over a new library (nullptr unloads). The old one is kept alive until the audio thread has let go of it.
     void setLibrary(std::shared_ptr<const Library> lib);
     void setMasterGain(float g) { master_.store(g); }
+    // which list plays: -1 = every group, -2 = the list the library was saved with
+    void setList(int index) { list_.store(index); }
+    int list() const { return list_.load(); }
 
     // audio thread
     void noteOn(int note, int velocity);
@@ -45,6 +48,9 @@ private:
     std::atomic<const Library*> inUse_{nullptr};        // audio thread -> message thread (hazard pointer)
     std::vector<std::shared_ptr<const Library>> owners_; std::mutex ownersMutex_;
     std::atomic<float> master_{0.8f};
+    std::atomic<int> list_{-2};
+    bool groupAllowed(int g) const;
+    float rnd() { rng_ = rng_ * 1664525u + 1013904223u; return (float) ((rng_ >> 8) & 0xFFFF) / 65535.f; }
     std::atomic<int> active_{0};
     Voice voices_[kMaxVoices];
     unsigned long clock_ = 0; bool sustain_ = false; bool heldNotes_[128] = {};

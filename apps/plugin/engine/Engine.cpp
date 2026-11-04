@@ -34,7 +34,7 @@ void Engine::adopt() {
 Interp Engine::interpFor(const Zone& z) const {
     if (z.hasInterp) return z.interp;
     const GroupCfg& g = lib_->groups[(size_t) z.group];
-    return g.inheritInterp ? Interp::Linear : g.interp;
+    return g.inheritInterp ? lib_->projectInterp : g.interp;
 }
 
 static double fadeCurve(double t, const std::string& c) { t = std::min(1.0, std::max(0.0, t)); return c == "linear" ? t : c == "s" ? t * t * (3 - 2 * t) : std::sin(t * kPi / 2); }
@@ -55,13 +55,14 @@ void Engine::kill(Voice& v, bool fast) {
 
 void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease) {
     const Sample& s = lib_->samples[(size_t) z.sample]; const GroupCfg& g = lib_->groups[(size_t) z.group];
-    const double startMsBase = z.start + z.vstart * (vel / 127.0);
-    float amp = dbToGain(z.vol + g.vol) * (float) std::pow(vel / 127.0, g.velcurve) * zoneGain(z, note, vel);
+    const float jt = (rnd() * 2 - 1) * z.humTune, jv = (rnd() * 2 - 1) * z.humVol, js = rnd() * z.humStart;
+    const double startMsBase = z.start + z.vstart * (vel / 127.0) + js;
+    float amp = dbToGain(z.vol + g.vol + jv) * (float) std::pow(vel / 127.0, g.velcurve) * zoneGain(z, note, vel);
     for (const UnisonVoice& u : s.unison) {
         Voice* v = nullptr; unsigned long oldest = ~0ul; Voice* ov = nullptr;
         for (auto& c : voices_) { if (!c.on) { v = &c; break; } if (c.age < oldest) { oldest = c.age; ov = &c; } }
         if (!v) v = ov;                                  // steal the oldest
-        const double semis = (z.keytrack ? note - z.root : 0) + (z.tune + g.tune + u.tuneCents) / 100.0;
+        const double semis = (z.keytrack ? note - z.root : 0) + (z.tune + g.tune + u.tuneCents + jt) / 100.0;
         v->zone = &z; v->sample = &s; v->audio = &z.audio; v->interp = interpFor(z);
         v->ratio = std::pow(2.0, semis / 12.0) * s.sr / sr_;
         double st = z.rev ? 0.0 : std::min((double) (s.frames - 2), std::max(0.0, std::round((startMsBase + u.startMs) / 1000.0 * s.sr)));
@@ -75,6 +76,14 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease) {
     }
 }
 
+bool Engine::groupAllowed(int g) const {
+    if (lib_->lists.empty()) return true;
+    int l = list_.load(); if (l == -2) l = lib_->defaultList;
+    if (l < 0 || l >= (int) lib_->lists.size()) return true;
+    const auto& gs = lib_->lists[(size_t) l].groups;
+    return std::find(gs.begin(), gs.end(), g) != gs.end();
+}
+
 void Engine::noteOn(int note, int vel) {
     adopt();
     if (!lib_ || note < 0 || note > 127) return;
@@ -83,7 +92,7 @@ void Engine::noteOn(int note, int vel) {
     int hits[64]; int nh = 0;
     for (int zi : list) {
         const Zone& z = lib_->zones[(size_t) zi]; const GroupCfg& g = lib_->groups[(size_t) z.group];
-        if (z.mute || g.mute || g.mode == GroupMode::Release || vel < z.vlo || vel > z.vhi || (lib_->anySolo && !g.solo)) continue;
+        if (z.mute || g.mute || g.mode == GroupMode::Release || vel < z.vlo || vel > z.vhi || (lib_->anySolo && !g.solo) || (lib_->anyZoneSolo && !z.solo) || !groupAllowed(z.group)) continue;
         if (nh < 64) hits[nh++] = zi;
     }
     // round robin: one sequence per group per hit
@@ -120,7 +129,7 @@ void Engine::noteOff(int note) {
     for (auto& v : voices_) if (v.on && !v.releasing && !v.fromRelease && v.note == note && !v.oneshot) kill(v, false);
     for (int zi : lib_->byNote[(size_t) note]) {
         const Zone& z = lib_->zones[(size_t) zi];
-        if (lib_->groups[(size_t) z.group].mode == GroupMode::Release && !z.mute && 100 >= z.vlo && 100 <= z.vhi && !lib_->groups[(size_t) z.group].mute) startZone(z, note, 100, true);
+        if (lib_->groups[(size_t) z.group].mode == GroupMode::Release && !z.mute && 100 >= z.vlo && 100 <= z.vhi && !lib_->groups[(size_t) z.group].mute && groupAllowed(z.group)) startZone(z, note, 100, true);
     }
 }
 
