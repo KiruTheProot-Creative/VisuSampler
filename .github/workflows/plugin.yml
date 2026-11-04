@@ -1,5 +1,14 @@
 name: plugin
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    paths:
+      - "apps/plugin/**"
+      - ".github/workflows/plugin.yml"
+  pull_request:
+    paths:
+      - "apps/plugin/**"
+      - ".github/workflows/plugin.yml"
+  workflow_dispatch:
 jobs:
   build:
     strategy:

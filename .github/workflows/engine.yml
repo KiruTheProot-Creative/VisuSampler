@@ -1,5 +1,22 @@
 name: engine
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - "apps/plugin/engine/**"
+      - "apps/plugin/tests/**"
+      - "apps/plugin/CMakeLists.txt"
+      - "packages/core/**"
+      - "apps/player/examples/**"
+      - ".github/workflows/engine.yml"
+  pull_request:
+    paths:
+      - "apps/plugin/engine/**"
+      - "apps/plugin/tests/**"
+      - "apps/plugin/CMakeLists.txt"
+      - "packages/core/**"
+      - "apps/player/examples/**"
+      - ".github/workflows/engine.yml"
+  workflow_dispatch:
 jobs:
   engine-tests:
     strategy:

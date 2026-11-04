@@ -1,5 +1,18 @@
 name: maker
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    paths:
+      - "apps/maker/**"
+      - "apps/maker-desktop/**"
+      - "packages/core/**"
+      - ".github/workflows/maker.yml"
+  pull_request:
+    paths:
+      - "apps/maker/**"
+      - "apps/maker-desktop/**"
+      - "packages/core/**"
+      - ".github/workflows/maker.yml"
+  workflow_dispatch:
 jobs:
   desktop:
     strategy:
