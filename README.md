@@ -5,6 +5,12 @@ A lighter, friendlier Kontakt alternative.
 - **VisuMaker** builds libraries: Samples, Mapping, Designer, FX Designer, Export.
 - **VisuPlayer** plays them. A library is one `.vsamp` file. No scripting.
 
+## Layout
+
+- `packages/core`: the engine and the `.vsamp` format (done, tested, `npm test`)
+- `prototype/`: the single-file HTML prototype all design decisions came from
+- `docs/`: format spec and roadmap
+
 ## Status
 
 `prototype/` holds the single-file HTML prototype (v4) that all design decisions came from.

@@ -1,0 +1,6 @@
+{
+  "name": "visusampler",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": { "test": "npm test --workspaces --if-present", "proto": "python3 prototype/build.py" }
+}
