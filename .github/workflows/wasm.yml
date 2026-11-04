@@ -1,0 +1,27 @@
+name: wasm
+on:
+  push:
+    paths:
+      - "apps/plugin/engine/**"
+      - ".github/workflows/wasm.yml"
+  workflow_dispatch:
+jobs:
+  engine-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+        with: { version: 3.1.74 }
+      - name: Build engine.wasm
+        run: |
+          mkdir -p out
+          E=apps/plugin/engine
+          emcc -O3 -std=c++17 -DVISU_NO_FILES \
+            $E/WasmApi.cpp $E/Engine.cpp $E/Library.cpp $E/Vsamp.cpp $E/Inflate.cpp \
+            -sSTANDALONE_WASM=1 --no-entry -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=33554432 -sFILESYSTEM=0 \
+            -sEXPORTED_FUNCTIONS=_visu_alloc,_visu_free,_visu_prepare,_visu_load,_visu_unload,_visu_error,_visu_note_on,_visu_note_off,_visu_sustain,_visu_all_off,_visu_set_list,_visu_set_gain,_visu_render,_visu_left,_visu_right,_visu_voices,_visu_zones,_visu_unsupported_zones,_malloc,_free \
+            -o out/engine.wasm
+          ls -la out
+          wasm-objdump -x -j Import out/engine.wasm 2>/dev/null | head -30 || true
+      - uses: actions/upload-artifact@v4
+        with: { name: engine-wasm, path: out/engine.wasm }
