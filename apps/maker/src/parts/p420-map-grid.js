@@ -103,7 +103,7 @@ function pianoDraw(){
 }
 const MAPN=new Set();
 function mapLoop(){
-  if(S.view!=='map'){MG.run=false;return;}
+  if(!inMapView()){MG.run=false;return;}
   const now=performance.now();let hot=false;
   for(const id in S.map.hot){if(now-S.map.hot[id]<520)hot=true;else delete S.map.hot[id];}
   if(MG.dirty||hot) mapDraw();
@@ -111,7 +111,7 @@ function mapLoop(){
 }
 let zoomInit=false;
 function mapStart(){if(!zoomInit){zoomInit=true;S.map.zoom=clamp(($('#mapWrap').clientWidth||900)/128,3,40);$('#mapZoom').value=S.map.zoom;}mapSize();mapInvalidate();if(!MG.run){MG.run=true;requestAnimationFrame(mapLoop);}}
-new ResizeObserver(()=>{if(S.view==='map')mapSize();}).observe($('#mapWrap'));
+new ResizeObserver(()=>{if(inMapView())mapSize();}).observe($('#mapWrap'));
 /* ---- hit testing ---- */
 function hitAt(px,py){
   const z=S.map.zoom,vh=velH(),sel=new Set(S.map.sel);

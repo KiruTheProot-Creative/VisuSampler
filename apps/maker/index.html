@@ -510,6 +510,86 @@ label.f.col textarea{width:100%;resize:vertical}
 .stomp .foot{width:38px;height:38px;border-radius:50%;border:2px solid #222;background:radial-gradient(circle at 35% 30%,#f4f4f4,#9a9a9a 55%,#5a5a5a);cursor:pointer;box-shadow:0 3px 0 #111}
 .stomp .foot:active{transform:translateY(2px);box-shadow:0 1px 0 #111}
 .fxn.pedal.bypass{filter:saturate(.6) brightness(.85)}
+/* ===== Sound tab (calm) ===== */
+body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body:not(.tips) #centerN .mapfoot>span:not(#mapInfo){display:none}
+.btn.ghost{background:transparent;border-color:transparent;box-shadow:none}
+.btn.ghost:hover{background:#3a3a3a}
+.btn.ghost[aria-pressed="true"]{background:#3a4a5e;color:#fff}
+.btn.primary{background:var(--sel);color:#fff;border-color:#2b507c}
+#centerN{gap:0;min-height:0}
+.snbar{gap:8px}.snbar #snSub{margin-right:6px}
+.snbar #mapMsg{color:var(--muted);font-size:11px;max-width:40%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.snbody{flex:1;display:flex;flex-direction:column;min-height:0}
+.snpane{display:flex;flex-direction:column;min-height:90px;position:relative}
+.snpane>.mapmain{flex:1;min-height:0;margin:0}
+.snsplit{flex:0 0 7px;background:#1c1c1c;cursor:row-resize;display:grid;place-items:center;border-top:1px solid #111;border-bottom:1px solid #333}
+.snsplit::after{content:'';width:46px;height:3px;background:#555;border-radius:3px}
+.snsplit:hover::after,.snsplit:focus-visible::after{background:var(--sel)}
+.snwbar{display:flex;align-items:center;gap:8px;padding:4px 8px;background:#2b2b2b;border-bottom:1px solid #1d1d1d}
+.snwbar #smMsg{color:var(--muted);font-size:11px}
+.snempty{position:absolute;inset:0;z-index:3;display:grid;place-content:center;text-align:center;background:rgba(30,30,30,.92);pointer-events:none;color:var(--muted)}
+.snempty h2{color:#e8e8e8;font-size:20px;font-weight:600;margin:0 0 6px}
+.snempty p{margin:0 0 14px}.snempty button{pointer-events:auto}
+.menuwrap{position:relative}
+.snmenu{position:absolute;right:0;top:calc(100% + 4px);z-index:40;min-width:250px;background:#2f2f2f;border:1px solid #111;box-shadow:0 10px 24px rgba(0,0,0,.5);padding:6px;display:flex;flex-direction:column;gap:2px}
+.snmenu[hidden]{display:none}
+.snmenu .mi{display:block;width:100%;text-align:left;background:none;border:0;padding:6px 8px;border-radius:3px;cursor:pointer;color:var(--text)}
+.snmenu .mi:hover{background:#3d3d3d}
+.snmenu .mrow{display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px}
+.snmenu .mrow .mi{width:auto;flex:1}.snmenu .mrow label{display:flex;align-items:center;gap:6px;width:100%}
+.snmenu .mrow input[type=range]{flex:1}.snmenu .ml{color:var(--muted);min-width:70px}
+.snmenu .msep{height:1px;background:#444;margin:4px 0}
+/* left column */
+#leftM .snh{display:flex;align-items:center;justify-content:space-between;margin:14px 8px 4px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#leftM .snh:first-child{margin-top:8px}
+#leftM .snadd{background:none;border:0;color:var(--muted);font-size:17px;line-height:1;cursor:pointer;padding:0 4px;border-radius:3px}
+#leftM .snadd:hover{color:#fff;background:#3a3a3a}
+#leftM .snlist{display:flex;flex-direction:column;gap:1px;margin:0 4px}
+#leftM .snrow{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:4px;border:0;background:none;text-align:left;color:#cfcfcf;cursor:pointer;width:100%;font:inherit;min-height:28px}
+#leftM .snrow:hover{background:#363636}
+#leftM .snrow.cur{color:#fff}
+#leftM .snrow.on{background:#38475a}
+#leftM .snrow .nm{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#leftM .snrow small{color:var(--muted);font-size:11px}
+#leftM .snrow .sw{width:9px;height:9px;border-radius:2px;flex:0 0 auto}
+#leftM .snrow .ms{opacity:0;width:20px;height:18px;padding:0;font-size:10px;border-radius:3px;border:1px solid #1d1d1d;background:#3a3a3a;color:#bbb;cursor:pointer}
+#leftM .snrow:hover .ms,#leftM .snrow .ms.on{opacity:1}
+#leftM .snrow .ms.on{background:#a8862f;color:#111}
+#leftM .snrow.muted .nm{color:var(--muted);text-decoration:line-through}
+#leftM .snrow.unused .nm{color:#9a9a9a}
+#leftM .snnone{margin:2px 12px;color:var(--muted);font-size:12px}
+/* inspector */
+#rightN{overflow:auto;padding-top:6px}
+#rightN .snins,#rightN>div{padding:0 10px}
+#rightN .snhead{display:flex;align-items:baseline;gap:8px;margin:6px 0 10px}
+#rightN .snhead b{font-size:15px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#rightN .snhead small{color:var(--muted)}
+#rightN .snmores{margin-top:12px;display:flex;flex-direction:column;gap:4px}
+#rightN .snmore{background:#303030;border-radius:4px}
+#rightN .snmore>summary{padding:7px 10px;cursor:pointer;color:#cfcfcf;list-style:none;display:flex}
+#rightN .snmore>summary::after{content:'›';margin-left:auto;color:var(--muted);transition:transform .15s}
+#rightN .snmore[open]>summary::after{transform:rotate(90deg)}
+#rightN .snmore>div{padding:2px 10px 8px}
+#rightN .snacts{display:flex;gap:6px;margin:14px 0 10px}
+#rightN .snsub{margin:12px 0 4px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em}
+#rightN .sngroups{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+#rightN .sngroups .chk{display:flex;align-items:center;gap:7px}
+#rightN .sngroups .sw{width:9px;height:9px;border-radius:2px}
+#rightN .empty{margin-top:30px}
+#tipsBtn{margin-right:4px}
+#centerN #smMsg{display:none}
+#leftM .snfold{background:none;border:0;padding:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer;display:flex;align-items:center;gap:6px}
+#leftM .snfold::before{content:'▾';font-size:9px;transition:transform .15s}
+#leftM .snfold[aria-expanded="false"]::before{transform:rotate(-90deg)}
+#leftM .snfold:hover{color:#fff}
+#rightN details.sec{margin:4px 0;border:0;background:#303030;border-radius:4px}
+#rightN details.sec>summary{background:transparent;border:0;padding:7px 10px;font-size:12px;color:#cfcfcf;list-style:none;display:flex}
+#rightN details.sec>summary::-webkit-details-marker{display:none}
+#rightN details.sec>summary::after{content:'›';margin-left:auto;color:var(--muted);transition:transform .15s}
+#rightN details.sec[open]>summary::after{transform:rotate(90deg)}
+#rightN details.sec>:not(summary){margin-left:10px;margin-right:10px}
+#rightN details.sec[open]{padding-bottom:6px}
+#rightN .phead{margin:6px 0 8px}
 
 </style>
 </head><body>
@@ -517,13 +597,13 @@ label.f.col textarea{width:100%;resize:vertical}
   <header class="top">
     <div class="logo">Visu<em>Maker</em></div>
     <nav class="tabs" id="viewTabs" aria-label="Maker sections">
-      <button type="button" data-view="samples">Samples</button>
-      <button type="button" data-view="map">Mapping</button>
-      <button type="button" class="on" data-view="design" aria-current="page">Designer</button>
-      <button type="button" data-view="fx">FX Designer</button>
-      <button type="button" data-view="export">Export .vsamp</button>
+      <button type="button" data-view="sound">Sound</button>
+      <button type="button" class="on" data-view="design" aria-current="page">Interface</button>
+      <button type="button" data-view="fx">Effects</button>
+      <button type="button" data-view="export">Export</button>
     </nav>
     <div class="pre">
+      <button type="button" class="btn ghost" id="tipsBtn" aria-pressed="false" title="Show or hide the explanations">Tips</button>
       <button type="button" class="btn" id="projOpen" title="Open a saved project (.vmproj)">Open</button>
       <button type="button" class="btn" id="projSave" title="Save the whole project to a .vmproj file">Save</button>
       <input type="file" id="fileProj" accept=".vmproj,application/octet-stream" hidden>
@@ -665,7 +745,30 @@ label.f.col textarea{width:100%;resize:vertical}
   </main>
   <aside class="box right" id="rightX" aria-label="Build" hidden><div id="rbodyX"></div></aside>
 
-  <aside class="box left" id="leftM" aria-label="Groups and samples" hidden></aside>
+  <aside class="box left" id="leftM" aria-label="Lists, groups and samples" hidden></aside>
+
+  <main class="center" id="centerN" hidden>
+    <div class="bar snbar">
+      <b id="snTitle">Sound</b><span id="snSub" class="muted"></span>
+      <span class="grow"></span>
+      <span id="snAutoSlot"></span>
+      <div class="menuwrap"><button type="button" class="btn" id="snTools" aria-haspopup="true" aria-expanded="false">Tools ▾</button><div class="menu snmenu" id="snToolsMenu" hidden></div></div>
+      <div class="seg" role="group" aria-label="Layout"><button type="button" data-lay="map" aria-pressed="false">Map</button><button type="button" data-lay="split" aria-pressed="true">Split</button><button type="button" data-lay="wave" aria-pressed="false">Wave</button></div>
+    </div>
+    <div class="snbody" id="snBody">
+      <div class="snpane" id="snTop"><div class="snempty" id="snEmpty" hidden><h2>Drop samples here</h2><p>WAV, FLAC, MP3 or OGG. Names like <b>Piano_C3</b> are mapped to the right key automatically.</p><div><button type="button" class="btn primary" data-ma="imp">Import audio…</button> <button type="button" class="btn" data-ma="demo">Load the demo set</button></div></div></div>
+      <div class="snsplit" id="snSplit" role="separator" aria-orientation="horizontal" aria-label="Resize map and waveform" tabindex="0"></div>
+      <div class="snpane" id="snBot">
+        <div class="snwbar"><b id="snWaveTitle">No sample</b><span id="snWaveSub" class="muted"></span><span class="grow"></span><span id="snWaveSlot"></span>
+          <div class="menuwrap"><button type="button" class="btn" id="snEdit" aria-haspopup="true" aria-expanded="false">View ▾</button><div class="menu snmenu" id="snEditMenu" hidden></div></div></div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="box right" id="rightN" aria-label="Inspector" hidden>
+    <div id="snInsList" hidden></div>
+    <div id="snInsGroup" hidden></div>
+  </aside>
 
   <main class="center" id="centerM" hidden>
     <div class="bar mapbar">

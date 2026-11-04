@@ -102,7 +102,7 @@ function restore(sn){
 }
 function afterLoad(){
   syncToolbar(); layout(); mountAll(); renderLayers(); renderRight(); fxRender();
-  if(S.view==='map'){mapUI();mapInvalidate();} if(S.view==='export')exRender();
+  if(S.view==='map'){mapUI();mapInvalidate();} if(S.view==='export')exRender(); if(S.view==='sound')soundEnter(true);
 }
 function loadPreset(key){
   S.prevSnap=snapshot();

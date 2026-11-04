@@ -62,12 +62,12 @@ function smDraw(){
   $('#smInfo').textContent=(S.smp.a!=null?'Selection '+(Math.abs(S.smp.b-S.smp.a)/b.sr).toFixed(3)+' s  ·  ':'')+(n/b.sr).toFixed(2)+' s · '+b.sr+' Hz · '+b.ch.length+' ch';
 }
 function smLoop(){
-  if(S.view!=='samples'){SM.run=false;return;}
+  if(!inSmpView()){SM.run=false;return;}
   if(S.smp.dirty||S.smp.play) smDraw();
   requestAnimationFrame(smLoop);
 }
 function smStart(){smSize();smInvalidate();if(!SM.run){SM.run=true;requestAnimationFrame(smLoop);}}
-new ResizeObserver(()=>{if(S.view==='samples')smSize();}).observe($('#smWrap'));
+new ResizeObserver(()=>{if(inSmpView())smSize();}).observe($('#smWrap'));
 /* snap a position to the nearest rising zero crossing */
 function zeroSnap(b,f,range){
   const d=b.ch[0],n=d.length;f=clamp(f,1,n-3);

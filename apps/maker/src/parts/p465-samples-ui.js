@@ -109,7 +109,7 @@ $('#leftS').addEventListener('click',e=>{
     S.samples=S.samples.filter(x=>x.id!==s.id);BUF.delete(s.id);S.smp.sel=S.samples[0]?S.samples[0].id:null;touchMap();smPanelRender();smFit();
   }
 });
-$('#fileAudio').addEventListener('change',()=>{if(S.view==='samples'){setTimeout(()=>{if(!S.smp.sel&&S.samples.length)S.smp.sel=S.samples[S.samples.length-1].id;smPanelRender();smFit();},500);}});
+$('#fileAudio').addEventListener('change',()=>{if(S.view==='samples'||S.view==='sound'){setTimeout(()=>{if(!S.smp.sel&&S.samples.length)S.smp.sel=S.samples[S.samples.length-1].id;smPanelRender();smFit();},500);}});
 $('#rightS').addEventListener('click',e=>{
   const so=e.target.closest('[data-so]');
   if(so){const o=so.dataset.so;if(o==='undo')smUndo();else if(o==='gain')smOp('gain',parseFloat($('#smGain').value)||0);else smOp(o);return;}

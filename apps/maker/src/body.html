@@ -2,13 +2,13 @@
   <header class="top">
     <div class="logo">Visu<em>Maker</em></div>
     <nav class="tabs" id="viewTabs" aria-label="Maker sections">
-      <button type="button" data-view="samples">Samples</button>
-      <button type="button" data-view="map">Mapping</button>
-      <button type="button" class="on" data-view="design" aria-current="page">Designer</button>
-      <button type="button" data-view="fx">FX Designer</button>
-      <button type="button" data-view="export">Export .vsamp</button>
+      <button type="button" data-view="sound">Sound</button>
+      <button type="button" class="on" data-view="design" aria-current="page">Interface</button>
+      <button type="button" data-view="fx">Effects</button>
+      <button type="button" data-view="export">Export</button>
     </nav>
     <div class="pre">
+      <button type="button" class="btn ghost" id="tipsBtn" aria-pressed="false" title="Show or hide the explanations">Tips</button>
       <button type="button" class="btn" id="projOpen" title="Open a saved project (.vmproj)">Open</button>
       <button type="button" class="btn" id="projSave" title="Save the whole project to a .vmproj file">Save</button>
       <input type="file" id="fileProj" accept=".vmproj,application/octet-stream" hidden>
@@ -150,7 +150,30 @@
   </main>
   <aside class="box right" id="rightX" aria-label="Build" hidden><div id="rbodyX"></div></aside>
 
-  <aside class="box left" id="leftM" aria-label="Groups and samples" hidden></aside>
+  <aside class="box left" id="leftM" aria-label="Lists, groups and samples" hidden></aside>
+
+  <main class="center" id="centerN" hidden>
+    <div class="bar snbar">
+      <b id="snTitle">Sound</b><span id="snSub" class="muted"></span>
+      <span class="grow"></span>
+      <span id="snAutoSlot"></span>
+      <div class="menuwrap"><button type="button" class="btn" id="snTools" aria-haspopup="true" aria-expanded="false">Tools ▾</button><div class="menu snmenu" id="snToolsMenu" hidden></div></div>
+      <div class="seg" role="group" aria-label="Layout"><button type="button" data-lay="map" aria-pressed="false">Map</button><button type="button" data-lay="split" aria-pressed="true">Split</button><button type="button" data-lay="wave" aria-pressed="false">Wave</button></div>
+    </div>
+    <div class="snbody" id="snBody">
+      <div class="snpane" id="snTop"><div class="snempty" id="snEmpty" hidden><h2>Drop samples here</h2><p>WAV, FLAC, MP3 or OGG. Names like <b>Piano_C3</b> are mapped to the right key automatically.</p><div><button type="button" class="btn primary" data-ma="imp">Import audio…</button> <button type="button" class="btn" data-ma="demo">Load the demo set</button></div></div></div>
+      <div class="snsplit" id="snSplit" role="separator" aria-orientation="horizontal" aria-label="Resize map and waveform" tabindex="0"></div>
+      <div class="snpane" id="snBot">
+        <div class="snwbar"><b id="snWaveTitle">No sample</b><span id="snWaveSub" class="muted"></span><span class="grow"></span><span id="snWaveSlot"></span>
+          <div class="menuwrap"><button type="button" class="btn" id="snEdit" aria-haspopup="true" aria-expanded="false">View ▾</button><div class="menu snmenu" id="snEditMenu" hidden></div></div></div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="box right" id="rightN" aria-label="Inspector" hidden>
+    <div id="snInsList" hidden></div>
+    <div id="snInsGroup" hidden></div>
+  </aside>
 
   <main class="center" id="centerM" hidden>
     <div class="bar mapbar">

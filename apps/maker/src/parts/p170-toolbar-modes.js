@@ -20,13 +20,13 @@ function setMode(m){
   $('#mDesign').setAttribute('aria-pressed',String(m==='design')); $('#mTest').setAttribute('aria-pressed',String(m==='test'));
   $('#testbar').hidden=m!=='test'; hideGuides(); placeSel(); layout(); rerenderAll();
 }
-const VIEWS={design:['leftD','centerD','rightD'],fx:['leftF','centerF','rightF'],map:['leftM','centerM','rightM'],samples:['leftS','centerS','rightS'],export:['leftX','centerX','rightX']};
+const VIEWS={design:['leftD','centerD','rightD'],fx:['leftF','centerF','rightF'],map:['leftM','centerM','rightM'],samples:['leftS','centerS','rightS'],sound:['leftM','centerN','rightN'],export:['leftX','centerX','rightX']};
 function setView(v){
   S.view=v;
-  Object.keys(VIEWS).forEach(k=>VIEWS[k].forEach(id=>{$('#'+id).hidden=k!==v;}));
+  const show=new Set(VIEWS[v]||[]);Object.keys(VIEWS).forEach(k=>VIEWS[k].forEach(id=>{$('#'+id).hidden=!show.has(id);}));
   $('#modeSeg').hidden=v!=='design';
   $$('#viewTabs [data-view]').forEach(b=>{b.classList.toggle('on',b.dataset.view===v);if(b.dataset.view===v)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
-  if(v==='fx') fxRender(); else if(v==='map'){mapUI();mapStart();} else if(v==='samples'){if(!smSample()&&S.samples[0])S.smp.sel=S.samples[0].id;smPanelRender();smStart();smFit();} else if(v==='export'){exRender();} else {layout();rerenderAll();}
+  if(v==='fx') fxRender(); else if(v==='map'){mapUI();mapStart();} else if(v==='samples'){if(!smSample()&&S.samples[0])S.smp.sel=S.samples[0].id;smPanelRender();smStart();smFit();} else if(v==='export'){exRender();} else if(v==='sound'){soundEnter();} else {layout();rerenderAll();}
 }
 $$('#viewTabs [data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
 $('#mDesign').addEventListener('click',()=>setMode('design'));

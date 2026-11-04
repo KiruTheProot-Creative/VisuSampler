@@ -1,7 +1,7 @@
 import {openApp} from './_helper.mjs';
 const app=await openApp(),p=app.p,errs=app.errs,fails=[];
 const ok=(c,m)=>{console.log((c?'ok  ':'FAIL ')+m);if(!c)fails.push(m);};
-await p.click('[data-view=samples]');await p.waitForTimeout(300);
+await p.click('[data-view=sound]');await p.waitForTimeout(300);
 await p.screenshot({path:'a1.png'});
 const r=await p.evaluate(()=>{
   const v=window.__vs;v.ensureAudio();const out={};
@@ -40,8 +40,8 @@ const res=await p.evaluate(()=>{const v=window.__vs;const s=v.S.samples.find(s=>
   v.S.smp.a=1000;v.S.smp.b=5000;v.smOp('cut');const n1=s.frames;v.smOp('normalize');v.smOp('reverse');v.smOp('revert');return[n0,n1,s.frames];});
 ok(res[1]===res[0]-4000&&res[2]===res[0],'cut removes selection and revert restores ('+res+')');
 // UI: switch to samples tab & click things
-await p.click('[data-sa=demobeat]');await p.waitForTimeout(200);
-await p.click('#smToolSlice');
+await p.evaluate(()=>{const v=window.__vs;v.demoExtras('beat');v.touchMap();v.soundEnter&&0;});await p.evaluate(()=>window.__vs.mapLeftRender());await p.click('#leftM .prow >> nth=-1');await p.waitForTimeout(200);
+await p.click('#snEdit');await p.click('#smToolSlice');
 const cv=await p.$('#smCanvas'),bb=await cv.boundingBox();await p.mouse.click(bb.x+300,bb.y+100);await p.waitForTimeout(100);
 await p.selectOption('[data-sk="sm.mode"]','granular');await p.waitForTimeout(150);
 await p.screenshot({path:'a2.png'});
