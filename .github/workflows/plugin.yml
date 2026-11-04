@@ -1,0 +1,29 @@
+name: plugin
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix: { os: [ubuntu-latest, macos-latest, windows-latest] }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux packages for JUCE
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev libcurl4-openssl-dev
+      - name: Configure
+        run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF
+      - name: Build
+        run: cmake --build build --config Release --target VisuPlayer_VST3 --parallel 4
+      - name: Collect VST3
+        shell: bash
+        run: |
+          mkdir -p out
+          find build -name "*.vst3" -maxdepth 6 -exec cp -R {} out/ \;
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VisuPlayer-VST3-${{ runner.os }}
+          path: out
