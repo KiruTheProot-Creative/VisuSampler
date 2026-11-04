@@ -1,0 +1,48 @@
+:root{--bg:#262626;--panel:#383838;--panel2:#2f2f2f;--line:#1d1d1d;--text:#d8d8d8;--muted:#9a9a9a;--sel:#3d6fa8;--ok:#5a9a45;--bad:#c0504a;--f:"Figtree",system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.45 var(--f)}
+button{font:inherit;color:inherit}
+.top{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#3c3c3c;border-bottom:1px solid var(--line)}
+.logo{font-weight:700;font-size:15px}.logo em{font-style:normal;color:#7fb0e6}
+.grow{flex:1}
+.btn{background:linear-gradient(#5c5c5c,#4a4a4a);border:1px solid #1d1d1d;border-radius:3px;padding:4px 12px;cursor:pointer}
+.btn:hover{background:linear-gradient(#666,#525252)}
+.app{display:grid;grid-template-columns:260px 1fr;height:calc(100% - 41px - var(--kh,0px))}
+.explorer{background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:0 10px 10px}
+h2{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:10px 0 8px}
+.tiles{display:grid;gap:10px}
+.tile{position:relative;border:2px solid transparent;background:#2c2c2c;cursor:pointer;text-align:left;padding:0;overflow:hidden}
+.tile.on{border-color:var(--sel)}
+.tile .art{aspect-ratio:1;overflow:hidden;background:#1b1b1b}
+.tile .art img,.tile .art .fallback{width:100%;height:100%;display:block;object-fit:cover;transform:scale(1.06);transition:transform .12s ease-out}
+.fallback{display:grid;place-items:center;font-weight:700;font-size:22px;color:#fff;text-align:center;padding:8px}
+.tile .meta{padding:6px 8px;display:grid;gap:1px;font-size:11px}.tile .meta b{font-size:12px}
+.stage{overflow:auto;padding:14px}
+.empty{height:100%;display:grid;place-content:center;text-align:center;color:var(--muted)}
+.empty h1{margin:0 0 6px;font-size:18px;color:var(--text)}
+.wide{width:100%;max-width:1000px;aspect-ratio:3/1;background:#1b1b1b;border:1px solid var(--line);display:block;object-fit:cover}
+.wide.fb{display:grid;place-items:center;font-size:42px;font-weight:700;color:#fff}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px;max-width:1000px;margin-top:14px}
+.cols h1{margin:0;font-size:22px}
+.byline{color:var(--muted);margin:2px 0 10px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.chip{border:1px solid #1d1d1d;background:#2a2a2a;padding:1px 8px;border-radius:10px;font-size:11px}
+.chip.ok{border-color:#3f6b31;color:#9ad486}.chip.warn{border-color:#8a7228;color:#e0c264}
+.card{background:var(--panel);border:1px solid var(--line);padding:8px 10px;margin-bottom:10px}
+.card h3{margin:0 0 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px}.card dt{color:var(--muted)}.card dd{margin:0;text-align:right}
+pre.lic{white-space:pre-wrap;margin:0;font:11px/1.5 var(--f);color:var(--muted)}
+.keys{position:fixed;left:0;right:0;bottom:0;background:#2b2b2b;border-top:1px solid var(--line)}
+.kbar{display:flex;gap:14px;align-items:center;padding:6px 10px;font-size:12px}
+.muted{color:var(--muted)}
+.piano{position:relative;height:110px;margin:0 10px 8px;user-select:none;touch-action:none}
+.wk,.bk{position:absolute;top:0;cursor:pointer}
+.wk{background:#e8e8e8;border:1px solid #111;height:100%;border-radius:0 0 3px 3px;z-index:1}
+.bk{background:#222;border:1px solid #000;height:62%;z-index:2;border-radius:0 0 2px 2px}
+.wk.on{background:#9cc3ec}.bk.on{background:#4f7db8}
+.wk i{position:absolute;bottom:2px;left:0;right:0;text-align:center;font:9px/1 var(--f);color:#777;font-style:normal;pointer-events:none}
+.drop{position:fixed;inset:0;background:rgba(40,60,90,.85);display:grid;place-items:center;font-size:22px;z-index:20}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:170px;background:#111;padding:6px 14px;border-radius:4px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+@media(max-width:760px){.app{grid-template-columns:1fr}.explorer{max-height:180px}.cols{grid-template-columns:1fr}}
+[hidden]{display:none!important}

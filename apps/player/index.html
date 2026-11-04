@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VisuPlayer</title>
+<link rel="stylesheet" href="player.css">
+</head><body>
+<header class="top"><div class="logo">Visu<em>Player</em></div>
+  <div class="grow"></div>
+  <button class="btn" id="btnOpen" type="button">Open .vsamp</button>
+  <button class="btn" id="btnDemo" type="button">Load demo library</button>
+  <input type="file" id="fileIn" accept=".vsamp,.zip,application/octet-stream" hidden>
+</header>
+<div class="app">
+  <aside class="explorer" id="explorer" aria-label="Library explorer"><h2>Libraries</h2><div id="tiles" class="tiles"></div>
+    <p class="hint" id="emptyHint">Drop a <b>.vsamp</b> file anywhere, or press Open.</p></aside>
+  <main class="stage" id="stage"><div class="empty" id="stageEmpty"><h1>No library open</h1><p>Open a library to see its banner and play it.</p></div>
+    <div id="detail" hidden></div></main>
+</div>
+<footer class="keys" id="keysBar" hidden>
+  <div class="kbar"><label>Volume <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8"></label>
+    <span class="muted" id="oct">Octave C2</span><span class="muted" id="midi">MIDI: not connected</span><span class="muted" id="voices">0 voices</span>
+    <button class="btn" id="btnPanic" type="button">Panic</button></div>
+  <div class="piano" id="piano" aria-label="Piano keyboard"></div>
+</footer>
+<div class="drop" id="drop" hidden>Drop the .vsamp file to open it</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="src/main.js"></script>
+</body></html>

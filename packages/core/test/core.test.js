@@ -80,3 +80,8 @@ test('bake: size budget picks a bigger step',()=>{
   const big=estimate(ctx,proj,Object.assign({},base,{budgetOn:false})).after;
   const st=estimate(ctx,proj,Object.assign({},base,{budgetMB:big/1048576*.4})).step;assert.ok(st>1);
 });
+test('the example library made by the prototype opens and verifies in core',async()=>{
+  const {readFileSync}=await import('node:fs');
+  const bytes=new Uint8Array(readFileSync(new URL('../../../apps/player/examples/rompler-demo.vsamp',import.meta.url)));
+  const v=await verifyVsamp(bytes);assert.ok(v.ok,v.errors.join());assert.equal(v.manifest.lib.name,'Rompler Demo');
+});

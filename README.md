@@ -8,6 +8,7 @@ A lighter, friendlier Kontakt alternative.
 ## Layout
 
 - `packages/core`: the engine and the `.vsamp` format (done, tested, `npm test`)
+- `apps/player`: VisuPlayer, first version (`node apps/player/serve.mjs`)
 - `prototype/`: the single-file HTML prototype all design decisions came from
 - `docs/`: format spec and roadmap
 
