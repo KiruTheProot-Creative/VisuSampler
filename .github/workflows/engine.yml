@@ -1,0 +1,21 @@
+name: engine
+on: [push, pull_request]
+jobs:
+  engine-tests:
+    strategy:
+      fail-fast: false
+      matrix: { os: [ubuntu-latest, macos-latest, windows-latest] }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: JS core tests
+        run: npm test
+        working-directory: packages/core
+      - name: Configure engine
+        run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build engine
+        run: cmake --build build --config Release
+      - name: Run engine tests
+        run: ctest --test-dir build -C Release --output-on-failure
