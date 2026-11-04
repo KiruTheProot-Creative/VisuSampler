@@ -5,6 +5,8 @@ on:
       - "apps/plugin/engine/**"
       - ".github/workflows/wasm.yml"
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   engine-wasm:
     runs-on: ubuntu-latest
@@ -25,3 +27,13 @@ jobs:
           wasm-objdump -x -j Import out/engine.wasm 2>/dev/null | head -30 || true
       - uses: actions/upload-artifact@v4
         with: { name: engine-wasm, path: out/engine.wasm }
+      - name: Commit engine.wasm into packages/engine-wasm
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          cp out/engine.wasm packages/engine-wasm/engine.wasm
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/engine-wasm/engine.wasm
+          if git diff --cached --quiet; then echo "engine.wasm unchanged"; exit 0; fi
+          git commit -m "Build engine.wasm from ${GITHUB_SHA::7}"
+          git pull --rebase origin main && git push origin HEAD:main
