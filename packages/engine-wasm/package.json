@@ -1,0 +1,9 @@
+{
+  "name": "@visusampler/engine-wasm",
+  "version": "0.1.0",
+  "description": "The C++ VisuPlayer engine compiled to WebAssembly, so VisuMaker plays libraries exactly like the plugin. engine.wasm is built by CI (workflow 'wasm').",
+  "type": "module",
+  "main": "src/engine.js",
+  "scripts": { "test": "node --test test/engine.test.js" },
+  "license": "UNLICENSED"
+}
