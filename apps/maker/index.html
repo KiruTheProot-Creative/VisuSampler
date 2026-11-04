@@ -512,6 +512,9 @@ label.f.col textarea{width:100%;resize:vertical}
       <button type="button" data-view="export">Export .vsamp</button>
     </nav>
     <div class="pre">
+      <button type="button" class="btn" id="projOpen" title="Open a saved project (.vmproj)">Open</button>
+      <button type="button" class="btn" id="projSave" title="Save the whole project to a .vmproj file">Save</button>
+      <input type="file" id="fileProj" accept=".vmproj,application/octet-stream" hidden>
       <button type="button" class="btn" id="presetBtn" aria-haspopup="true" aria-expanded="false">Presets ▾</button>
       <button type="button" class="btn" id="presetUndo" hidden>Undo preset</button>
       <div class="menu" id="presetMenu" hidden></div>

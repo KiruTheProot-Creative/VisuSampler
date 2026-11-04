@@ -14,7 +14,7 @@ function imgOf(id){
   if(!e){
     const im=new Image();e={im,ok:false};
     im.onload=()=>{e.ok=true;if(S.view==='export')bannerRedraw();};
-    im.src=S.assets[id].mips[0].url;IMGC.set(id,e);
+    im.src=fullUrl(id);IMGC.set(id,e);
   }
   return e.ok?e.im:null;
 }

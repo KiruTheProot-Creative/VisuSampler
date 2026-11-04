@@ -3,6 +3,7 @@ const DEF_GROUP={mode:'normal',choke:0,vol:0,pan:0,tune:0,voices:0,interp:'inher
 /** Open a .vsamp: decode audio, banner images and fonts, and build the engine context the core needs. */
 export async function openLibrary(bytes){
   const {manifest:m,blob}=readVsamp(bytes);
+  if(m.format!=='vsamp')throw new Error(m.format==='visumaker-project'?'This is a VisuMaker project. Export it as a .vsamp library first.':'Not a library file.');
   const buffers=new Map(),metas=new Map();
   for(const s of m.samples){
     const ch=decodePCM(await blob(s.data),s.chn,s.bits);

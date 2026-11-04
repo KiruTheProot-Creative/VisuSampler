@@ -27,10 +27,10 @@ async function buildVsamp(progress){
   const img=async(key,u8)=>{bi[key]=await pack.add(u8,{});};
   await img('wide',await bannerBlob('wide',1200,400));await img('tile',await bannerBlob('tile',512,512));await img('icon',await bannerBlob('icon',128,128));
   const layers={};
-  for(const k of ['bgImg','logoImg','iconImg']){const a=banner[k]&&S.assets[banner[k]];if(a){const d=dataUrlBytes(a.mips[0].url);if(d){layers[k]={mime:d.mime,name:a.name,data:await pack.add(d.bytes,{})};}}}
+  for(const k of ['bgImg','logoImg','iconImg']){const a=banner[k]&&S.assets[banner[k]];if(a){const d=dataUrlBytes(fullUrl(banner[k]));if(d){layers[k]={mime:d.mime,name:a.name,data:await pack.add(d.bytes,{})};}}}
   /* project images */
   const assets={};
-  for(const id of Object.keys(S.assets)){if(id.indexOf('tex_')===0)continue;const d=dataUrlBytes(S.assets[id].mips[0].url);if(d)assets[id]={name:S.assets[id].name,w:S.assets[id].w,h:S.assets[id].h,mime:d.mime,data:await pack.add(d.bytes,{})};}
+  for(const id of Object.keys(S.assets)){if(id.indexOf('tex_')===0)continue;const d=dataUrlBytes(fullUrl(id));if(d)assets[id]={name:S.assets[id].name,w:S.assets[id].w,h:S.assets[id].h,mime:d.mime,data:await pack.add(d.bytes,{})};}
   const fonts={};
   for(const fam of Object.keys(S.fonts)){
     const f=S.fonts[fam];
@@ -54,7 +54,9 @@ async function buildVsamp(progress){
   return{bytes,report,manifest};
 }
 const parseVsamp=bytes=>verifyVsamp(bytes);
+let LAST_DL=null;
 async function downloadBytes(u8,name){
+  LAST_DL={name,bytes:u8};
   /* the artifact viewer only allows a few extensions, so there the file is offered as name.vsamp.zip (rename it to .vsamp) */
   let d=null;try{d=window.claude&&await window.claude.use('downloads');}catch(e){}
   if(d){

@@ -4,6 +4,8 @@ function mipFor(id,px){
   for(const k of a.mips){ if(k.s>=px) return k; }
   return a.mips[a.mips.length-1];
 }
+/* mips are sorted small to large: the last one is the full-size original */
+const fullUrl=id=>{const a=S.assets[id];return a?a.mips[a.mips.length-1].url:'';};
 const imgSrc=(id,px)=>{const m=mipFor(id,px);return m?m.url:'';};
 function buildAsset(name,img,isSvg,dataUrl){
   const w=img.naturalWidth||256,h=img.naturalHeight||256;
