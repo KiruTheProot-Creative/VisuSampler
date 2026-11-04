@@ -46,7 +46,7 @@ std::vector<UnisonVoice> unisonVoices(const Json& u) {
     return out;
 }
 
-static double fadeCurve(double t, const std::string& c) { t = std::min(1.0, std::max(0.0, t)); return c == "linear" ? t : c == "s" ? t * t * (3 - 2 * t) : std::sin(t * M_PI / 2); }
+static double fadeCurve(double t, const std::string& c) { t = std::min(1.0, std::max(0.0, t)); return c == "linear" ? t : c == "s" ? t * t * (3 - 2 * t) : std::sin(t * 3.14159265358979323846 / 2); }
 
 static void prepareAudio(Zone& z, const Sample& s, const Json& zj) {
     long total = (long) s.frames; ZoneAudio& a = z.audio;

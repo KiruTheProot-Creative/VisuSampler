@@ -2,3 +2,5 @@ node_modules/
 prototype/check.js
 *.vsamp
 build/
+!apps/player/examples/*.vsamp
+!apps/plugin/tests/golden/*.vsamp
