@@ -8,6 +8,7 @@ option(VISU_BUILD_TESTS "Build the engine tests" ON)
 
 add_library(visu_engine STATIC engine/Vsamp.cpp engine/Inflate.cpp engine/Library.cpp engine/Engine.cpp)
 target_include_directories(visu_engine PUBLIC engine)
+set_target_properties(visu_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(visu_engine PRIVATE -Wall -Wextra)
 endif()
