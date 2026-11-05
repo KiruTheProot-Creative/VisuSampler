@@ -179,9 +179,16 @@ void Engine::reportLoad(float f) {
     guard_.store(g);
 }
 
+int Engine::keyswitchList(int note) const {
+    if (!lib_) return -1;
+    for (size_t i = 0; i < lib_->lists.size(); ++i) if (lib_->lists[i].ks == note) return (int) i;
+    return -1;
+}
+
 void Engine::noteOn(int note, int vel) {
     adopt();
     if (!lib_ || note < 0 || note > 127) return;
+    { const int k = keyswitchList(note); if (k >= 0) { list_.store(k); ksChanged_.store(true); return; } }   // a keyswitch: picks a list, makes no sound
     vel = std::min(127, std::max(1, vel));
     heldNotes_[note] = true;
     ctl_.vel = (float) vel; ctl_.key = (float) note; ctl_.gate = true; ctl_.tOn = ctl_.time;
@@ -257,6 +264,7 @@ void Engine::startNote(int note, int vel, float glideFrom, const Zone* const* sk
 
 void Engine::noteOff(int note) {
     adopt();
+    if (keyswitchList(note) >= 0) return;
     if (ctl_.gate) { ctl_.gate = false; ctl_.tOff = ctl_.time; }
     if (!lib_ || note < 0 || note > 127) return;
     heldNotes_[note] = false;

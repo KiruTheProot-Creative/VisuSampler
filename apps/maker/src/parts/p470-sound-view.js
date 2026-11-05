@@ -236,12 +236,17 @@ $('#snInsGroup').addEventListener('click',e=>{
   delete S.gset[n];S.map.group=S.groups[0]||null;touchMap();soundRefresh();
 });
 /* ---- list inspector ---- */
+const KSL={learn:null};
 function snListHTML(){
   const l=curList();if(!l)return '<p class="empty">No list selected.<br>Lists choose which groups play, like the patches of a rompler. Press + next to Lists to make one.</p>';
   return '<div class="snhead"><b>List</b><small>bank '+((S.banks[l.bank]||{}).letter||'?')+'</small></div>'
     +'<label class="f"><span>Name</span><input type="text" data-sl="name" value="'+esc(l.name)+'"></label>'
     +'<label class="f"><span>Bank</span><select data-sl="bank">'+S.banks.map((b,i)=>'<option value="'+i+'"'+(i===l.bank?' selected':'')+'>'+b.letter+(b.name?' · '+esc(b.name):'')+'</option>').join('')+'</select></label>'
     +'<div class="snsub">Groups it plays</div><div class="sngroups">'+(S.groups.length?S.groups.map(g=>'<label class="chk"><input type="checkbox" data-sl="grp" data-g="'+esc(g)+'"'+(l.groups.indexOf(g)>=0?' checked':'')+'><i class="sw" style="background:'+gcfg(g).color+'"></i>'+esc(g)+'</label>').join(''):'<span class="muted">No groups yet.</span>')+'</div>'
+    +'<div class="snsub">Keyswitch</div><div class="ksrow"><span class="ksnote">'+(l.ks!=null&&l.ks>=0?noteName(l.ks)+' <small>('+l.ks+')</small>':'none')+'</span>'
+      +'<button type="button" class="btn'+(KSL.learn===l.id?' on':'')+'" data-ls="ksLearn" data-id="'+l.id+'">'+(KSL.learn===l.id?'Play a key…':'Set by playing a key')+'</button>'
+      +(l.ks!=null&&l.ks>=0?'<button type="button" class="btn" data-ls="ksClear" data-id="'+l.id+'">Clear</button>':'')+'</div>'
+      +'<p class="hint" style="display:block">Playing this key picks the list (for articulations like legato, staccato, pizzicato). The key itself makes no sound. Keys below your mapped range work best.</p>'
     +'<label class="f chk"><input type="checkbox" data-sl="follow"'+(S.map.follow?' checked':'')+'><span>Only play this list\'s groups while editing</span></label>'
     +'<div class="snmores"><details class="snmore"><summary>Saved knob values</summary><div><p class="hint" style="display:block">'+Object.keys(l.vals||{}).length+' values stored. Choosing this list in the player sets the knobs to them.</p><div class="chips"><button type="button" class="btn" data-ls="saveVals" data-id="'+l.id+'">Store the current knob values</button></div></div></details></div>'
     +'<div class="snacts"><button type="button" class="btn danger" data-ls="delList" data-id="'+l.id+'">Delete list</button></div>';

@@ -82,6 +82,17 @@ if(await p.locator('#leftM [data-sdu]').count()){
   await p.click('#leftM [data-sdu]');await p.click('#leftM [data-sdu]');await p.waitForTimeout(200);
   ok(await p.evaluate(()=>window.__vs.S.samples.every(s=>window.__vs.S.zones.some(z=>z.sample===s.id)))&&await p.evaluate(()=>window.__vs.S.samples.length)<n0,'Remove unused deletes the samples no zone plays');
 }else ok(false,'Remove unused appears when a sample is unused');
+/* keyswitch: learn a key for a list, then that key picks the list */
+await p.evaluate(()=>{const v=window.__vs,S=v.S;v.ensureAudio();S.view='sound';const bt=S.tags.find(t=>t.name==='bank'),lt=S.tags.find(t=>t.name==='list');window.__ksList=S.lists[2].id;v.setTag(bt,0);v.setTag(lt,0);S.snd.focus='list';});
+await p.evaluate(()=>{const v=window.__vs,S=v.S,l=S.lists.find(x=>x.id===window.__ksList);const bt=S.tags.find(t=>t.name==='bank'),lt=S.tags.find(t=>t.name==='list');v.setStep(bt,l.bank);v.setStep(lt,v.listsInBank(l.bank).indexOf(l));v.soundEnter();S.snd.focus='list';v.snShow();});
+await p.waitForTimeout(200);
+await p.click('#snInsList [data-ls=ksLearn]');await p.waitForTimeout(100);
+await p.evaluate(()=>window.__vs.noteOn(30,100));await p.waitForTimeout(150);
+ok(await p.evaluate(()=>window.__vs.S.lists.find(x=>x.id===window.__ksList).ks===30),'Set by playing a key learns the keyswitch');
+await p.evaluate(()=>{const v=window.__vs,S=v.S;const bt=S.tags.find(t=>t.name==='bank'),lt=S.tags.find(t=>t.name==='list');v.setTag(bt,0);v.setTag(lt,0);});
+await p.evaluate(()=>window.__vs.noteOn(30,100));await p.waitForTimeout(150);
+ok(await p.evaluate(()=>{const v=window.__vs;return v.curList().id===window.__ksList&&v.SV.list.length===0;}),'playing the keyswitch picks its list and makes no sound');
+await p.evaluate(()=>window.__vs.noteOff(30));
 /* layouts and fold */
 await p.click('[data-lay=map]');await p.waitForTimeout(150);ok(!(await vis('#smCanvas'))&&await vis('#mapCanvas'),'Map layout hides the waveform');
 await p.click('[data-lay=wave]');await p.waitForTimeout(150);ok(await vis('#smCanvas')&&!(await vis('#mapCanvas')),'Wave layout hides the map');

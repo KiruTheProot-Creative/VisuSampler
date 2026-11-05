@@ -101,8 +101,17 @@ function sampPanic(){SV.list.forEach(v=>stopVoice(v,40));SV.list=[];SV.held.clea
 function updVoices(){const e=$('#mapVoices');if(e)e.textContent=(SV.list.filter(v=>!v.dead).length+(engineOn()?ENG.voices:0))+' voices · no limit'+(engineOn()?' · shared engine':ENG.failed||ENG.loadError?' · ENGINE OFF: '+(ENG.failed||ENG.loadError):'');if(e)e.classList.toggle('engoff',!engineOn()&&!!(ENG.failed||ENG.loadError));}
 /* dispatchers: the sampler plays when zones exist, otherwise the little synth does */
 const hasSampler=()=>S.zones.length>0&&S.zones.some(z=>BUF.has(z.sample));
+/* keyswitches: a key that picks a list (and makes no sound); "Set by playing a key" learns it */
+function keyswitch(m){
+  if(KSL.learn){const l=S.lists.find(x=>x.id===KSL.learn);KSL.learn=null;if(l){S.lists.forEach(x=>{if(x!==l&&x.ks===m)x.ks=null;});l.ks=m;flash('Keyswitch for "'+l.name+'": '+noteName(m));if(S.view==='sound')soundRefresh(true),snShow();}return true;}
+  const l=S.lists.find(x=>x.ks===m);if(!l)return false;
+  const bt=bankTag(),lt=listTag();if(bt&&lt){setStep(bt,l.bank);setStep(lt,listsInBank(l.bank).indexOf(l));}
+  return true;
+}
 function noteOn(m,vel){
-  if(!ensureAudio()) return; vel=vel||100; fxNoteOn(m,vel);
+  if(!ensureAudio()) return; vel=vel||100;
+  if(keyswitch(m)) return;
+  fxNoteOn(m,vel);
   if(engineOn()&&hasSampler()){
     ENG.node.port.postMessage({t:'on',n:m,v:vel});
     const now=performance.now();S.zones.forEach(z=>{if(engineZone(z)&&m>=z.lo&&m<=z.hi&&vel>=z.vlo&&vel<=z.vhi)S.map.hot[z.id]=now;});
@@ -111,4 +120,4 @@ function noteOn(m,vel){
   if(hasSampler()&&sampNoteOn(m,vel)) return;
   if(!hasSampler()) synthOn(m);
 }
-function noteOff(m){fxNoteOff();if(engineOn())ENG.node.port.postMessage({t:'off',n:m});sampNoteOff(m);synthOff(m);}
+function noteOff(m){if(S.lists.some(x=>x.ks===m))return;fxNoteOff();if(engineOn())ENG.node.port.postMessage({t:'off',n:m});sampNoteOff(m);synthOff(m);}

@@ -1822,6 +1822,8 @@ rbody.addEventListener('change',e=>{
 document.body.addEventListener('click',e=>{
   const b=e.target.closest('[data-ls]'); if(!b) return;
   const act=b.dataset.ls,l=S.lists.find(x=>x.id===b.dataset.id);
+  if(act==='ksLearn'&&l){KSL.learn=KSL.learn===l.id?null:l.id;if(KSL.learn)flash('Play the key that should pick "'+l.name+'"');if(S.view==='sound')snShow();return;}
+  if(act==='ksClear'&&l){l.ks=null;if(S.view==='sound')snShow();return;}
   if(act==='bank'){const bt=bankTag();if(bt)setStep(bt,+b.dataset.i);renderRight();}
   else if(act==='addBank') listStructure(()=>{S.banks.push({letter:bankLetter(S.banks.length),name:''});});
   else if(act==='addList') listStructure(()=>{S.lists.push({id:nid('l'),name:'New list '+(S.lists.length+1),bank:bankIdx(),groups:[],vals:{}});});
@@ -3487,8 +3489,17 @@ function sampPanic(){SV.list.forEach(v=>stopVoice(v,40));SV.list=[];SV.held.clea
 function updVoices(){const e=$('#mapVoices');if(e)e.textContent=(SV.list.filter(v=>!v.dead).length+(engineOn()?ENG.voices:0))+' voices · no limit'+(engineOn()?' · shared engine':ENG.failed||ENG.loadError?' · ENGINE OFF: '+(ENG.failed||ENG.loadError):'');if(e)e.classList.toggle('engoff',!engineOn()&&!!(ENG.failed||ENG.loadError));}
 /* dispatchers: the sampler plays when zones exist, otherwise the little synth does */
 const hasSampler=()=>S.zones.length>0&&S.zones.some(z=>BUF.has(z.sample));
+/* keyswitches: a key that picks a list (and makes no sound); "Set by playing a key" learns it */
+function keyswitch(m){
+  if(KSL.learn){const l=S.lists.find(x=>x.id===KSL.learn);KSL.learn=null;if(l){S.lists.forEach(x=>{if(x!==l&&x.ks===m)x.ks=null;});l.ks=m;flash('Keyswitch for "'+l.name+'": '+noteName(m));if(S.view==='sound')soundRefresh(true),snShow();}return true;}
+  const l=S.lists.find(x=>x.ks===m);if(!l)return false;
+  const bt=bankTag(),lt=listTag();if(bt&&lt){setStep(bt,l.bank);setStep(lt,listsInBank(l.bank).indexOf(l));}
+  return true;
+}
 function noteOn(m,vel){
-  if(!ensureAudio()) return; vel=vel||100; fxNoteOn(m,vel);
+  if(!ensureAudio()) return; vel=vel||100;
+  if(keyswitch(m)) return;
+  fxNoteOn(m,vel);
   if(engineOn()&&hasSampler()){
     ENG.node.port.postMessage({t:'on',n:m,v:vel});
     const now=performance.now();S.zones.forEach(z=>{if(engineZone(z)&&m>=z.lo&&m<=z.hi&&vel>=z.vlo&&vel<=z.vhi)S.map.hot[z.id]=now;});
@@ -3497,7 +3508,7 @@ function noteOn(m,vel){
   if(hasSampler()&&sampNoteOn(m,vel)) return;
   if(!hasSampler()) synthOn(m);
 }
-function noteOff(m){fxNoteOff();if(engineOn())ENG.node.port.postMessage({t:'off',n:m});sampNoteOff(m);synthOff(m);}
+function noteOff(m){if(S.lists.some(x=>x.ks===m))return;fxNoteOff();if(engineOn())ENG.node.port.postMessage({t:'off',n:m});sampNoteOff(m);synthOff(m);}
 
 /* ---------- mapper: zone grid + piano ---------- */
 const MG={W:600,H:300,dirty:true,conf:null,confVer:-1,down:new Set(),drag:null,run:false,pian:{H:54}};
@@ -4717,12 +4728,17 @@ $('#snInsGroup').addEventListener('click',e=>{
   delete S.gset[n];S.map.group=S.groups[0]||null;touchMap();soundRefresh();
 });
 /* ---- list inspector ---- */
+const KSL={learn:null};
 function snListHTML(){
   const l=curList();if(!l)return '<p class="empty">No list selected.<br>Lists choose which groups play, like the patches of a rompler. Press + next to Lists to make one.</p>';
   return '<div class="snhead"><b>List</b><small>bank '+((S.banks[l.bank]||{}).letter||'?')+'</small></div>'
     +'<label class="f"><span>Name</span><input type="text" data-sl="name" value="'+esc(l.name)+'"></label>'
     +'<label class="f"><span>Bank</span><select data-sl="bank">'+S.banks.map((b,i)=>'<option value="'+i+'"'+(i===l.bank?' selected':'')+'>'+b.letter+(b.name?' · '+esc(b.name):'')+'</option>').join('')+'</select></label>'
     +'<div class="snsub">Groups it plays</div><div class="sngroups">'+(S.groups.length?S.groups.map(g=>'<label class="chk"><input type="checkbox" data-sl="grp" data-g="'+esc(g)+'"'+(l.groups.indexOf(g)>=0?' checked':'')+'><i class="sw" style="background:'+gcfg(g).color+'"></i>'+esc(g)+'</label>').join(''):'<span class="muted">No groups yet.</span>')+'</div>'
+    +'<div class="snsub">Keyswitch</div><div class="ksrow"><span class="ksnote">'+(l.ks!=null&&l.ks>=0?noteName(l.ks)+' <small>('+l.ks+')</small>':'none')+'</span>'
+      +'<button type="button" class="btn'+(KSL.learn===l.id?' on':'')+'" data-ls="ksLearn" data-id="'+l.id+'">'+(KSL.learn===l.id?'Play a key…':'Set by playing a key')+'</button>'
+      +(l.ks!=null&&l.ks>=0?'<button type="button" class="btn" data-ls="ksClear" data-id="'+l.id+'">Clear</button>':'')+'</div>'
+      +'<p class="hint" style="display:block">Playing this key picks the list (for articulations like legato, staccato, pizzicato). The key itself makes no sound. Keys below your mapped range work best.</p>'
     +'<label class="f chk"><input type="checkbox" data-sl="follow"'+(S.map.follow?' checked':'')+'><span>Only play this list\'s groups while editing</span></label>'
     +'<div class="snmores"><details class="snmore"><summary>Saved knob values</summary><div><p class="hint" style="display:block">'+Object.keys(l.vals||{}).length+' values stored. Choosing this list in the player sets the knobs to them.</p><div class="chips"><button type="button" class="btn" data-ls="saveVals" data-id="'+l.id+'">Store the current knob values</button></div></div></details></div>'
     +'<div class="snacts"><button type="button" class="btn danger" data-ls="delList" data-id="'+l.id+'">Delete list</button></div>';
@@ -5363,6 +5379,6 @@ S.tab='props';
 syncToolbar(); layout(); mountAll(); renderLayers(); renderRight();
 new ResizeObserver(()=>{if(S.view==='design')layout();}).observe(vp);
 setView('sound');
-if(window.__VSTEST) window.__vs={S,HIST,deleteSamples:ids=>deleteSamples(ids),smOp:(o,a)=>smOp(o,a),ENG,engineBytes:()=>engineBytes(),setTag:(t,v)=>setTag(t,v),rerender:()=>{rerenderAll();placeSel();},ensureAudio,renderZone,touchMap,noteOn,noteOff,addBuffer,autoMapSamples,zoneConflicts,AU,SV,smOf,zoneData,uniVoices,BUF,sampleById,demoExtras,mapSlices,smOp,mkZone,detectTransients,smSample,previewOn,previewOff,PV,estimate,buildVsamp,parseVsamp,exRender,exBuild,bannerRedraw,crc32,fmtBytes,saveProject,openProject,restore,snapshot,FXT,FXA,graphOf,fxNode,mkCable,fxRender,sampBus,sampPanic,mapLeftRender,soundEnter,ENG};
+if(window.__VSTEST) window.__vs={S,setStep:(t,i)=>setStep(t,i),listsInBank:b=>listsInBank(b),curList:()=>curList(),snShow:()=>snShow(),HIST,deleteSamples:ids=>deleteSamples(ids),smOp:(o,a)=>smOp(o,a),ENG,engineBytes:()=>engineBytes(),setTag:(t,v)=>setTag(t,v),rerender:()=>{rerenderAll();placeSel();},ensureAudio,renderZone,touchMap,noteOn,noteOff,addBuffer,autoMapSamples,zoneConflicts,AU,SV,smOf,zoneData,uniVoices,BUF,sampleById,demoExtras,mapSlices,smOp,mkZone,detectTransients,smSample,previewOn,previewOff,PV,estimate,buildVsamp,parseVsamp,exRender,exBuild,bannerRedraw,crc32,fmtBytes,saveProject,openProject,restore,snapshot,FXT,FXA,graphOf,fxNode,mkCable,fxRender,sampBus,sampPanic,mapLeftRender,soundEnter,ENG};
 
 })();

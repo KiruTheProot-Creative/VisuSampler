@@ -35,6 +35,7 @@ public:
     void unloadLibrary();
     int addLibraryFiles(const juce::Array<juce::File>& files);
     void setList(int index);
+    bool pollKeyswitch() { if (!engine_.takeKeyswitchChange()) return false; list_ = engine_.list(); sendChangeMessage(); return true; }
     void panic() { panicRequest_ = true; }
     void setTag(const juce::String& name, float value);   // a knob in the library's interface moved
     void setVolume(float v) { volume_->setValueNotifyingHost(volume_->convertTo0to1(v)); }

@@ -660,3 +660,7 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 .ic.image{border:2px solid var(--muted);border-radius:2px;background:linear-gradient(135deg,transparent 55%,var(--accent) 55%)}
 .stage.test .el.image,#stage.test .el.image{pointer-events:none}
 .btn.hist{min-width:30px;padding:2px 8px;font-size:15px}.btn.hist:disabled{opacity:.35;cursor:default}
+
+.ksrow{display:flex;align-items:center;gap:6px;margin:2px 0 4px}
+.ksrow .ksnote{min-width:70px;font-weight:600}
+.ksrow .btn.on{background:var(--sel);color:#fff}

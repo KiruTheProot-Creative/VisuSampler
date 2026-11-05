@@ -238,7 +238,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
     /* lists: which groups each one plays */
     const Json& lj = m["project"]["lists"];
     for (size_t i = 0; i < lj.size(); ++i) {
-        ListDef d; d.name = lj[i]["name"].str(); d.bank = lj[i]["bank"].integer(0);
+        ListDef d; d.name = lj[i]["name"].str(); d.bank = lj[i]["bank"].integer(0); d.ks = lj[i].has("ks") && !lj[i]["ks"].isNull() ? lj[i]["ks"].integer(-1) : -1;
         for (size_t k = 0; k < lj[i]["groups"].size(); ++k) { auto it = gidx.find(lj[i]["groups"][k].str()); if (it != gidx.end()) d.groups.push_back(it->second); }
         L->lists.push_back(std::move(d));
     }

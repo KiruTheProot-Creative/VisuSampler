@@ -70,6 +70,12 @@ ok((await p.textContent('#preName'))==='Bright','the arrows step through the pre
 await p.click('#preBtn');await p.click('#preMenu [data-del="Bright"]');await p.waitForTimeout(150);
 ok(await p.locator('#preMenu [data-p="Bright"]').count()===0,'a preset can be deleted');
 await p.evaluate(()=>document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})));
+/* keyswitch keys show on the keyboard, and a keyswitch changes the list in the interface */
+await p.evaluate(()=>{const st=Object.assign({},window.__mock.state.status,{lists:[{name:'Legato',bank:0,ks:24},{name:'Staccato',bank:0,ks:25},{name:'Pizz',bank:0}],list:0});window.__mock.state.status=st;window.__mock.emit('status',st);});
+await p.waitForTimeout(150);
+ok(await p.locator('#piano [data-n="24"].ks.kson').count()===1&&await p.locator('#piano [data-n="25"].ks').count()===1,'keyswitch keys are coloured on the keyboard (it reaches down to them)');
+await p.evaluate(()=>{const st=Object.assign({},window.__mock.state.status,{list:1});window.__mock.state.status=st;window.__mock.emit('status',st);});await p.waitForTimeout(150);
+ok(await p.locator('#piano [data-n="25"].kson').count()===1,'the active keyswitch is marked');
 await p.click('#btnAbout');await p.waitForTimeout(100);
 const nl=await p.locator('[data-list]').count();ok(nl>1,'About shows the info page with the lists ('+nl+')');
 await p.click('[data-list="2"]');ok(await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='setList'&&c[1]===2)),'choosing a list tells the plugin');

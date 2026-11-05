@@ -60,7 +60,7 @@ struct Zone {
     ZoneAudio audio; std::string id;
 };
 
-struct ListDef { std::string name; int bank = 0; std::vector<int> groups; };
+struct ListDef { std::string name; int bank = 0; std::vector<int> groups; int ks = -1; };   // ks: keyswitch note that picks this list (silent)
 
 // Features this engine can play (see docs/vsamp-format.md).
 const std::vector<std::string>& supportedFeatures();

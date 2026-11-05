@@ -21,6 +21,8 @@ public:
     void setMasterGain(float g) { master_.store(g); }
     // which list plays: -1 = every group, -2 = the list the library was saved with
     void setList(int index) { list_.store(index); }
+    // true once after a keyswitch note changed the list (the player then updates its interface)
+    bool takeKeyswitchChange() { return ksChanged_.exchange(false); }
     int list() const { return list_.load(); }
 
     // audio thread
@@ -87,6 +89,8 @@ private:
     std::atomic<float> master_{0.8f};
     std::atomic<int> list_{-2};
     bool groupAllowed(int g) const;
+    int keyswitchList(int note) const;
+    std::atomic<bool> ksChanged_{ false };
     float rnd() { rng_ = rng_ * 1664525u + 1013904223u; return (float) ((rng_ >> 8) & 0xFFFF) / 65535.f; }
     std::atomic<int> active_{0};
     Voice voices_[kMaxVoices];

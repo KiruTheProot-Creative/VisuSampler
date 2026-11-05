@@ -43,6 +43,8 @@ rbody.addEventListener('change',e=>{
 document.body.addEventListener('click',e=>{
   const b=e.target.closest('[data-ls]'); if(!b) return;
   const act=b.dataset.ls,l=S.lists.find(x=>x.id===b.dataset.id);
+  if(act==='ksLearn'&&l){KSL.learn=KSL.learn===l.id?null:l.id;if(KSL.learn)flash('Play the key that should pick "'+l.name+'"');if(S.view==='sound')snShow();return;}
+  if(act==='ksClear'&&l){l.ks=null;if(S.view==='sound')snShow();return;}
   if(act==='bank'){const bt=bankTag();if(bt)setStep(bt,+b.dataset.i);renderRight();}
   else if(act==='addBank') listStructure(()=>{S.banks.push({letter:bankLetter(S.banks.length),name:''});});
   else if(act==='addList') listStructure(()=>{S.lists.push({id:nid('l'),name:'New list '+(S.lists.length+1),bank:bankIdx(),groups:[],vals:{}});});

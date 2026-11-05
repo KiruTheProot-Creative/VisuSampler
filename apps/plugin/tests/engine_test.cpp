@@ -214,6 +214,21 @@ static void testStreaming() {
     }
 }
 
+// keyswitches: a note that picks a list and makes no sound
+static void testKeyswitch() {
+    std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
+    if (!lib || lib->lists.size() < 3) { CHECK(false, "demo with lists"); return; }
+    lib->lists[0].ks = 24; lib->lists[2].ks = 26;
+    auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setLibrary(lib);
+    std::vector<float> L(4800), R(4800);
+    e.noteOn(26, 100); e.render(L.data(), R.data(), 480);
+    CHECK(e.list() == 2 && e.activeVoices() == 0 && e.takeKeyswitchChange(), "a keyswitch picks its list and stays silent (list %d, %d voices)", e.list(), e.activeVoices());
+    e.noteOff(26); e.noteOn(60, 100); e.render(L.data(), R.data(), 480);
+    const int v2 = e.activeVoices(); e.noteOff(60); for (int i = 0; i < 40; ++i) e.render(L.data(), R.data(), 480);
+    e.noteOn(24, 100); e.noteOn(60, 100); e.render(L.data(), R.data(), 480);
+    CHECK(e.list() == 0 && v2 > 0 && e.activeVoices() > 0, "another keyswitch switches again, and notes play the chosen list (%d then %d voices)", v2, e.activeVoices());
+}
+
 static void testDemo() {
     std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
     CHECK(lib != nullptr, "demo library loads %s", err.c_str());
@@ -311,7 +326,7 @@ static void testFx() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testStreaming(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testKeyswitch(); testStreaming(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

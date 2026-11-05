@@ -101,3 +101,8 @@ pre.lic{white-space:pre-wrap;margin:0;font:11px/1.5 var(--f);color:var(--muted)}
 .pmenu .pmsep{height:1px;background:#3a3a42;margin:4px 2px}
 .pmenu .pmsave{display:flex;gap:6px;padding:4px}
 .pmenu .pmsave input{flex:1;min-width:0;background:#1c1c20;border:1px solid #444;color:#eee;border-radius:5px;padding:5px 8px;font:inherit}
+
+/* keyswitch keys */
+.piano .wk.ks{background:linear-gradient(#ffd9a8,#ffc27a)}
+.piano .bk.ks{background:linear-gradient(#a8651c,#d68b30)}
+.piano .ks.kson{box-shadow:inset 0 -6px 0 #ff8a1e}

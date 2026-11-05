@@ -142,7 +142,7 @@ juce::var VisuProcessor::statusVar() const
     if (current_)
     {
         juce::Array<juce::var> lists, bad;
-        for (auto& l : current_->lists) { auto* x = new juce::DynamicObject(); x->setProperty("name", juce::String(l.name)); x->setProperty("bank", l.bank); lists.add(juce::var(x)); }
+        for (auto& l : current_->lists) { auto* x = new juce::DynamicObject(); x->setProperty("name", juce::String(l.name)); x->setProperty("bank", l.bank); if (l.ks >= 0) x->setProperty("ks", l.ks); lists.add(juce::var(x)); }
         for (auto& u : current_->unsupported) bad.add(juce::String(u));
         o->setProperty("lists", lists); o->setProperty("unsupported", bad);
         o->setProperty("list", list_ == -2 ? current_->defaultList : list_);

@@ -88,7 +88,7 @@ function renderDetail(){
 }
 $('#detail').addEventListener('click',e=>{const b=e.target.closest('[data-list]');if(b){call('setList',+b.dataset.list);st.list=+b.dataset.list;renderDetail();if(uiReady)frame.contentWindow.postMessage({t:'list',index:st.list},'*');}});
 /* ---------- keyboard ---------- */
-const LO=36,HI=96,isBlack=n=>[1,3,6,8,10].includes(n%12),down=new Set(),keyNote=new Map();
+let LO=36;const HI=96,isBlack=n=>[1,3,6,8,10].includes(n%12),down=new Set(),keyNote=new Map();
 function buildPiano(){
   const p=$('#piano'),whites=[];for(let n=LO;n<=HI;n++)if(!isBlack(n))whites.push(n);
   const w=100/whites.length;let h='';
@@ -119,6 +119,8 @@ $('#btnPanic').onclick=()=>{releaseAll();call('panic');};
 /* ---------- events from the plugin ---------- */
 on('libraries',d=>setLibs(d));
 on('status',d=>{const was=st;st=d||{};
+  if(uiReady&&st.list!=null&&st.list>=0&&st.list!==was.list&&st.currentId===was.currentId)frame.contentWindow.postMessage({t:'list',index:st.list},'*');   /* e.g. a keyswitch */
+  markKeyswitches();
   if(st.currentId&&!st.loading&&(was.loading||was.currentId!==st.currentId||!uiFor))showUI();
   if(st.currentId&&(!cur||cur.id!==st.currentId)){const L=libs.find(x=>x.id===st.currentId);if(L){cur=L;setMode('play');}}
   if(cur&&document.body.dataset.mode==='play')renderDetail();});
@@ -214,3 +216,12 @@ $('#preMenu').addEventListener('submit',async e=>{
 const preStep=async d=>{await presetsRefresh();const all=[''].concat(pre.names),i=Math.max(0,all.indexOf(pre.current||''));await presetApply(all[(i+d+all.length)%all.length]);};
 $('#prePrev').addEventListener('click',()=>preStep(-1));$('#preNext').addEventListener('click',()=>preStep(1));
 addEventListener('pointerdown',e=>{if(!$('#preMenu').hidden&&!e.target.closest('#presetBox'))preMenuClose();},true);
+
+/* keyswitch keys (notes that pick a list) are coloured on the keyboard, with the list name */
+const $$=(q,r)=>[...(r||document).querySelectorAll(q)];
+function markKeyswitches(){
+  const ks=(st.lists||[]).map(l=>l.ks).filter(n=>n!=null),lo=Math.min(36,...ks.map(n=>Math.floor(n/12)*12));
+  if(lo!==LO){LO=Math.max(0,lo);buildPiano();}   /* low keyswitches: the keyboard reaches down to them */
+  $$('#piano .ks').forEach(k=>{k.classList.remove('ks','kson');k.removeAttribute('title');});
+  (st.lists||[]).forEach((l,i)=>{if(l.ks==null)return;const k=$('#piano [data-n="'+l.ks+'"]');if(!k)return;k.classList.add('ks');if(i===st.list)k.classList.add('kson');k.title='Keyswitch: '+l.name;});
+}

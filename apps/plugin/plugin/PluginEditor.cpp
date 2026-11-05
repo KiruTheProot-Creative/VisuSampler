@@ -135,6 +135,7 @@ void VisuEditor::timerCallback()
     const int v = proc_.activeVoices();
     if (v != lastVoices_) { lastVoices_ = v; auto* o = new juce::DynamicObject(); o->setProperty("voices", v); browser_.emitEventIfBrowserIsVisible("meter", juce::var(o)); }
     proc_.endIdleGestures();
+    proc_.pollKeyswitch();   // a keyswitch note changed the list: the status event updates the interface
     if (proc_.pollLearned()) browser_.emitEventIfBrowserIsVisible("mappings", proc_.mappingsVar());
     { const auto ch = proc_.takeUiChanges(); if (!ch.isVoid()) browser_.emitEventIfBrowserIsVisible("tags", ch); }
     const float vol = proc_.volume();
