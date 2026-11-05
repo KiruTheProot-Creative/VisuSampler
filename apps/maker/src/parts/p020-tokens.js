@@ -109,6 +109,8 @@ function expand(text){
       case 'timesig': return esc(p.fmt==='bar'||p.fmt==='ms'?msStr(msOfBeats(barBeats(S.sig))):p.fmt==='num'?String(S.sig.n):p.fmt==='den'?String(S.sig.d):S.sig.n+'/'+S.sig.d);
       case 'list': return esc(listToken(p));
       case 'bank': return esc(bankToken(p));
+      case 'folder': return esc(listToken(p));
+      case 'folderB': return layerBOn()?esc(listToken(p,1)):'-';
       case 'patch': return patchModeOn()?esc(patchToken(p,0)):'-';
       case 'patchB': return patchModeOn()&&layerBOn()?esc(patchToken(p,1)):'-';
       case 'listB': return layerBOn()?esc(listToken(p,1)):'-';

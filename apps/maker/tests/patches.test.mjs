@@ -25,6 +25,7 @@ ok(r5.pm==='group'&&r5.f.indexOf('grouppatches')>=0,'the library is saved in gro
 const r6=await p.evaluate(async()=>{const v=window.__vs,S=v.S;S.zones[0].trig='release';v.touchMap();const c=await v.buildVsamp();return c.manifest.features.indexOf('releasetrigger')>=0&&c.manifest.zones.some(z=>z.trig==='release');});
 ok(r6,'a zone set to play on release is exported');
 await p.click('#leftM [data-sn="play"]');await p.waitForTimeout(200);
+await p.evaluate(()=>document.querySelectorAll('#snInsPlay details').forEach(d=>d.open=true));
 await p.selectOption('#snInsPlay [data-pl="patchMode"]','list');await p.waitForTimeout(300);
 const r7=await p.evaluate(()=>window.__vs.S.tags.filter(t=>t.kind==='patch').length);
 ok(r7===0,'back to whole lists removes the patch tags');

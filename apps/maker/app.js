@@ -144,6 +144,8 @@ function expand(text){
       case 'timesig': return esc(p.fmt==='bar'||p.fmt==='ms'?msStr(msOfBeats(barBeats(S.sig))):p.fmt==='num'?String(S.sig.n):p.fmt==='den'?String(S.sig.d):S.sig.n+'/'+S.sig.d);
       case 'list': return esc(listToken(p));
       case 'bank': return esc(bankToken(p));
+      case 'folder': return esc(listToken(p));
+      case 'folderB': return layerBOn()?esc(listToken(p,1)):'-';
       case 'patch': return patchModeOn()?esc(patchToken(p,0)):'-';
       case 'patchB': return patchModeOn()&&layerBOn()?esc(patchToken(p,1)):'-';
       case 'listB': return layerBOn()?esc(listToken(p,1)):'-';
@@ -4598,7 +4600,9 @@ $('#tipsBtn').addEventListener('click',()=>{const on=!document.body.classList.co
 mapLeftHTML=function(){
   const cur=S.map.group,cl=curList(),f=S.snd.focus;
   const fo=S.snd.fold,sh=(t,add)=>'<div class="snh"><button type="button" class="snfold" data-fold="'+t+'" aria-expanded="'+!fo[t]+'">'+t+'</button>'+(add||'')+'</div>',body=(t,html)=>fo[t]?'':html;
-  let h=sh('Lists','<button type="button" class="snadd" data-ls="addList" title="New list" aria-label="New list">+</button>');
+  let h='';
+  if(patchModeOn())h+=folderTreeHTML(sh,body);else{
+  h+=sh('Lists','<button type="button" class="snadd" data-ls="addList" title="New list" aria-label="New list">+</button>');
   h+=body('Lists',S.lists.length?'<div class="snlist">'+S.lists.map(l=>'<button type="button" class="snrow'+(l===cl?' cur':'')+(f==='list'&&l===cl?' on':'')+'" data-sn="list" data-id="'+l.id+'"><span class="nm">'+esc(l.name)+'</span><small>'+((S.banks[l.bank]||{}).letter||'?')+(listsInBank(l.bank).indexOf(l)+1)+'</small></button>').join('')+'</div>'
     :'<p class="snnone">No lists. Everything plays.</p>');
   h+=sh('Groups','<button type="button" class="snadd" data-ma="addgrp" title="New group" aria-label="New group">+</button>');
@@ -4607,7 +4611,7 @@ mapLeftHTML=function(){
     return '<div class="snrow grow'+(g===cur?' cur':'')+(f==='group'&&g===cur?' on':'')+(c.mute?' muted':'')+'" data-ma="grp" data-g="'+esc(g)+'" role="button" tabindex="0"><i class="sw" style="background:'+c.color+'"></i><span class="nm">'+esc(g)+'</span>'
       +'<button type="button" class="ms'+(c.mute?' on':'')+'" data-ma="gmute" data-g="'+esc(g)+'" title="Mute" aria-label="Mute '+esc(g)+'" aria-pressed="'+c.mute+'">M</button>'
       +'<button type="button" class="ms'+(c.solo?' on':'')+'" data-ma="gsolo" data-g="'+esc(g)+'" title="Solo" aria-label="Solo '+esc(g)+'" aria-pressed="'+c.solo+'">S</button><small>'+n+'</small></div>';
-  }).join('')+'</div>');
+  }).join('')+'</div>');}
   h+=sh('Samples','<button type="button" class="snadd" data-ma="imp" title="Import audio" aria-label="Import audio">+</button>');
   h+=body('Samples',S.samples.length?'<div class="snlist">'+S.samples.map(s=>{
       const used=S.zones.some(z=>z.sample===s.id);
@@ -4700,7 +4704,7 @@ document.addEventListener('toggle',e=>{const d=e.target;if(d.classList&&d.classL
 function snGroupHTML(){
   const g=S.map.group;if(!g)return '<p class="empty">Pick a group on the left.</p>';
   const c=gcfg(g),n=S.zones.filter(z=>z.group===g).length;
-  return '<div class="snhead"><b>Group</b><small>'+n+' zones</small></div>'
+  return '<div class="snhead"><b>'+(patchModeOn()?'Patch':'Group')+'</b><small>'+n+' zones</small></div>'
     +'<label class="f"><span>Name</span><input type="text" data-sg="name" value="'+esc(g)+'"></label>'
     +'<label class="f"><span>Plays</span><select data-sg="mode">'+mopt(MODES,c.mode)+'</select></label>'
     +nf('Volume','data-sg="vol"',c.vol,-48,24,.5,'dB')+nf('Pan','data-sg="pan"',c.pan,-100,100,1,'L–R')+nf('Tune','data-sg="tune"',c.tune,-2400,2400,1,'cents')
@@ -4777,17 +4781,19 @@ $('#snInsGroup').addEventListener('click',e=>{
 const KSL={learn:null};
 function snListHTML(){
   const l=curList();if(!l)return '<p class="empty">No list selected.<br>Lists choose which groups play, like the patches of a rompler. Press + next to Lists to make one.</p>';
-  return '<div class="snhead"><b>List</b><small>bank '+((S.banks[l.bank]||{}).letter||'?')+'</small></div>'
+  const pm=patchModeOn();
+  return '<div class="snhead"><b>'+(pm?'Folder':'List')+'</b><small>'+(pm?l.groups.length+' patches':'bank '+((S.banks[l.bank]||{}).letter||'?'))+'</small></div>'
     +'<label class="f"><span>Name</span><input type="text" data-sl="name" value="'+esc(l.name)+'"></label>'
-    +'<label class="f"><span>Bank</span><select data-sl="bank">'+S.banks.map((b,i)=>'<option value="'+i+'"'+(i===l.bank?' selected':'')+'>'+b.letter+(b.name?' · '+esc(b.name):'')+'</option>').join('')+'</select></label>'
-    +'<div class="snsub">Groups it plays</div><div class="sngroups">'+(S.groups.length?S.groups.map(g=>'<label class="chk"><input type="checkbox" data-sl="grp" data-g="'+esc(g)+'"'+(l.groups.indexOf(g)>=0?' checked':'')+'><i class="sw" style="background:'+gcfg(g).color+'"></i>'+esc(g)+'</label>').join(''):'<span class="muted">No groups yet.</span>')+'</div>'
+    +(pm?'<p class="hint" style="display:block">Drag patches onto this folder on the left, or tick them here. The order on the left is the order of Next / Previous patch.</p>':'')
+    +'<label class="f"'+(pm?' hidden':'')+'><span>Bank</span><select data-sl="bank">'+S.banks.map((b,i)=>'<option value="'+i+'"'+(i===l.bank?' selected':'')+'>'+b.letter+(b.name?' · '+esc(b.name):'')+'</option>').join('')+'</select></label>'
+    +'<div class="snsub">'+(pm?'Patches in this folder':'Groups it plays')+'</div><div class="sngroups">'+(S.groups.length?S.groups.map(g=>'<label class="chk"><input type="checkbox" data-sl="grp" data-g="'+esc(g)+'"'+(l.groups.indexOf(g)>=0?' checked':'')+'><i class="sw" style="background:'+gcfg(g).color+'"></i>'+esc(g)+'</label>').join(''):'<span class="muted">No groups yet.</span>')+'</div>'
     +'<div class="snsub">Keyswitch</div><div class="ksrow"><span class="ksnote">'+(l.ks!=null&&l.ks>=0?noteName(l.ks)+' <small>('+l.ks+')</small>':'none')+'</span>'
       +'<button type="button" class="btn'+(KSL.learn===l.id?' on':'')+'" data-ls="ksLearn" data-id="'+l.id+'">'+(KSL.learn===l.id?'Play a key…':'Set by playing a key')+'</button>'
       +(l.ks!=null&&l.ks>=0?'<button type="button" class="btn" data-ls="ksClear" data-id="'+l.id+'">Clear</button>':'')+'</div>'
       +'<p class="hint" style="display:block">Playing this key picks the list (for articulations like legato, staccato, pizzicato). The key itself makes no sound. Keys below your mapped range work best.</p>'
     +'<label class="f chk"><input type="checkbox" data-sl="follow"'+(S.map.follow?' checked':'')+'><span>Only play this list\'s groups while editing</span></label>'
     +'<div class="snmores"><details class="snmore"><summary>Saved knob values</summary><div><p class="hint" style="display:block">'+Object.keys(l.vals||{}).length+' values stored. Choosing this list in the player sets the knobs to them.</p><div class="chips"><button type="button" class="btn" data-ls="saveVals" data-id="'+l.id+'">Store the current knob values</button></div></div></details></div>'
-    +'<div class="snacts"><button type="button" class="btn danger" data-ls="delList" data-id="'+l.id+'">Delete list</button></div>';
+    +'<div class="snacts"><button type="button" class="btn danger" data-ls="delList" data-id="'+l.id+'">'+(pm?'Delete folder':'Delete list')+'</button></div>';
 }
 $('#snInsList').addEventListener('input',e=>{const t=e.target,l=curList();if(!l||t.dataset.sl!=='name')return;l.name=t.value;refreshDisplays();const r=$('#leftM [data-sn="list"].cur .nm');if(r)r.textContent=l.name;});
 $('#snInsList').addEventListener('change',e=>{
@@ -4875,8 +4881,8 @@ function snPlayHTML(){
     +nf('Voice limit','data-pl="maxVoices"',p.maxVoices,0,256,1,'0 = 256')
     +'<label class="f"><span>When full, steal</span><select data-pl="steal">'+mopt([['oldest','The oldest note'],['quietest','The quietest note']],p.steal)+'</select></label>'
     +'<p class="hint" style="display:block">Glide works in mono. Released notes are always stolen first. In the player a CPU guard also lowers the limit for a moment when the computer cannot keep up.</p>'
-    +'<div class="snenv"><label class="f"><span>A patch is</span><select data-pl="patchMode">'+mopt([['list','A whole list (its groups play together)'],['group','One group of a list (a list is a folder)']],patchModeOn()?'group':'list')+'</select></label>'
-    +(patchModeOn()?'<p class="hint">Lists are folders: choosing a list picks the folder, and the tag <b>patch</b> picks one of its groups. Buttons with next/previous on patch step through them; texts show {patch.name} and {patch.number}. Samples set to play on key release go in the same group.</p>':'<p class="hint">Each list is one patch and all its groups play together.</p>')+'</div>'
+    +'<div class="snmores"><details class="snmore"'+(patchModeOn()?'':' open')+'><summary>Advanced: how patches work</summary><div><label class="f"><span>A patch is</span><select data-pl="patchMode">'+mopt([['list','A whole list (its groups play together)'],['group','One group of a list (a list is a folder)']],patchModeOn()?'group':'list')+'</select></label>'
+    +(patchModeOn()?'<p class="hint">Lists are folders: choosing a list picks the folder, and the tag <b>patch</b> picks one of its groups. Buttons with next/previous on patch step through them; texts show {patch.name} and {patch.number}. Samples set to play on key release go in the same group.</p>':'<p class="hint">Each list is one patch and all its groups play together (older libraries).</p>')+'</div></details></div>'
     +layersHTML()+'</div>';
 }
 $('#snInsPlay').addEventListener('change',e=>{
@@ -4956,6 +4962,179 @@ $('#snInsPlay').addEventListener('change',e=>{
   else if(kind==='envtag'){if(t.value)L.env.tags[k]=t.value;else delete L.env.tags[k];}
   p.layers=ls;S.play=p;$('#snInsPlay').innerHTML=snPlayHTML();
 });
+
+/* ---------- folders and patches (patch mode "group") ----------
+   The Sound tab's left column shows lists as folders with their groups (the patches) inside, like a file explorer.
+   Click a patch to hear it, drag a patch onto a folder to move it there (hold Ctrl to put it in both),
+   drag it onto another patch to change the order, double-click a name to rename, right-click for more. Banks stay hidden. */
+S.snd.ffold=S.snd.ffold||{};
+const groupRowHTML=(g,extra,num)=>{
+  const c=gcfg(g),n=S.zones.filter(z=>z.group===g).length,cur=S.map.group,f=S.snd.focus;
+  return '<div class="snrow grow tree'+(g===cur?' cur':'')+(f==='group'&&g===cur?' on':'')+(c.mute?' muted':'')+'" data-ma="grp" data-g="'+esc(g)+'" '+extra+' draggable="true" role="button" tabindex="0">'
+    +(num?'<small class="pn">'+num+'</small>':'')+'<i class="sw" style="background:'+c.color+'"></i><span class="nm" data-ren="group">'+esc(g)+'</span>'
+    +'<button type="button" class="ms'+(c.mute?' on':'')+'" data-ma="gmute" data-g="'+esc(g)+'" title="Mute" aria-label="Mute '+esc(g)+'" aria-pressed="'+c.mute+'">M</button>'
+    +'<button type="button" class="ms'+(c.solo?' on':'')+'" data-ma="gsolo" data-g="'+esc(g)+'" title="Solo" aria-label="Solo '+esc(g)+'" aria-pressed="'+c.solo+'">S</button><small>'+n+'</small></div>';
+};
+const foldersSorted=()=>S.lists.slice().sort((a,b)=>a.bank-b.bank||S.lists.indexOf(a)-S.lists.indexOf(b));
+function folderTreeHTML(sh,body){
+  const cl=curList(),fo=S.snd.ffold;
+  let h=sh('Folders','<button type="button" class="snadd" data-fa="addFolder" title="New folder" aria-label="New folder">+</button>');
+  let b='<div class="snlist tree">';
+  foldersSorted().forEach(l=>{
+    const open=!fo[l.id];
+    b+='<div class="snrow frow'+(l===cl?' cur':'')+'" data-sn="list" data-id="'+l.id+'" data-drop="'+l.id+'" role="button" tabindex="0">'
+      +'<button type="button" class="ffold" data-ffold="'+l.id+'" aria-expanded="'+open+'" aria-label="'+(open?'Close':'Open')+' '+esc(l.name)+'">'+(open?'▾':'▸')+'</button>'
+      +'<span class="nm" data-ren="folder">'+esc(l.name)+'</span><button type="button" class="snadd" data-fa="addPatch" data-id="'+l.id+'" title="New patch in this folder" aria-label="New patch in '+esc(l.name)+'">+</button><small>'+l.groups.length+'</small></div>';
+    if(open)b+=l.groups.length?l.groups.map((g,i)=>groupRowHTML(g,'data-from="'+l.id+'" data-pi="'+i+'"',pad2(i+1))).join(''):'<p class="snnone tree">Empty. Drag patches here.</p>';
+  });
+  const loose=S.groups.filter(g=>!S.lists.some(l=>l.groups.indexOf(g)>=0));
+  if(loose.length||!S.lists.length){
+    b+='<div class="snrow frow loose" data-drop="" role="presentation"><span class="nm">Not in a folder</span><button type="button" class="snadd" data-fa="addPatch" data-id="" title="New patch" aria-label="New patch">+</button><small>'+loose.length+'</small></div>';
+    b+=loose.map(g=>groupRowHTML(g,'data-from=""','')).join('');
+  }
+  h+=body('Folders',b+'</div>');
+  return h;
+}
+/* choosing a patch in the tree also picks its folder and patch, so you hear it */
+function pickPatch(lid,i){
+  const l=S.lists.find(x=>x.id===lid);if(!l)return;
+  const bt=bankTag(),lt=listTag();if(bt&&lt){setStep(bt,l.bank);setStep(lt,listsInBank(l.bank).indexOf(l));}
+  const pt=patchTag(0);if(pt)setStep(pt,i);
+}
+function renameGroup(old,nn){
+  nn=(nn||'').trim();if(!nn||nn===old)return false;if(S.groups.indexOf(nn)>=0){flash('Group names must be unique');return false;}
+  S.groups[S.groups.indexOf(old)]=nn;S.gset[nn]=S.gset[old];delete S.gset[old];
+  S.zones.forEach(z=>{if(z.group===old)z.group=nn;});S.lists.forEach(l=>{l.groups=(l.groups||[]).map(x=>x===old?nn:x);});
+  if(S.map.group===old)S.map.group=nn;touchMap();refreshDisplays();return true;
+}
+function deleteGroup(n){
+  delZones(S.zones.filter(z=>z.group===n).map(z=>z.id));
+  S.groups=S.groups.filter(x=>x!==n);S.lists.forEach(l=>{l.groups=(l.groups||[]).filter(x=>x!==n);});
+  delete S.gset[n];if(S.map.group===n)S.map.group=S.groups[0]||null;touchMap();refreshDisplays();
+}
+$('#leftM').addEventListener('click',e=>{
+  if(S.view!=='sound'||!patchModeOn())return;
+  const ff=e.target.closest('[data-ffold]');if(ff){e.stopPropagation();S.snd.ffold[ff.dataset.ffold]=!S.snd.ffold[ff.dataset.ffold];soundRefresh(true);return;}
+  const fa=e.target.closest('[data-fa]');
+  if(fa){e.stopPropagation();
+    if(fa.dataset.fa==='addFolder'){const l={id:nid('l'),name:'Folder '+(S.lists.length+1),bank:0,groups:[],vals:{}};S.lists.push(l);refreshDisplays();pickPatch(l.id,0);S.snd.focus='list';soundRefresh();return;}
+    if(fa.dataset.fa==='addPatch'){const n=newGroupName();S.groups.push(n);gcfg(n);S.map.group=n;const l=S.lists.find(x=>x.id===fa.dataset.id);if(l){l.groups.push(n);pickPatch(l.id,l.groups.length-1);}touchMap();S.snd.focus='group';soundRefresh();return;}
+  }
+  const r=e.target.closest('.grow.tree');if(r&&!e.target.closest('.ms')&&r.dataset.from)pickPatch(r.dataset.from,+r.dataset.pi);
+},true);
+/* double-click a name to rename it (the first click may redraw the row, so the second click starts it) */
+$('#leftM').addEventListener('click',e=>{
+  if(e.detail!==2||S.view!=='sound'||!patchModeOn())return;const nm=e.target.closest('[data-ren]');if(!nm)return;
+  e.preventDefault();e.stopPropagation();startRename(nm);
+},true);
+function startRename(nm){
+  if(!nm||!nm.isConnected)return;
+  const row=nm.closest('.snrow'),isF=nm.dataset.ren==='folder',old=isF?(S.lists.find(l=>l.id===row.dataset.id)||{}).name:row.dataset.g;if(old==null)return;
+  const inp=document.createElement('input');inp.type='text';inp.value=old;inp.className='renin';inp.setAttribute('aria-label','New name');nm.replaceWith(inp);inp.focus();inp.select();
+  let done=false;const fin=ok=>{if(done)return;done=true;
+    if(ok){if(isF){const l=S.lists.find(x=>x.id===row.dataset.id);const v=inp.value.trim();if(l&&v){l.name=v;refreshDisplays();}}else renameGroup(old,inp.value);}
+    soundRefresh(true);snShow();};
+  inp.addEventListener('keydown',k=>{if(k.key==='Enter')fin(true);else if(k.key==='Escape')fin(false);k.stopPropagation();});
+  inp.addEventListener('blur',()=>fin(true));inp.addEventListener('change',()=>fin(true));
+}
+/* drag patches between folders */
+let dragPatch=null;
+$('#leftM').addEventListener('dragstart',e=>{
+  const r=e.target.closest&&e.target.closest('.grow.tree');if(!r||!patchModeOn())return;
+  dragPatch={g:r.dataset.g,from:r.dataset.from};e.dataTransfer.effectAllowed='copyMove';e.dataTransfer.setData('text/plain',r.dataset.g);
+});
+const dropTarget=e=>dragPatch&&e.target.closest&&(e.target.closest('[data-drop]')||e.target.closest('.grow.tree'));
+$('#leftM').addEventListener('dragover',e=>{const t=dropTarget(e);if(!t)return;e.preventDefault();e.dataTransfer.dropEffect=e.ctrlKey?'copy':'move';
+  $$('#leftM .dropon').forEach(x=>{if(x!==t)x.classList.remove('dropon');});t.classList.add('dropon');});
+$('#leftM').addEventListener('dragleave',e=>{const t=e.target.closest&&e.target.closest('.dropon');if(t&&!t.contains(e.relatedTarget))t.classList.remove('dropon');});
+$('#leftM').addEventListener('drop',e=>{
+  const t=dropTarget(e);if(!t)return;e.preventDefault();e.stopPropagation();
+  const {g,from}=dragPatch;dragPatch=null;
+  let to,at=-1;
+  if(t.classList.contains('grow')){to=t.dataset.from;at=t.dataset.pi!=null?+t.dataset.pi:-1;}else to=t.dataset.drop;
+  const src=S.lists.find(l=>l.id===from),dst=S.lists.find(l=>l.id===to);
+  if(src&&!e.ctrlKey&&src!==dst)src.groups=src.groups.filter(x=>x!==g);
+  if(dst){const i=dst.groups.indexOf(g);if(i>=0){dst.groups.splice(i,1);if(at>i)at--;}if(at<0||at>dst.groups.length)dst.groups.push(g);else dst.groups.splice(at,0,g);}
+  else if(!to&&!e.ctrlKey)S.lists.forEach(l=>{l.groups=l.groups.filter(x=>x!==g);});
+  touchMap();refreshDisplays();soundRefresh(true);
+});
+$('#leftM').addEventListener('dragend',()=>{dragPatch=null;$$('#leftM .dropon').forEach(x=>x.classList.remove('dropon'));});
+/* right-click: rename, take out of the folder, delete */
+let fmenu=null;
+const fmenuClose=()=>{if(fmenu){fmenu.remove();fmenu=null;}};
+$('#leftM').addEventListener('contextmenu',e=>{
+  if(S.view!=='sound'||!patchModeOn())return;const r=e.target.closest('.grow.tree,.frow[data-id]');if(!r)return;
+  e.preventDefault();fmenuClose();
+  const isF=r.classList.contains('frow'),items=isF?[['ren','Rename folder'],['delf','Delete folder (keeps its patches)']]
+    :[['ren','Rename patch']].concat(r.dataset.from?[['out','Take out of this folder']]:[]).concat([['dup','Duplicate patch'],['delg','Delete patch and its zones']]);
+  fmenu=document.createElement('div');fmenu.className='ctxmenu fmenu';fmenu.setAttribute('role','menu');
+  fmenu.innerHTML=items.map(([k,l])=>'<button type="button" role="menuitem" data-fm="'+k+'"'+(k.indexOf('del')===0?' class="danger"':'')+'>'+l+'</button>').join('');
+  document.body.appendChild(fmenu);fmenu.style.left=Math.min(e.clientX,innerWidth-230)+'px';fmenu.style.top=Math.min(e.clientY,innerHeight-fmenu.offsetHeight-8)+'px';
+  fmenu.querySelector('button').focus();
+  fmenu.addEventListener('click',ev=>{const k=ev.target.closest('[data-fm]');if(!k)return;const a=k.dataset.fm;fmenuClose();
+    if(a==='ren'){startRename(r.querySelector('[data-ren]'));return;}
+    if(a==='out'){const l=S.lists.find(x=>x.id===r.dataset.from);if(l)l.groups=l.groups.filter(x=>x!==r.dataset.g);}
+    else if(a==='delf'){const l=S.lists.find(x=>x.id===r.dataset.id);if(l)listStructure(()=>{S.lists.splice(S.lists.indexOf(l),1);});}
+    else if(a==='delg')deleteGroup(r.dataset.g);
+    else if(a==='dup'){const g=r.dataset.g;let n=g+' copy',i=2;while(S.groups.indexOf(n)>=0)n=g+' copy '+(i++);
+      S.groups.splice(S.groups.indexOf(g)+1,0,n);S.gset[n]=JSON.parse(JSON.stringify(gcfg(g)));
+      S.zones.filter(z=>z.group===g).forEach(z=>{const c=JSON.parse(JSON.stringify(z));c.id=nid('z');c.group=n;S.zones.push(c);});
+      const l=S.lists.find(x=>x.id===r.dataset.from);if(l)l.groups.splice(l.groups.indexOf(g)+1,0,n);S.map.group=n;}
+    touchMap();refreshDisplays();soundRefresh();
+  });
+});
+document.addEventListener('pointerdown',e=>{if(fmenu&&!fmenu.contains(e.target))fmenuClose();},true);
+document.addEventListener('keydown',e=>{if(fmenu&&e.key==='Escape'){e.preventDefault();e.stopPropagation();fmenuClose();}},true);
+
+/* ---------- ready-made patch browser and a second patch slot (Interface tab > Add) ----------
+   Patch browser: a display plus folder and patch buttons, wired to the patch tags (side A, or side B with "B").
+   Second patch slot: switches on layer B, adds its browser and an A/B mix knob linked to both layers' volume. */
+function ensureGroupMode(){
+  if(patchModeOn())return;
+  const p=playOf();setPatchMode(p,'group');
+}
+function addBrowser(B,at){
+  ensureGroupMode();
+  const sx=B?'B':'',W=380,H=104,x0=at?at.x:Math.round((S.canvas.w-W)/2),y0=at?at.y:Math.round((S.canvas.h-H)/2);
+  const g={id:nid('g'),name:'Patch browser'+(B?' B':''),open:false};S.lgroups.push(g);
+  const put=(type,o)=>{const e=mk(type,Object.assign({grp:g.id},o));S.els.push(e);const n=document.createElement('div');n.className='el '+type;n.dataset.id=e.id;canvas.appendChild(n);nodes.set(e.id,n);renderEl(e);return e;};
+  put('panel',{name:'Browser panel'+(B?' B':''),x:x0,y:y0,w:W,h:H,radius:10});
+  put('lcd',{name:'Patch display'+(B?' B':''),x:x0+10,y:y0+10,w:W-20,h:40,size:20,text:'{folder'+sx+'}  ·  {patch'+sx+'}'});
+  const bw=80,bh=34,by=y0+H-bh-10;
+  const btn=(label,verb,tag,x)=>put('button',{name:label+(B?' B':''),label,x,y:by,w:bw,h:bh,size:12,mode:'momentary',tag:'',rules:[{when:'press',cond:null,acts:[{verb,tag,val:''}]}]});
+  btn('◀ Folder','prev','list'+sx,x0+10);btn('Folder ▶','next','list'+sx,x0+14+bw);
+  btn('◀ Patch','prev','patch'+sx,x0+W-14-2*bw);btn('Patch ▶','next','patch'+sx,x0+W-10-bw);
+  rerenderAll();renderLayers();refreshDisplays();
+  return g;
+}
+function addSlotB(){
+  ensureGroupMode();
+  const p=playOf();if(!layerBOn()){setLayerB(p,true);S.play=p;}
+  /* an A/B mix knob, linked to both layers' volume (equal power) */
+  let mix=tagByName('Patch mix');if(!mix){mix=mkTag('Patch mix','number',{value:.5,def:.5});S.tags.push(mix);}
+  const q=playOf(),ls=[layerOf(q,0),layerOf(q,1)];
+  if(!ls[0].links.vol)ls[0].links.vol={tag:mix.id,from:0,to:-60};
+  if(!ls[1].links.vol)ls[1].links.vol={tag:mix.id,from:-60,to:0};
+  q.layers=ls;q.layerB=true;S.play=q;
+  /* under browser A when there is one (above it if there is no room), otherwise in the middle */
+  const W=380,H=104,ga=S.lgroups.find(x=>x.name==='Patch browser'),pa=ga&&S.els.find(e=>e.grp===ga.id&&e.type==='panel');
+  let x0=Math.round((S.canvas.w-W)/2),y0=Math.round((S.canvas.h-H)/2);
+  if(pa){x0=pa.x;y0=pa.y+pa.h+12;if(y0+H>S.canvas.h)y0=Math.max(0,pa.y-H-12);}
+  const g=addBrowser(true,{x:x0,y:y0});
+  const kx=x0+W+16+72<=S.canvas.w?x0+W+16:Math.max(0,x0-16-72),ky=pa?Math.round((Math.min(pa.y,y0)+Math.max(pa.y,y0)+H)/2-48):y0+4;
+  const k=mk('knob',{name:'A/B mix',x:kx,y:ky,w:72,h:72,tag:mix.id,grp:g.id});S.els.push(k);
+  const t=mk('text',{name:'A/B mix label',x:kx-24,y:ky+76,w:120,h:22,text:'A  ·  Mix  ·  B',size:13,align:'center',grp:g.id});S.els.push(t);
+  [k,t].forEach(e=>{const n=document.createElement('div');n.className='el '+e.type;n.dataset.id=e.id;canvas.appendChild(n);nodes.set(e.id,n);renderEl(e);});
+  rerenderAll();renderLayers();refreshDisplays();
+  flash('Second patch slot added: side B picks its own patch, and the A/B mix knob blends them');
+}
+{const ac0=addComp;addComp=function(kind){
+  if(kind==='browser'){const B=layerBOn()&&S.els.some(e=>e.rules&&e.rules.some(r=>r.acts&&r.acts.some(a=>a.tag==='patch')));const g=addBrowser(B);setSel(S.els.filter(e=>e.grp===g.id).map(e=>e.id));flash('Patch browser added'+(B?' for side B':'')+'. Restyle it like any other elements.');return;}
+  if(kind==='slotB'){addSlotB();return;}
+  return ac0(kind);
+};}
+/* new blank projects start with folders and patches */
+{const bb0=buildBlank;buildBlank=function(){bb0.apply(this,arguments);setPatchMode(playOf(),'group');};}
 
 /* ---------- visual loop editor (Sound tab) ----------
    The waveform edits the loop of the selected zones (the loop that plays), or the sample's default loop when no zone is picked.

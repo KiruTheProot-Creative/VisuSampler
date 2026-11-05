@@ -336,6 +336,22 @@ textarea{resize:vertical;font-family:var(--f-mono);font-size:12px}
 .bar select{width:auto}
 .lc1 select{width:auto;flex:none}.lc1 input{flex:1 1 90px}
 .gchips label,.gedit label{display:inline-flex;align-items:center;gap:4px;margin-right:6px}
+/* folders and patches tree */
+#leftM .snlist.tree .frow{font-weight:600;gap:4px}
+#leftM .snlist.tree .frow .ffold{background:none;border:0;color:#9a9a9a;width:18px;padding:0;cursor:pointer;font-size:11px}
+#leftM .snlist.tree .frow .snadd{opacity:.55}
+#leftM .snlist.tree .frow:hover .snadd,#leftM .snlist.tree .frow .snadd:focus-visible{opacity:1}
+#leftM .snlist.tree .frow.loose{font-weight:500;color:#9a9a9a;padding-left:26px;cursor:default}
+#leftM .snrow.tree{padding-left:26px}
+#leftM .snrow.tree .pn{min-width:16px;color:#8a8a8a;font-variant-numeric:tabular-nums}
+#leftM .snnone.tree{padding-left:30px}
+#leftM .dropon{outline:2px dashed #5aa0ff;outline-offset:-2px;background:#2d3a4a}
+#leftM .renin{flex:1;min-width:0;font:inherit;padding:1px 4px;background:#1c1c1c;color:#fff;border:1px solid #5aa0ff;border-radius:3px}
+.fmenu{position:fixed;z-index:1000}
+.fmenu{background:#2b2b2b;border:1px solid #4a4a4a;border-radius:6px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.5);display:flex;flex-direction:column;min-width:200px}
+.fmenu button{background:none;border:0;color:#e6e6e6;text-align:left;padding:6px 10px;border-radius:4px;font:inherit;cursor:pointer}
+.fmenu button:hover,.fmenu button:focus-visible{background:#38475a;outline:none}
+.fmenu button.danger{color:#ff8a8a}
 
 
 /* ---------- retro Unity editor skin (dark only) ---------- */
@@ -708,6 +724,8 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
       <button type="button" class="btn" data-act="add" data-type="dropdown"><i class="ic dropdown"></i>Dropdown</button>
       <button type="button" class="btn" data-act="addimg"><i class="ic image"></i>Image…</button>
       <button type="button" class="btn" data-act="addcomp" data-comp="banks"><i class="ic banks"></i>Bank buttons</button>
+      <button type="button" class="btn" data-act="addcomp" data-comp="browser" title="A display with folder and patch buttons, already wired up"><i class="ic list"></i>Patch browser</button>
+      <button type="button" class="btn" data-act="addcomp" data-comp="slotB" title="A second patch that plays at the same time, with its own browser and an A/B mix knob"><i class="ic list"></i>Second patch slot</button>
     </div>
     <h2>Layers <span id="layerCount" class="muted"></span><button type="button" id="layPage" class="laypage" aria-pressed="true" hidden title="Show only the layers on the page you are editing">This page</button></h2>
     <ul id="layers"></ul>

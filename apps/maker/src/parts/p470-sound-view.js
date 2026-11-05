@@ -61,7 +61,9 @@ $('#tipsBtn').addEventListener('click',()=>{const on=!document.body.classList.co
 mapLeftHTML=function(){
   const cur=S.map.group,cl=curList(),f=S.snd.focus;
   const fo=S.snd.fold,sh=(t,add)=>'<div class="snh"><button type="button" class="snfold" data-fold="'+t+'" aria-expanded="'+!fo[t]+'">'+t+'</button>'+(add||'')+'</div>',body=(t,html)=>fo[t]?'':html;
-  let h=sh('Lists','<button type="button" class="snadd" data-ls="addList" title="New list" aria-label="New list">+</button>');
+  let h='';
+  if(patchModeOn())h+=folderTreeHTML(sh,body);else{
+  h+=sh('Lists','<button type="button" class="snadd" data-ls="addList" title="New list" aria-label="New list">+</button>');
   h+=body('Lists',S.lists.length?'<div class="snlist">'+S.lists.map(l=>'<button type="button" class="snrow'+(l===cl?' cur':'')+(f==='list'&&l===cl?' on':'')+'" data-sn="list" data-id="'+l.id+'"><span class="nm">'+esc(l.name)+'</span><small>'+((S.banks[l.bank]||{}).letter||'?')+(listsInBank(l.bank).indexOf(l)+1)+'</small></button>').join('')+'</div>'
     :'<p class="snnone">No lists. Everything plays.</p>');
   h+=sh('Groups','<button type="button" class="snadd" data-ma="addgrp" title="New group" aria-label="New group">+</button>');
@@ -70,7 +72,7 @@ mapLeftHTML=function(){
     return '<div class="snrow grow'+(g===cur?' cur':'')+(f==='group'&&g===cur?' on':'')+(c.mute?' muted':'')+'" data-ma="grp" data-g="'+esc(g)+'" role="button" tabindex="0"><i class="sw" style="background:'+c.color+'"></i><span class="nm">'+esc(g)+'</span>'
       +'<button type="button" class="ms'+(c.mute?' on':'')+'" data-ma="gmute" data-g="'+esc(g)+'" title="Mute" aria-label="Mute '+esc(g)+'" aria-pressed="'+c.mute+'">M</button>'
       +'<button type="button" class="ms'+(c.solo?' on':'')+'" data-ma="gsolo" data-g="'+esc(g)+'" title="Solo" aria-label="Solo '+esc(g)+'" aria-pressed="'+c.solo+'">S</button><small>'+n+'</small></div>';
-  }).join('')+'</div>');
+  }).join('')+'</div>');}
   h+=sh('Samples','<button type="button" class="snadd" data-ma="imp" title="Import audio" aria-label="Import audio">+</button>');
   h+=body('Samples',S.samples.length?'<div class="snlist">'+S.samples.map(s=>{
       const used=S.zones.some(z=>z.sample===s.id);
@@ -163,7 +165,7 @@ document.addEventListener('toggle',e=>{const d=e.target;if(d.classList&&d.classL
 function snGroupHTML(){
   const g=S.map.group;if(!g)return '<p class="empty">Pick a group on the left.</p>';
   const c=gcfg(g),n=S.zones.filter(z=>z.group===g).length;
-  return '<div class="snhead"><b>Group</b><small>'+n+' zones</small></div>'
+  return '<div class="snhead"><b>'+(patchModeOn()?'Patch':'Group')+'</b><small>'+n+' zones</small></div>'
     +'<label class="f"><span>Name</span><input type="text" data-sg="name" value="'+esc(g)+'"></label>'
     +'<label class="f"><span>Plays</span><select data-sg="mode">'+mopt(MODES,c.mode)+'</select></label>'
     +nf('Volume','data-sg="vol"',c.vol,-48,24,.5,'dB')+nf('Pan','data-sg="pan"',c.pan,-100,100,1,'L–R')+nf('Tune','data-sg="tune"',c.tune,-2400,2400,1,'cents')
@@ -240,17 +242,19 @@ $('#snInsGroup').addEventListener('click',e=>{
 const KSL={learn:null};
 function snListHTML(){
   const l=curList();if(!l)return '<p class="empty">No list selected.<br>Lists choose which groups play, like the patches of a rompler. Press + next to Lists to make one.</p>';
-  return '<div class="snhead"><b>List</b><small>bank '+((S.banks[l.bank]||{}).letter||'?')+'</small></div>'
+  const pm=patchModeOn();
+  return '<div class="snhead"><b>'+(pm?'Folder':'List')+'</b><small>'+(pm?l.groups.length+' patches':'bank '+((S.banks[l.bank]||{}).letter||'?'))+'</small></div>'
     +'<label class="f"><span>Name</span><input type="text" data-sl="name" value="'+esc(l.name)+'"></label>'
-    +'<label class="f"><span>Bank</span><select data-sl="bank">'+S.banks.map((b,i)=>'<option value="'+i+'"'+(i===l.bank?' selected':'')+'>'+b.letter+(b.name?' · '+esc(b.name):'')+'</option>').join('')+'</select></label>'
-    +'<div class="snsub">Groups it plays</div><div class="sngroups">'+(S.groups.length?S.groups.map(g=>'<label class="chk"><input type="checkbox" data-sl="grp" data-g="'+esc(g)+'"'+(l.groups.indexOf(g)>=0?' checked':'')+'><i class="sw" style="background:'+gcfg(g).color+'"></i>'+esc(g)+'</label>').join(''):'<span class="muted">No groups yet.</span>')+'</div>'
+    +(pm?'<p class="hint" style="display:block">Drag patches onto this folder on the left, or tick them here. The order on the left is the order of Next / Previous patch.</p>':'')
+    +'<label class="f"'+(pm?' hidden':'')+'><span>Bank</span><select data-sl="bank">'+S.banks.map((b,i)=>'<option value="'+i+'"'+(i===l.bank?' selected':'')+'>'+b.letter+(b.name?' · '+esc(b.name):'')+'</option>').join('')+'</select></label>'
+    +'<div class="snsub">'+(pm?'Patches in this folder':'Groups it plays')+'</div><div class="sngroups">'+(S.groups.length?S.groups.map(g=>'<label class="chk"><input type="checkbox" data-sl="grp" data-g="'+esc(g)+'"'+(l.groups.indexOf(g)>=0?' checked':'')+'><i class="sw" style="background:'+gcfg(g).color+'"></i>'+esc(g)+'</label>').join(''):'<span class="muted">No groups yet.</span>')+'</div>'
     +'<div class="snsub">Keyswitch</div><div class="ksrow"><span class="ksnote">'+(l.ks!=null&&l.ks>=0?noteName(l.ks)+' <small>('+l.ks+')</small>':'none')+'</span>'
       +'<button type="button" class="btn'+(KSL.learn===l.id?' on':'')+'" data-ls="ksLearn" data-id="'+l.id+'">'+(KSL.learn===l.id?'Play a key…':'Set by playing a key')+'</button>'
       +(l.ks!=null&&l.ks>=0?'<button type="button" class="btn" data-ls="ksClear" data-id="'+l.id+'">Clear</button>':'')+'</div>'
       +'<p class="hint" style="display:block">Playing this key picks the list (for articulations like legato, staccato, pizzicato). The key itself makes no sound. Keys below your mapped range work best.</p>'
     +'<label class="f chk"><input type="checkbox" data-sl="follow"'+(S.map.follow?' checked':'')+'><span>Only play this list\'s groups while editing</span></label>'
     +'<div class="snmores"><details class="snmore"><summary>Saved knob values</summary><div><p class="hint" style="display:block">'+Object.keys(l.vals||{}).length+' values stored. Choosing this list in the player sets the knobs to them.</p><div class="chips"><button type="button" class="btn" data-ls="saveVals" data-id="'+l.id+'">Store the current knob values</button></div></div></details></div>'
-    +'<div class="snacts"><button type="button" class="btn danger" data-ls="delList" data-id="'+l.id+'">Delete list</button></div>';
+    +'<div class="snacts"><button type="button" class="btn danger" data-ls="delList" data-id="'+l.id+'">'+(pm?'Delete folder':'Delete list')+'</button></div>';
 }
 $('#snInsList').addEventListener('input',e=>{const t=e.target,l=curList();if(!l||t.dataset.sl!=='name')return;l.name=t.value;refreshDisplays();const r=$('#leftM [data-sn="list"].cur .nm');if(r)r.textContent=l.name;});
 $('#snInsList').addEventListener('change',e=>{
