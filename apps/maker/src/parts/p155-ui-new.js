@@ -17,20 +17,30 @@ function buttonProps(el){
       +'<p class="hint">Pressed and On flip the bevel inward, so they follow the light angle. Pressed also darkens. On adds a lit tint.</p>':'<p class="hint">Off: the button keeps one look in every state.</p>'));
   return h+eventsHTML(el);
 }
+function fillSec(el,key,label){
+  const m=el.fillMode||'solid';
+  return sec('Fill',H.sel('Fill','fillMode',m,[['solid','Colour'],['gradient','Gradient'],['image','Image']],true)
+    +H.color(m==='gradient'?'From':label||'Colour',key,el[key])
+    +(m==='gradient'?H.color('To','fill2',el.fill2||'#000000')+H.chk('Follow the light angle','gradLight',el.gradLight!==false,true)+(el.gradLight===false?H.range('Angle','gradAngle',0,360,1,el.gradAngle||180):''):'')
+    +(m==='image'?H.img('Image','bgImg',el.bgImg,Math.max(el.w,el.h),'PNG, JPG or SVG. Your own artwork works: a scanned screen, brushed metal, a photo.')
+      +H.sel('Fit','bgFit',el.bgFit||'cover',[['cover','Fill (crop)'],['contain','Fit inside'],['stretch','Stretch'],['tile','Tile']]):''));
+}
 function lcdLook(el,extra){
-  return sec('Screen',looksRow()+H.color('Text colour','fg',el.fg)+H.color('Screen colour','bg',el.bg)+H.range('Glow','glow',0,14,1,el.glow)
-    +H.chk('Pixel grid','grid',el.grid,true)+(el.grid?H.range('Grid strength','gridAmt',.04,.5,.01,el.gridAmt):'')
-    +H.range('Rounding','radius',0,30,1,el.radius)+H.range('Padding','pad',0,40,1,el.pad)+(extra||''));
+  const scr=el.screen!==false;
+  return sec('Look',looksRow()+H.color('Text colour','fg',el.fg)+H.range('Glow','glow',0,14,1,el.glow)+H.range('Rounding','radius',0,30,1,el.radius)+H.range('Padding','pad',0,40,1,el.pad))
+    +fillSec(el,'bg','Background')
+    +sec('LCD screen',H.chk('Screen effect (bezel and pixels)','screen',scr,true)
+      +(scr?H.chk('Pixel grid','grid',el.grid,true)+(el.grid?H.range('Grid strength','gridAmt',.04,.5,.01,el.gridAmt):'')+(extra||''):''));
 }
 function lcdProps(el){
   return sec('Content',H.area('Text','text',el.text)+insRow())
-    +sec('Text',H.sel('Font','font',el.font,['VT323','JetBrains Mono','Figtree']) +H.range('Size','size',8,120,1,el.size)+H.sel('Align','align',el.align,['left','center','right'],true))
+    +sec('Text',H.sel('Font','font',el.font,BUILTIN_FONTS.concat(Object.keys(S.fonts))) +H.range('Size','size',8,120,1,el.size)+H.sel('Align','align',el.align,['left','center','right'],true))
     +lcdLook(el,H.chk('Scanlines','scan',el.scan));
 }
 function listProps(el){
   return sec('List',H.range('Visible rows','rows',2,16,1,el.rows)+H.chk('Show numbers (A01)','numbers',el.numbers)
     +H.sel('Selected row','selStyle',el.selStyle,[['invert','Inverted'],['arrow','Arrow'],['box','Outline']])
-    +H.sel('Font','font',el.font,['VT323','JetBrains Mono','Figtree'])+H.range('Font size (0 = auto)','size',0,80,1,el.size)
+    +H.sel('Font','font',el.font,BUILTIN_FONTS.concat(Object.keys(S.fonts)))+H.range('Font size (0 = auto)','size',0,80,1,el.size)
     +'<p class="hint">Bound to the built-in list and bank tags, no setup needed. In Test mode click a row or scroll to choose. Edit the lists in the Lists tab.</p>')
     +lcdLook(el,H.chk('Scanlines','scan',el.scan))+eventsHTML(el);
 }

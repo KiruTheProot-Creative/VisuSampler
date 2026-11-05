@@ -1,13 +1,13 @@
 /* ---------- element factories ---------- */
-const TYPE_NAMES={panel:'Panel',knob:'Knob',fader:'Fader',text:'Text',button:'Button',lcd:'LCD',list:'List selector'};
+const TYPE_NAMES={panel:'Panel',knob:'Knob',fader:'Fader',text:'Text',button:'Button',lcd:'Text panel',list:'List selector'};
 const DEF={
-  panel:()=>({w:240,h:160,fill:'#3a3445',round:true,radius:14,bevel:true,bevelSize:3,bevelDir:'out',shadow:true,shadowDist:6,shadowBlur:18,mat:null,matBlend:'overlay',matOpacity:.5,matMode:'tile',matScale:1}),
+  panel:()=>({w:240,h:160,fillMode:'solid',fill2:'#1f1b26',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',fill:'#3a3445',round:true,radius:14,bevel:true,bevelSize:3,bevelDir:'out',shadow:true,shadowDist:6,shadowBlur:18,mat:null,matBlend:'overlay',matOpacity:.5,matMode:'tile',matScale:1}),
   knob:()=>({w:110,h:110,tag:'',lower:null,upper:null,ringMode:'auto',ringImg:null,ringColor:'#ff7eb6',ringFrom:'start',ringWidth:.09,start:-135,end:135,px:.5,py:.5,baseColor:'#4a4357',capColor:'#e9e4f2',ptrColor:'#ff7eb6',ptrStyle:'line',rules:[]}),
   fader:()=>({w:56,h:200,tag:'',orient:'v',lower:null,upper:null,handleLen:.14,fill:true,fillColor:'#ff7eb6',trackColor:'#17141d',handleColor:'#e9e4f2',rules:[]}),
   text:()=>({w:200,h:36,text:'Label',font:'Figtree',size:18,weight:'600',color:'#f3e9ff',align:'center',spacing:0,bevel:'none',shadow:false,glow:false,glowColor:'#ff7eb6'}),
   button:()=>({w:72,h:44,label:'Button',font:'Figtree',size:15,weight:'700',textColor:'#1c1d21',tag:'',mode:'momentary',value:0,color:'#b4bac4',radius:8,bevelSize:3,led:false,ledColor:'#ff9d2e',auto:true,hover:8,press:14,travel:1,preview:'auto',rules:[]}),
-  lcd:()=>({w:320,h:84,text:'{list.id}  {list.name}',font:'VT323',size:34,align:'left',fg:'#1f2a0f',bg:'#a3b865',glow:0,grid:true,gridAmt:.16,scan:false,radius:6,pad:12}),
-  list:()=>({w:360,h:200,rows:6,font:'VT323',size:0,fg:'#1f2a0f',bg:'#a3b865',selStyle:'invert',numbers:true,grid:true,gridAmt:.16,radius:6,pad:10,glow:0,rules:[]})
+  lcd:()=>({w:320,h:84,text:'{list.id}  {list.name}',font:'Figtree',size:26,align:'left',fg:'#f2f2f2',bg:'#1d1d22',glow:0,screen:false,grid:true,gridAmt:.16,scan:false,radius:6,pad:12,fillMode:'solid',fill2:'#0e0e12',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover'}),
+  list:()=>({w:360,h:200,rows:6,font:'VT323',size:0,fg:'#1f2a0f',bg:'#a3b865',selStyle:'invert',numbers:true,screen:true,grid:true,gridAmt:.16,radius:6,pad:10,glow:0,fillMode:'solid',fill2:'#6f8a3c',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',rules:[]})
 };
 function mk(type,over){
   const n=S.els.filter(e=>e.type===type).length+1;
@@ -19,11 +19,23 @@ function mkTag(name,kind,o){
 }
 const sysTags=()=>[mkTag('bank','bank',{sys:true}),mkTag('list','list',{sys:true})];
 const LOOKS={
-  green:{bg:'#a3b865',fg:'#1f2a0f',glow:0},
-  amber:{bg:'#1c1004',fg:'#ffb347',glow:6},
-  ice:{bg:'#06161c',fg:'#8fe9ff',glow:6},
-  dark:{bg:'#0b0b0d',fg:'#f2f2f2',glow:3}
+  plain:{bg:'#1d1d22',fg:'#f2f2f2',glow:0,screen:false,fillMode:'solid',font:'Figtree'},
+  'green LCD':{bg:'#a3b865',fg:'#1f2a0f',glow:0,screen:true,fillMode:'solid',font:'VT323'},
+  'amber LCD':{bg:'#1c1004',fg:'#ffb347',glow:6,screen:true,fillMode:'solid',font:'VT323'},
+  'ice LCD':{bg:'#06161c',fg:'#8fe9ff',glow:6,screen:true,fillMode:'solid',font:'VT323'},
+  dark:{bg:'#0b0b0d',fg:'#f2f2f2',glow:3,screen:false,fillMode:'solid',font:'JetBrains Mono'},
+  glass:{bg:'#2a3442',fill2:'#121820',fg:'#dfeaff',glow:0,screen:false,fillMode:'gradient',gradLight:true,font:'Figtree'}
 };
+/* shared fill for panels, text panels and list selectors: solid, gradient (can follow the light) or an image */
+function fillCss(el,key){
+  const c=el[key],m=el.fillMode||'solid';
+  if(m==='image'&&el.bgImg&&S.assets[el.bgImg]){
+    const fit=el.bgFit||'cover',url=imgSrc(el.bgImg,Math.ceil(Math.max(el.w,el.h)*(S.z||1)*2));
+    return 'background:'+c+' url(\''+url+'\') center/'+(fit==='stretch'?'100% 100%':fit==='tile'?'auto':fit)+' '+(fit==='tile'?'repeat':'no-repeat')+';';
+  }
+  if(m==='gradient'){const a=el.gradLight?(S.light+180)%360:(el.gradAngle||180);return 'background:linear-gradient('+a+'deg,'+c+','+(el.fill2||'#000')+');';}
+  return 'background:'+c+';';
+}
 function addSample(){
   S.groups=['Felt Piano','Felt Hammers','Release Noise','String Pad','Warm Pad','Glass Pad','Choir Ah','Choir Oo','Bells','Sub Bass','Bass Pluck','Rhodes','Clav','Organ'];
   const L=(name,bank,groups,vals)=>({id:nid('l'),name,bank,groups,vals:vals||{}});

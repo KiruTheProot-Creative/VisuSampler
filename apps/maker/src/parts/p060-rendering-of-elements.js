@@ -7,7 +7,7 @@ function panelCss(el){
     sh.push('inset '+f1(-lx*b*d)+'px '+f1(-ly*b*d)+'px '+b+'px rgba(255,255,255,.3)');
     sh.push('inset '+f1(lx*b*d)+'px '+f1(ly*b*d)+'px '+b+'px rgba(0,0,0,.45)');
   }
-  return 'background:'+el.fill+';border-radius:'+(el.round?el.radius:0)+'px;box-shadow:'+(sh.join(',')||'none')+';isolation:isolate;';
+  return fillCss(el,'fill')+'border-radius:'+(el.round?el.radius:0)+'px;box-shadow:'+(sh.join(',')||'none')+';isolation:isolate;';
 }
 function panelHTML(el){
   const a=el.mat&&S.assets[el.mat]; if(!a) return '';

@@ -1,0 +1,26 @@
+import {openApp} from './_helper.mjs';
+const app=await openApp(),p=app.p,fails=[];
+const ok=(c,m)=>{console.log((c?'ok  ':'FAIL ')+m);if(!c)fails.push(m);};
+await p.click('[data-view="design"]');await p.waitForTimeout(300);
+await p.click('[data-act="add"][data-type="lcd"]');await p.waitForTimeout(200);
+ok(await p.evaluate(()=>{const S=window.__vs.S,e=S.els.find(x=>x.id===S.sel);return e&&e.type==='lcd'&&/^Text panel/.test(e.name)&&e.screen===false;}),'Text panel is added, plain by default');
+const bg=()=>p.evaluate(()=>{const S=window.__vs.S;return getComputedStyle(document.querySelector('.el[data-id="'+S.sel+'"]')).backgroundImage;});
+await p.selectOption('[data-k="fillMode"]','gradient');await p.waitForTimeout(150);
+ok(/linear-gradient/.test(await bg()),'gradient fill');
+await p.click('[data-act="lcdlook"][data-v="green LCD"]');await p.waitForTimeout(150);
+ok(await p.evaluate(()=>{const S=window.__vs.S;return document.querySelectorAll('.el[data-id="'+S.sel+'"] .ov').length>0;}),'LCD look adds the screen effect');
+await p.click('[data-k="screen"]');await p.waitForTimeout(150);
+ok(await p.evaluate(()=>{const S=window.__vs.S;return document.querySelectorAll('.el[data-id="'+S.sel+'"] .ov').length===0;}),'screen effect can be switched off');
+await p.selectOption('[data-k="fillMode"]','image');await p.waitForTimeout(150);
+ok(await p.locator('[data-act="pick"][data-k="bgImg"]').count()===1,'image fill offers Choose image');
+await p.evaluate(()=>{const S=window.__vs.S,e=S.els.find(x=>x.id===S.sel);e.bgImg='tex_brushed';window.__vs.renderEl&&0;});
+await p.selectOption('[data-k="fillMode"]','solid');await p.selectOption('[data-k="fillMode"]','image');await p.waitForTimeout(150);
+ok(/url\(/.test(await bg()),'image fill shows the image');
+/* panels get the same fills */
+await p.click('[data-act="add"][data-type="panel"]');await p.waitForTimeout(150);await p.selectOption('[data-k="fillMode"]','gradient');await p.waitForTimeout(100);
+ok(/linear-gradient/.test(await bg()),'panels can be gradients');
+await p.click('[data-act="add"][data-type="list"]');await p.waitForTimeout(150);
+ok(await p.locator('[data-k="fillMode"]').count()===1,'list selectors have the same fill options');
+await p.screenshot({path:'/tmp/des1.png'});
+ok(app.errs.length===0,'no page errors '+app.errs.join(' | '));
+console.log(fails.length?'FAILED '+fails.length:'ALL OK');await app.close();process.exit(fails.length?1:0);

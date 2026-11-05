@@ -39,11 +39,13 @@ function buttonHTML(el,st){
   return h;
 }
 function lcdCss(el){
-  const {lx,ly}=lightVec();
-  return 'background:'+el.bg+';border-radius:'+el.radius+'px;box-shadow:inset '+f1(-lx*4)+'px '+f1(-ly*4)+'px 8px rgba(0,0,0,.55),inset '+f1(lx*2)+'px '+f1(ly*2)+'px 3px rgba(255,255,255,.12),'+f1(lx)+'px '+f1(ly)+'px 0 rgba(255,255,255,.28);';
+  const {lx,ly}=lightVec(),scr=el.screen!==false;
+  const sh=scr?'box-shadow:inset '+f1(-lx*4)+'px '+f1(-ly*4)+'px 8px rgba(0,0,0,.55),inset '+f1(lx*2)+'px '+f1(ly*2)+'px 3px rgba(255,255,255,.12),'+f1(lx)+'px '+f1(ly)+'px 0 rgba(255,255,255,.28);'
+    :(el.bevel===false?'':'box-shadow:inset '+f1(-lx*2)+'px '+f1(-ly*2)+'px 2px rgba(255,255,255,.08),inset '+f1(lx*2)+'px '+f1(ly*2)+'px 3px rgba(0,0,0,.35);');
+  return fillCss(el,'bg')+'border-radius:'+el.radius+'px;'+sh+'overflow:hidden;';
 }
 function lcdOverlay(el,cell){
-  let h='';
+  let h='';if(el.screen===false)return h;
   if(el.grid) h+='<div class="ov" style="background-image:linear-gradient(to right,rgba(0,0,0,'+el.gridAmt+') 1px,transparent 1px),linear-gradient(to bottom,rgba(0,0,0,'+el.gridAmt+') 1px,transparent 1px);background-size:'+cell+'px '+cell+'px"></div>';
   if(el.scan) h+='<div class="ov" style="background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px)"></div>';
   return h;

@@ -60,7 +60,7 @@ function faderProps(el){
 }
 function panelProps(el){
   const a=el.mat&&S.assets[el.mat];
-  let h=sec('Fill and edges',H.color('Fill','fill',el.fill)+H.chk('Rounded edges','round',el.round,true)+(el.round?H.range('Rounding','radius',0,80,1,el.radius):''));
+  let h=fillSec(el,'fill','Colour')+sec('Edges',H.chk('Rounded edges','round',el.round,true)+(el.round?H.range('Rounding','radius',0,80,1,el.radius):''));
   h+=sec('Bevel and shadow',H.chk('Bevel','bevel',el.bevel,true)
     +(el.bevel?H.range('Bevel size','bevelSize',1,16,1,el.bevelSize)+H.sel('Direction','bevelDir',el.bevelDir,[['out','Outwards'],['in','Inwards']]):'')
     +H.chk('Drop shadow','shadow',el.shadow,true)

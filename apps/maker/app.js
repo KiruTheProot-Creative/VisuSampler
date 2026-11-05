@@ -197,15 +197,15 @@ function addTexAssets(){
 
 
 /* ---------- element factories ---------- */
-const TYPE_NAMES={panel:'Panel',knob:'Knob',fader:'Fader',text:'Text',button:'Button',lcd:'LCD',list:'List selector'};
+const TYPE_NAMES={panel:'Panel',knob:'Knob',fader:'Fader',text:'Text',button:'Button',lcd:'Text panel',list:'List selector'};
 const DEF={
-  panel:()=>({w:240,h:160,fill:'#3a3445',round:true,radius:14,bevel:true,bevelSize:3,bevelDir:'out',shadow:true,shadowDist:6,shadowBlur:18,mat:null,matBlend:'overlay',matOpacity:.5,matMode:'tile',matScale:1}),
+  panel:()=>({w:240,h:160,fillMode:'solid',fill2:'#1f1b26',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',fill:'#3a3445',round:true,radius:14,bevel:true,bevelSize:3,bevelDir:'out',shadow:true,shadowDist:6,shadowBlur:18,mat:null,matBlend:'overlay',matOpacity:.5,matMode:'tile',matScale:1}),
   knob:()=>({w:110,h:110,tag:'',lower:null,upper:null,ringMode:'auto',ringImg:null,ringColor:'#ff7eb6',ringFrom:'start',ringWidth:.09,start:-135,end:135,px:.5,py:.5,baseColor:'#4a4357',capColor:'#e9e4f2',ptrColor:'#ff7eb6',ptrStyle:'line',rules:[]}),
   fader:()=>({w:56,h:200,tag:'',orient:'v',lower:null,upper:null,handleLen:.14,fill:true,fillColor:'#ff7eb6',trackColor:'#17141d',handleColor:'#e9e4f2',rules:[]}),
   text:()=>({w:200,h:36,text:'Label',font:'Figtree',size:18,weight:'600',color:'#f3e9ff',align:'center',spacing:0,bevel:'none',shadow:false,glow:false,glowColor:'#ff7eb6'}),
   button:()=>({w:72,h:44,label:'Button',font:'Figtree',size:15,weight:'700',textColor:'#1c1d21',tag:'',mode:'momentary',value:0,color:'#b4bac4',radius:8,bevelSize:3,led:false,ledColor:'#ff9d2e',auto:true,hover:8,press:14,travel:1,preview:'auto',rules:[]}),
-  lcd:()=>({w:320,h:84,text:'{list.id}  {list.name}',font:'VT323',size:34,align:'left',fg:'#1f2a0f',bg:'#a3b865',glow:0,grid:true,gridAmt:.16,scan:false,radius:6,pad:12}),
-  list:()=>({w:360,h:200,rows:6,font:'VT323',size:0,fg:'#1f2a0f',bg:'#a3b865',selStyle:'invert',numbers:true,grid:true,gridAmt:.16,radius:6,pad:10,glow:0,rules:[]})
+  lcd:()=>({w:320,h:84,text:'{list.id}  {list.name}',font:'Figtree',size:26,align:'left',fg:'#f2f2f2',bg:'#1d1d22',glow:0,screen:false,grid:true,gridAmt:.16,scan:false,radius:6,pad:12,fillMode:'solid',fill2:'#0e0e12',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover'}),
+  list:()=>({w:360,h:200,rows:6,font:'VT323',size:0,fg:'#1f2a0f',bg:'#a3b865',selStyle:'invert',numbers:true,screen:true,grid:true,gridAmt:.16,radius:6,pad:10,glow:0,fillMode:'solid',fill2:'#6f8a3c',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',rules:[]})
 };
 function mk(type,over){
   const n=S.els.filter(e=>e.type===type).length+1;
@@ -217,11 +217,23 @@ function mkTag(name,kind,o){
 }
 const sysTags=()=>[mkTag('bank','bank',{sys:true}),mkTag('list','list',{sys:true})];
 const LOOKS={
-  green:{bg:'#a3b865',fg:'#1f2a0f',glow:0},
-  amber:{bg:'#1c1004',fg:'#ffb347',glow:6},
-  ice:{bg:'#06161c',fg:'#8fe9ff',glow:6},
-  dark:{bg:'#0b0b0d',fg:'#f2f2f2',glow:3}
+  plain:{bg:'#1d1d22',fg:'#f2f2f2',glow:0,screen:false,fillMode:'solid',font:'Figtree'},
+  'green LCD':{bg:'#a3b865',fg:'#1f2a0f',glow:0,screen:true,fillMode:'solid',font:'VT323'},
+  'amber LCD':{bg:'#1c1004',fg:'#ffb347',glow:6,screen:true,fillMode:'solid',font:'VT323'},
+  'ice LCD':{bg:'#06161c',fg:'#8fe9ff',glow:6,screen:true,fillMode:'solid',font:'VT323'},
+  dark:{bg:'#0b0b0d',fg:'#f2f2f2',glow:3,screen:false,fillMode:'solid',font:'JetBrains Mono'},
+  glass:{bg:'#2a3442',fill2:'#121820',fg:'#dfeaff',glow:0,screen:false,fillMode:'gradient',gradLight:true,font:'Figtree'}
 };
+/* shared fill for panels, text panels and list selectors: solid, gradient (can follow the light) or an image */
+function fillCss(el,key){
+  const c=el[key],m=el.fillMode||'solid';
+  if(m==='image'&&el.bgImg&&S.assets[el.bgImg]){
+    const fit=el.bgFit||'cover',url=imgSrc(el.bgImg,Math.ceil(Math.max(el.w,el.h)*(S.z||1)*2));
+    return 'background:'+c+' url(\''+url+'\') center/'+(fit==='stretch'?'100% 100%':fit==='tile'?'auto':fit)+' '+(fit==='tile'?'repeat':'no-repeat')+';';
+  }
+  if(m==='gradient'){const a=el.gradLight?(S.light+180)%360:(el.gradAngle||180);return 'background:linear-gradient('+a+'deg,'+c+','+(el.fill2||'#000')+');';}
+  return 'background:'+c+';';
+}
 function addSample(){
   S.groups=['Felt Piano','Felt Hammers','Release Noise','String Pad','Warm Pad','Glass Pad','Choir Ah','Choir Oo','Bells','Sub Bass','Bass Pluck','Rhodes','Clav','Organ'];
   const L=(name,bank,groups,vals)=>({id:nid('l'),name,bank,groups,vals:vals||{}});
@@ -278,7 +290,7 @@ function panelCss(el){
     sh.push('inset '+f1(-lx*b*d)+'px '+f1(-ly*b*d)+'px '+b+'px rgba(255,255,255,.3)');
     sh.push('inset '+f1(lx*b*d)+'px '+f1(ly*b*d)+'px '+b+'px rgba(0,0,0,.45)');
   }
-  return 'background:'+el.fill+';border-radius:'+(el.round?el.radius:0)+'px;box-shadow:'+(sh.join(',')||'none')+';isolation:isolate;';
+  return fillCss(el,'fill')+'border-radius:'+(el.round?el.radius:0)+'px;box-shadow:'+(sh.join(',')||'none')+';isolation:isolate;';
 }
 function panelHTML(el){
   const a=el.mat&&S.assets[el.mat]; if(!a) return '';
@@ -424,11 +436,13 @@ function buttonHTML(el,st){
   return h;
 }
 function lcdCss(el){
-  const {lx,ly}=lightVec();
-  return 'background:'+el.bg+';border-radius:'+el.radius+'px;box-shadow:inset '+f1(-lx*4)+'px '+f1(-ly*4)+'px 8px rgba(0,0,0,.55),inset '+f1(lx*2)+'px '+f1(ly*2)+'px 3px rgba(255,255,255,.12),'+f1(lx)+'px '+f1(ly)+'px 0 rgba(255,255,255,.28);';
+  const {lx,ly}=lightVec(),scr=el.screen!==false;
+  const sh=scr?'box-shadow:inset '+f1(-lx*4)+'px '+f1(-ly*4)+'px 8px rgba(0,0,0,.55),inset '+f1(lx*2)+'px '+f1(ly*2)+'px 3px rgba(255,255,255,.12),'+f1(lx)+'px '+f1(ly)+'px 0 rgba(255,255,255,.28);'
+    :(el.bevel===false?'':'box-shadow:inset '+f1(-lx*2)+'px '+f1(-ly*2)+'px 2px rgba(255,255,255,.08),inset '+f1(lx*2)+'px '+f1(ly*2)+'px 3px rgba(0,0,0,.35);');
+  return fillCss(el,'bg')+'border-radius:'+el.radius+'px;'+sh+'overflow:hidden;';
 }
 function lcdOverlay(el,cell){
-  let h='';
+  let h='';if(el.screen===false)return h;
   if(el.grid) h+='<div class="ov" style="background-image:linear-gradient(to right,rgba(0,0,0,'+el.gridAmt+') 1px,transparent 1px),linear-gradient(to bottom,rgba(0,0,0,'+el.gridAmt+') 1px,transparent 1px);background-size:'+cell+'px '+cell+'px"></div>';
   if(el.scan) h+='<div class="ov" style="background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px)"></div>';
   return h;
@@ -938,7 +952,7 @@ function faderProps(el){
 }
 function panelProps(el){
   const a=el.mat&&S.assets[el.mat];
-  let h=sec('Fill and edges',H.color('Fill','fill',el.fill)+H.chk('Rounded edges','round',el.round,true)+(el.round?H.range('Rounding','radius',0,80,1,el.radius):''));
+  let h=fillSec(el,'fill','Colour')+sec('Edges',H.chk('Rounded edges','round',el.round,true)+(el.round?H.range('Rounding','radius',0,80,1,el.radius):''));
   h+=sec('Bevel and shadow',H.chk('Bevel','bevel',el.bevel,true)
     +(el.bevel?H.range('Bevel size','bevelSize',1,16,1,el.bevelSize)+H.sel('Direction','bevelDir',el.bevelDir,[['out','Outwards'],['in','Inwards']]):'')
     +H.chk('Drop shadow','shadow',el.shadow,true)
@@ -991,20 +1005,30 @@ function buttonProps(el){
       +'<p class="hint">Pressed and On flip the bevel inward, so they follow the light angle. Pressed also darkens. On adds a lit tint.</p>':'<p class="hint">Off: the button keeps one look in every state.</p>'));
   return h+eventsHTML(el);
 }
+function fillSec(el,key,label){
+  const m=el.fillMode||'solid';
+  return sec('Fill',H.sel('Fill','fillMode',m,[['solid','Colour'],['gradient','Gradient'],['image','Image']],true)
+    +H.color(m==='gradient'?'From':label||'Colour',key,el[key])
+    +(m==='gradient'?H.color('To','fill2',el.fill2||'#000000')+H.chk('Follow the light angle','gradLight',el.gradLight!==false,true)+(el.gradLight===false?H.range('Angle','gradAngle',0,360,1,el.gradAngle||180):''):'')
+    +(m==='image'?H.img('Image','bgImg',el.bgImg,Math.max(el.w,el.h),'PNG, JPG or SVG. Your own artwork works: a scanned screen, brushed metal, a photo.')
+      +H.sel('Fit','bgFit',el.bgFit||'cover',[['cover','Fill (crop)'],['contain','Fit inside'],['stretch','Stretch'],['tile','Tile']]):''));
+}
 function lcdLook(el,extra){
-  return sec('Screen',looksRow()+H.color('Text colour','fg',el.fg)+H.color('Screen colour','bg',el.bg)+H.range('Glow','glow',0,14,1,el.glow)
-    +H.chk('Pixel grid','grid',el.grid,true)+(el.grid?H.range('Grid strength','gridAmt',.04,.5,.01,el.gridAmt):'')
-    +H.range('Rounding','radius',0,30,1,el.radius)+H.range('Padding','pad',0,40,1,el.pad)+(extra||''));
+  const scr=el.screen!==false;
+  return sec('Look',looksRow()+H.color('Text colour','fg',el.fg)+H.range('Glow','glow',0,14,1,el.glow)+H.range('Rounding','radius',0,30,1,el.radius)+H.range('Padding','pad',0,40,1,el.pad))
+    +fillSec(el,'bg','Background')
+    +sec('LCD screen',H.chk('Screen effect (bezel and pixels)','screen',scr,true)
+      +(scr?H.chk('Pixel grid','grid',el.grid,true)+(el.grid?H.range('Grid strength','gridAmt',.04,.5,.01,el.gridAmt):'')+(extra||''):''));
 }
 function lcdProps(el){
   return sec('Content',H.area('Text','text',el.text)+insRow())
-    +sec('Text',H.sel('Font','font',el.font,['VT323','JetBrains Mono','Figtree']) +H.range('Size','size',8,120,1,el.size)+H.sel('Align','align',el.align,['left','center','right'],true))
+    +sec('Text',H.sel('Font','font',el.font,BUILTIN_FONTS.concat(Object.keys(S.fonts))) +H.range('Size','size',8,120,1,el.size)+H.sel('Align','align',el.align,['left','center','right'],true))
     +lcdLook(el,H.chk('Scanlines','scan',el.scan));
 }
 function listProps(el){
   return sec('List',H.range('Visible rows','rows',2,16,1,el.rows)+H.chk('Show numbers (A01)','numbers',el.numbers)
     +H.sel('Selected row','selStyle',el.selStyle,[['invert','Inverted'],['arrow','Arrow'],['box','Outline']])
-    +H.sel('Font','font',el.font,['VT323','JetBrains Mono','Figtree'])+H.range('Font size (0 = auto)','size',0,80,1,el.size)
+    +H.sel('Font','font',el.font,BUILTIN_FONTS.concat(Object.keys(S.fonts)))+H.range('Font size (0 = auto)','size',0,80,1,el.size)
     +'<p class="hint">Bound to the built-in list and bank tags, no setup needed. In Test mode click a row or scroll to choose. Edit the lists in the Lists tab.</p>')
     +lcdLook(el,H.chk('Scanlines','scan',el.scan))+eventsHTML(el);
 }
