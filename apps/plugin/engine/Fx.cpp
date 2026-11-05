@@ -107,7 +107,7 @@ static inline void panStereo(float pan, float& l, float& r) {   // Web Audio Ste
 }
 
 /* ================= nodes ================= */
-struct ParamInfo { std::string key; float min = 0, max = 1, raw = 0, real = 0; bool opt = false, sync = false, known = false; int tag = -1; };
+struct ParamInfo { std::string key; float min = 0, max = 1, raw = 0, real = 0; bool opt = false, sync = false, known = false, log = false; int tag = -1; };
 struct ModLink { int param; int src; float amt; };
 struct Cable { int src; std::string srcPort; std::string dstPort; };
 
@@ -129,7 +129,8 @@ struct Node {
     std::vector<Cable> incoming;            // audio
     std::vector<ModLink> mods;              // control
     std::unique_ptr<Module> mod;
-    float modValue = .5f, mixPrev = -1; double randCur = .5, randStep = -1;
+    float modValue = .5f, mixPrev = -1, wetPrev = -1; double randCur = .5, randStep = -1;
+    int byTag = -1; bool byInv = false, byTails = false; Stereo hold;   // bypass follows a tag (a button on the interface)
     std::string sampleRef, tagRef;          // convolution impulse, macro tag
     int idx(const char* k) const { for (size_t i = 0; i < params.size(); ++i) if (params[i].key == k) return (int) i; return -1; }
     float P(int i, float def = 0) const { return i < 0 ? def : params[(size_t) i].real; }
@@ -779,10 +780,13 @@ static void evalParams(Node& nd, Control& c, const std::vector<TagDef>& tags, co
                 const double beats = bar ? kSyncBar[i] * (c.sigN * 4.0 / c.sigD) : kSync[i]; p.real = (float) (beats * 60000.0 / c.bpm); continue;
             }
             norm = tv;
-        } else norm = p.max > p.min ? (p.raw - p.min) / (p.max - p.min) : 0;
-        for (auto& m : nd.mods) if (m.param == (int) pi) norm += (all[(size_t) m.src]->modValue - .5f) * 2 * (m.amt / 100.f);
+        } else if (p.log) norm = std::log(std::max(p.min, p.raw) / p.min) / std::log(p.max / p.min);
+        else norm = p.max > p.min ? (p.raw - p.min) / (p.max - p.min) : 0;
+        // a macro adds its knob on top (0 = the parameter as set); other modulators swing both ways
+        for (auto& m : nd.mods) if (m.param == (int) pi) { const Node& src = *all[(size_t) m.src];
+            norm += src.type == "macro" ? src.modValue * (m.amt / 100.f) : (src.modValue - .5f) * 2 * (m.amt / 100.f); }
         norm = clampf(norm, 0, 1);
-        p.real = p.min + norm * (p.max - p.min);
+        p.real = p.log ? p.min * std::pow(p.max / p.min, norm) : p.min + norm * (p.max - p.min);
         if (p.opt) p.real = std::round(p.real);
     }
 }
@@ -836,6 +840,8 @@ static std::unique_ptr<Graph> buildGraph(const Json& g, const Json& ranges, cons
         const Json& nj = nodes[i]; auto nd = std::make_unique<Node>();
         nd->id = nj["id"].str(); nd->type = nj["type"].str(); nd->bypass = nj["bypass"].boolean();
         nd->sampleRef = nj["s"]["ir"].str(); nd->tagRef = nj["tag"]["value"].str();
+        { const Json& bj = nj["byTag"]; const std::string tid = bj["tag"].str(); nd->byInv = bj["inv"].boolean(); nd->byTails = bj["tails"].boolean();
+          if (!tid.empty()) for (size_t k = 0; k < tags.size(); ++k) if (tags[k].id == tid) nd->byTag = (int) k; }
         const TypeInfo* ti = nullptr; for (auto& t : types()) if (nd->type == t.type) ti = &t;
         const bool isFx = std::find(kFx.begin(), kFx.end(), nd->type) != kFx.end();
         if (ti) { nd->inNames = ti->ins; nd->outNames = ti->outs; nd->raw = ti->raw; nd->isMod = ti->mod; nd->io = nd->type == "input" || nd->type == "output"; }
@@ -848,7 +854,7 @@ static std::unique_ptr<Graph> buildGraph(const Json& g, const Json& ranges, cons
         for (auto& kv : nj["p"].o) {
             ParamInfo p; p.key = kv.first; p.raw = (float) kv.second.num(); p.real = p.raw;
             const Json& r = rr[kv.first.c_str()];
-            if (r.size() >= 2) { p.known = true; p.min = (float) r[(size_t) 0].num(); p.max = (float) r[(size_t) 1].num(); p.opt = r[(size_t) 2].num() > .5; p.sync = r[(size_t) 3].num() > .5; }
+            if (r.size() >= 2) { p.known = true; p.min = (float) r[(size_t) 0].num(); p.max = (float) r[(size_t) 1].num(); p.opt = r[(size_t) 2].num() > .5; p.sync = r[(size_t) 3].num() > .5; p.log = r.size() > 4 && r[(size_t) 4].num() > .5 && p.min > 0; }
             const std::string tid = nj["tag"][kv.first.c_str()].str();
             if (!tid.empty()) for (size_t k = 0; k < tags.size(); ++k) if (tags[k].id == tid) p.tag = (int) k;
             nd->params.push_back(p);
@@ -893,20 +899,30 @@ static void runGraph(Graph& G, int n, Control& c, const std::vector<TagDef>& tag
         if (nd.type == "input") continue;
         evalParams(nd, c, tags, G.nodes);
         if (nd.isMod) { if (nd.mod) { nd.mod->run(nd, n, c); nd.modValue = modOut(nd, c, blockSec, tags); } continue; }
+        /* bypass: the switch in the editor, or a tag (on while the tag is on, unless reversed) */
+        bool off = nd.bypass || !nd.mod, tails = false;
+        if (!off && nd.byTag >= 0 && nd.byTag < c.numTags && c.tags) {
+            const bool on = (c.tags[nd.byTag].load() >= .5f) != nd.byInv;
+            if (!on) { if (nd.byTails && !nd.raw) tails = true; else off = true; }
+        }
         if (nd.raw) {
-            if (nd.bypass || !nd.mod) { for (auto& o : nd.outs) std::memcpy(&o, &nd.ins[0], sizeof(Stereo)); }
+            if (off) { for (auto& o : nd.outs) std::memcpy(&o, &nd.ins[0], sizeof(Stereo)); }
             else nd.mod->run(nd, n, c);
             continue;
         }
         /* effect: dry, wet and mix outputs */
         Stereo& x = nd.ins[0];
-        if (nd.bypass || !nd.mod) { nd.wet.clear(n); } else nd.mod->run(nd, n, c);
-        const int mi = nd.idx("mix"); const float target = (nd.bypass || !nd.mod) ? 0.f : clampf(nd.P(mi, 100) / 100.f, 0, 1);
-        if (nd.mixPrev < 0) nd.mixPrev = target;
+        if (off) nd.wet.clear(n);
+        else if (tails) {   // input closed, the module keeps running so reverb and delay tails ring out
+            std::memcpy(&nd.hold, &x, sizeof(Stereo)); x.clear(n); nd.mod->run(nd, n, c); std::memcpy(&x, &nd.hold, sizeof(Stereo));
+        } else nd.mod->run(nd, n, c);
+        const int mi = nd.idx("mix"); const float m0 = clampf(nd.P(mi, 100) / 100.f, 0, 1);
+        const float dryT = off || tails ? 1.f : 1 - m0, wetT = off ? 0.f : m0;   // smoothed, so switching never clicks
+        if (nd.mixPrev < 0) { nd.mixPrev = dryT; nd.wetPrev = wetT; }
         std::memcpy(&nd.outs[0], &x, sizeof(Stereo)); std::memcpy(&nd.outs[1], &nd.wet, sizeof(Stereo));
-        for (int i = 0; i < n; ++i) { const float m = nd.mixPrev + (target - nd.mixPrev) * (float) (i + 1) / (float) n;
-            nd.outs[2].l[i] = x.l[i] * (1 - m) + nd.wet.l[i] * m; nd.outs[2].r[i] = x.r[i] * (1 - m) + nd.wet.r[i] * m; }
-        nd.mixPrev = target;
+        for (int i = 0; i < n; ++i) { const float t = (float) (i + 1) / (float) n, dg = nd.mixPrev + (dryT - nd.mixPrev) * t, wg = nd.wetPrev + (wetT - nd.wetPrev) * t;
+            nd.outs[2].l[i] = x.l[i] * dg + nd.wet.l[i] * wg; nd.outs[2].r[i] = x.r[i] * dg + nd.wet.r[i] * wg; }
+        nd.mixPrev = dryT; nd.wetPrev = wetT;
         for (int i = 0; i < n; ++i) { if (!std::isfinite(nd.outs[2].l[i]) || !std::isfinite(nd.outs[2].r[i])) { nd.outs[2].clear(n); nd.outs[1].clear(n); break; } }
     }
 }

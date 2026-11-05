@@ -216,7 +216,7 @@ static void testFx() {
     };
     for (size_t i = 0; i < cases.size(); ++i) {
         const std::string mod = cases[i]["module"].str(); const int key = cases[i]["key"].integer();
-        if (mod == "lfo-mod" || mod == "tag") continue;
+        if (mod == "lfo-mod" || mod == "tag" || mod == "macro" || mod.rfind("bypass", 0) == 0) continue;
         const double secs = mod == "feedback" ? 3 : 1;
         auto [fin, peak, rms] = renderKey(key, secs, -1, nullptr);
         CHECK(fin && peak > 1e-3 && peak < 8, "%s: finite and audible (peak %.3f, rms %.4f)", mod.c_str(), peak, rms);
@@ -226,6 +226,33 @@ static void testFx() {
       CHECK(ripple > .002, "an LFO on the filter cutoff makes the sound move (ripple %.4f)", ripple); }
     { auto open_ = renderKey(tagKey, .6, .95f, nullptr), shut = renderKey(tagKey, .6, 0.f, nullptr);
       CHECK(std::get<2>(open_) > std::get<2>(shut) * 1.5, "a knob (tag) linked to the cutoff changes the sound (%.4f vs %.4f)", std::get<2>(open_), std::get<2>(shut)); }
+    const std::string playFile = dir + "/fx-play.vsamp";
+    auto renderPlay = [&](int key, double secs, float tagCut) {
+        auto L = Library::load(playFile, err, 48000); L->setTag("cut", tagCut);
+        auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setMasterGain(1.f); e.setLibrary(L); e.noteOn(key, 110);
+        std::vector<float> l(480), r(480), env; const int blocks = (int) (secs * 100);
+        for (int b = 0; b < blocks; ++b) { std::fill(l.begin(), l.end(), 0.f); std::fill(r.begin(), r.end(), 0.f); if (b == blocks / 2) e.noteOff(key); e.render(l.data(), r.data(), 480);
+            double bs = 0; for (int i = 0; i < 480; ++i) bs += l[i] * l[i]; env.push_back((float) std::sqrt(bs / 480)); }
+        return env; };
+    auto rmsOf = [](const std::vector<float>& v, size_t from, size_t to) { double s = 0; for (size_t i = from; i < to && i < v.size(); ++i) s += v[i] * v[i]; return std::sqrt(s / std::max<size_t>(1, to - from)); };
+    auto keyOf = [&](const char* name) { for (size_t i = 0; i < cases.size(); ++i) if (cases[i]["module"].str() == name) return cases[i]["key"].integer(); return 0; };
+    { const int k = keyOf("macro"); const double lo = rmsOf(renderPlay(k, .6, 0.f), 5, 30), mid = rmsOf(renderPlay(k, .6, .2f), 5, 30), hi = rmsOf(renderPlay(k, .6, 1.f), 5, 30);
+      CHECK(mid > lo * 1.3 && hi > mid * 1.3, "a macro on a knob sweeps the filter across the whole knob (at 0, 20 and 100 %%: %.4f, %.4f, %.4f)", lo, mid, hi); }
+    {   // the knob bypasses the delay: off = only the dry note; with tails the echoes keep ringing after switching off
+        const int k = keyOf("bypass"), kt = keyOf("bypass-tails");
+        const double on = rmsOf(renderPlay(k, 1.6, 1.f), 95, 150), off = rmsOf(renderPlay(k, 1.6, 0.f), 95, 150);
+        CHECK(on > off * 3, "a knob bypasses a module (echo level %.3f on, %.3f bypassed)", on, off);
+        auto ring = [&](int key) {   // echoes going, then the knob switches the delay off
+            auto L = Library::load(playFile, err, 48000); L->setTag("cut", 1.f);
+            auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setMasterGain(1.f); e.setLibrary(L); e.noteOn(key, 110);
+            std::vector<float> l(480), r(480); double after = 0;
+            for (int b = 0; b < 120; ++b) { std::fill(l.begin(), l.end(), 0.f); std::fill(r.begin(), r.end(), 0.f);
+                if (b == 30) e.noteOff(key); if (b == 60) L->setTag("cut", 0.f); e.render(l.data(), r.data(), 480);
+                if (b >= 70) for (int i = 0; i < 480; ++i) after += std::fabs(l[i]); }
+            return after; };
+        const double cut = ring(k), rings = ring(kt);
+        CHECK(rings > cut * 5 && rings > .5, "with tails on, echoes ring out after bypassing (%.2f vs %.2f)", rings, cut);
+    }
 }
 
 int main() {

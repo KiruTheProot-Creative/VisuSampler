@@ -34,6 +34,13 @@ for(const t of FX){
 {const g='g_tag';groups.push(g);const i=node('input'),o=node('output'),f=node('filter',{p:Object.assign({},cat.defs.filter.p,{cutoff:8000}),tag:{cutoff:'t_cut'}});
  graphs[g]={nodes:[i,o,f],cables:[cable(i,'out',f,'in'),cable(f,'mix',o,'in')]};
  zones.push({id:'z_tag',sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:'tag'});key++;}
+/* a macro on a knob sweeps a filter, and a knob bypasses a delay (cut off, or letting its echoes ring out) */
+{const g='g_macro';groups.push(g);const i=node('input'),o=node('output'),f=node('filter',{p:Object.assign({},cat.defs.filter.p,{cutoff:20,res:0})}),m=node('macro',{tag:{value:'t_cut'}});
+ graphs[g]={nodes:[i,o,f,m],cables:[cable(i,'out',f,'in'),cable(f,'mix',o,'in'),cable(m,'out',f,'p:cutoff',100)]};
+ zones.push({id:'z_macro',sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:'macro'});key++;}
+for(const tails of [false,true]){const g='g_byp'+(tails?'t':'');groups.push(g);const i=node('input'),o=node('output'),d=node('delay',{p:Object.assign({},cat.defs.delay.p,{time:120,fb:60,mix:100}),byTag:{tag:'t_cut',inv:false,tails}});
+ graphs[g]={nodes:[i,o,d],cables:[cable(i,'out',d,'in'),cable(d,'mix',o,'in')]};
+ zones.push({id:'z_byp'+(tails?'t':''),sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:tails?'bypass-tails':'bypass'});key++;}
 /* feedback loop through a delay must stay stable */
 {const g='g_loop';groups.push(g);const i=node('input'),o=node('output'),d=node('delay',{p:Object.assign({},cat.defs.delay.p,{fb:0,mix:100})}),f=node('filter');
  graphs[g]={nodes:[i,o,d,f],cables:[cable(i,'out',d,'in'),cable(d,'wet',f,'in'),cable(f,'mix',d,'in'),cable(d,'mix',o,'in')]};
@@ -53,4 +60,9 @@ const project={bpm:120,sig:{n:4,d:4},fx:graphs,gset:{},lists:[],banks:[],els:[],
 const manifest={format:'vsamp',formatVersion:1,lib:{id:'fxtest',name:'FX test'},banner:{images:{}},project,fxRanges:cat.ranges,features:[],samples:smeta,zones:zones.map(full)};
 writeFileSync(new URL('fx.vsamp',dir),writeVsamp(manifest,pack));
 writeFileSync(new URL('fx-cases.json',dir),JSON.stringify(cases));
+/* fx-play.vsamp: only the macro and bypass cases, so nothing else in the chains (crackle, hiss) colours the measurements */
+{const keep=['g_macro','g_byp','g_bypt'],g2={master:{nodes:[node('input'),node('output')],cables:[]}};g2.master.cables=[cable(g2.master.nodes[0],'out',g2.master.nodes[1],'in')];
+ keep.forEach(k=>{g2[k]=graphs[k];});
+ const m2=Object.assign({},manifest,{lib:{id:'fxplay',name:'FX play test'},project:Object.assign({},project,{fx:g2}),zones:zones.filter(z=>keep.includes(z.group)).map(full)});
+ writeFileSync(new URL('fx-play.vsamp',dir),writeVsamp(m2,pack));}
 console.log('fx test library:',cases.length,'cases');

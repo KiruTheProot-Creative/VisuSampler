@@ -106,3 +106,6 @@ FXT.env.hint='Envelope follower: turns how loud its audio input is into a contro
 /* value text for choice parameters */
 const fmtPar0=fmtPar;
 fmtPar=function(q,v){return q.opts?q.opts[clamp(Math.round(v),0,q.opts.length-1)]:fmtPar0(q,v);};
+
+/* Hz parameters with a wide range follow the ear (log scale) for knobs, macros and modulation */
+Object.values(FXT).forEach(d=>(d.params||[]).forEach(q=>{if(q.unit==='Hz'&&q.min>0&&q.max/q.min>=50&&!q.opts)q.log=1;}));

@@ -12,7 +12,7 @@ function parRowHTML(g,n,q,stack){
 }
 function nodeHTML(g,n,an){
   const d=FXT[n.type],cls=['fxn','k-'+d.kind];if(d.pedal||n.skin==='pedal')cls.push('pedal');
-  if(n.bypass) cls.push('bypass'); if(an.idle.indexOf(n.id)>=0) cls.push('idle'); if(S.fx.sel===n.id) cls.push('sel');
+  if(n.bypass||fxTagOff(n)) cls.push('bypass'); if(an.idle.indexOf(n.id)>=0) cls.push('idle'); if(S.fx.sel===n.id) cls.push('sel');
   const rows=Math.max(d.ins.length,d.outs.length);let io='';
   for(let i=0;i<rows;i++){
     const a=d.ins[i],o=d.outs[i];
@@ -22,7 +22,7 @@ function nodeHTML(g,n,an){
     +(d.kind==='io'?'':'<button type="button" class="fxb" data-fa="byp" data-id="'+n.id+'" title="Bypass" aria-label="Bypass '+esc(n.name)+'" aria-pressed="'+n.bypass+'">⏻</button><button type="button" class="fxb" data-fa="del" data-id="'+n.id+'" title="Remove" aria-label="Remove '+esc(n.name)+'">✕</button>')+'</div>';
   const ps=d.params.map(q=>parRowHTML(g,n,q,false)).join('')
     +(n.type==='macro'?'<div class="fxp"><span class="pl">Tag</span><select class="mtag" data-n="'+n.id+'" aria-label="Macro tag">'+tagOpts().map(o=>'<option value="'+o[0]+'"'+(o[0]===(n.tag.value||'')?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select></div>':'');
-  const isPed=d.pedal||n.skin==='pedal',ped=isPed?'<div class="stomp"><span class="pled'+(n.bypass?'':' on')+'" aria-hidden="true"></span><button type="button" class="foot" data-fa="byp" data-id="'+n.id+'" aria-pressed="'+!n.bypass+'" aria-label="Footswitch '+esc(n.name)+'"></button></div>':'';
+  const isPed=d.pedal||n.skin==='pedal',ped=isPed?'<div class="stomp"><span class="pled'+(n.bypass||fxTagOff(n)?'':' on')+'" aria-hidden="true"></span><button type="button" class="foot" data-fa="byp" data-id="'+n.id+'" aria-pressed="'+!n.bypass+'" aria-label="Footswitch '+esc(n.name)+'"></button></div>':'';
   const pst=isPed?';--ped:'+(d.pedal||'#555'):'';
   return '<div class="'+cls.join(' ')+'" data-id="'+n.id+'" style="left:'+n.x+'px;top:'+n.y+'px'+pst+'">'+hd+'<div class="fxio">'+io+'</div>'+(ps?'<div class="fxps">'+ps+'</div>':'')+ped+'</div>';
 }
@@ -59,7 +59,7 @@ function fxInspHTML(){
   if(c){
     const a=nodeById(g,c.from.n),b=nodeById(g,c.to.n),ctl=cableKind(g,c)==='ctl';
     return sec('Cable','<p class="hint" style="margin-top:0">'+esc(a.name)+' · '+(PORT_LBL[c.from.p]||c.from.p)+' → '+esc(b.name)+' · '+(ctl?c.to.p.slice(2):PORT_LBL[c.to.p])+'</p>'
-      +(ctl?'<label class="f"><span>Amount</span><input type="range" data-fa="amt" min="0" max="100" value="'+c.amt+'"><output>'+c.amt+'%</output></label>':'')
+      +(ctl?'<label class="f"><span>Amount</span><input type="range" data-fa="amt" min="-100" max="100" value="'+c.amt+'"><output>'+c.amt+'%</output></label>':'')
       +'<div class="chips"><button type="button" class="btn" data-fa="insert">Insert effect here…</button><button type="button" class="btn danger" data-fa="delcab">Delete cable</button></div>');
   }
   if(!n) return '<p class="empty">Select a node or cable.<br>Double-click empty space to search and add.</p>';
@@ -121,7 +121,7 @@ function fxRefreshParams(){
     const n=nodeById(g,host.dataset.id); if(!n) return;
     const q=FXT[n.type].params.find(x=>x.k===row.dataset.k); if(!q) return;
     const r=parReal(g,n,q,t),tg=n.tag[q.k]&&tagById(n.tag[q.k]);
-    const rng=$('.pr',row); if(rng&&document.activeElement!==rng) rng.value=Math.round((tg?tg.value:clamp((r.v-q.min)/(q.max-q.min),0,1))*1000);
+    const rng=$('.pr',row); if(rng&&document.activeElement!==rng) rng.value=Math.round((tg?tg.value:normOf(q,r.v))*1000);
     $('.pv',row).textContent=fmtPar(q,r.v); row.classList.toggle('modd',!!r.mod);
   });
   S.fx.an=fxAnalyze(g); fxReport();

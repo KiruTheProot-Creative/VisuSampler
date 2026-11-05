@@ -52,7 +52,7 @@ async function buildVsamp(progress){
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
   sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;}
   /* parameter ranges of every FX module, so the player can apply knobs and modulation exactly like the Maker */
-  const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0];});});
+  const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0];});});
   const est=estimate(o),dropped=set.stats.unusedSkipped;
   const lib={id:L.id,name:L.name,author:L.author,version:L.version,desc:L.desc,tags:L.tags,category:L.category,web:L.web,licence:L.licence,changelog:L.changelog,accent:L.accent};
   delete banner.bgImg;delete banner.logoImg;delete banner.iconImg;

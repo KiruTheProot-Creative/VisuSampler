@@ -26,7 +26,7 @@ const FXT={
     params:[FP('rate','Rate',0.05,20,'Hz',1),FP('depth','Depth',0,100,'%',100)]},
   env:{label:'Follower',kind:'mod',cat:'Modulators',ins:['in'],outs:['out'],cpu:.4,lat:0,hint:'Envelope follower: turns the loudness of its audio input into a control signal.',
     params:[FP('attack','Attack',1,200,'ms',10),FP('release','Release',10,2000,'ms',200),FP('gain','Gain',0,100,'%',70)]},
-  macro:{label:'Macro',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:0,lat:0,hint:'Turns any tag (a knob, a button, the bank) into a control signal.',
+  macro:{label:'Macro',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:0,lat:0,hint:'Turns a tag (a knob, a button, the bank) into a control: drag its out to a parameter\'s dot. With the knob at 0 the parameter stays as you set it, so set it where the knob should start; the cable amount is how far the knob reaches (negative turns it down).',
     params:[FP('value','Value',0,100,'%',50)]}
 };
 const FX_CATS=['Time','Modulation','Tone','Dynamics','Modulators'];
@@ -46,7 +46,7 @@ function fxNode(type,x,y,o){
   d.params.forEach(q=>{n.p[q.k]=q.def;});
   return n;
 }
-function mkCable(a,ap,b,bp){return{id:nid('c'),from:{n:a.id,p:ap},to:{n:b.id,p:bp},amt:50};}
+function mkCable(a,ap,b,bp){return{id:nid('c'),from:{n:a.id,p:ap},to:{n:b.id,p:bp},amt:a.type==='macro'?100:50};}
 const nodeById=(g,id)=>g.nodes.find(n=>n.id===id)||null;
 const isCtlPort=p=>p.indexOf('p:')===0;
 function cableKind(g,c){const n=nodeById(g,c.from.n);return n&&fxIsMod(n)?'ctl':'audio';}
@@ -84,20 +84,26 @@ function modOut(g,n,t){
   if(n.type==='macro'){const tg=n.tag.value&&tagById(n.tag.value);return tg?tg.value:v.value/100;}
   return 0;
 }
+/* frequency-like parameters move on a log scale, so a knob spends its travel evenly across what you hear */
+const qLog=q=>!!q.log&&q.min>0;
+const normOf=(q,v)=>qLog(q)?clamp(Math.log(Math.max(q.min,v)/q.min)/Math.log(q.max/q.min),0,1):clamp((v-q.min)/(q.max-q.min),0,1);
+const realOfNorm=(q,nm)=>qLog(q)?q.min*Math.pow(q.max/q.min,nm):q.min+nm*(q.max-q.min);
 function paramNorm(n,q){
   const tg=n.tag[q.k]&&tagById(n.tag[q.k]);
   if(tg) return tg.value;
-  return clamp((n.p[q.k]-q.min)/(q.max-q.min),0,1);
+  return normOf(q,n.p[q.k]);
 }
 function paramReal(g,n,q,t,wantMod){
   const tg=n.tag[q.k]&&tagById(n.tag[q.k]);
   if(tg&&q.sync&&tg.kind==='sync') return msOfBeats(syncBeats(tg,S.sig));
   let nm=paramNorm(n,q),mod=false;
   if(wantMod!==false) g.cables.forEach(c=>{
-    if(c.to.n===n.id&&c.to.p==='p:'+q.k){const s=nodeById(g,c.from.n);if(s){nm+=(modOut(g,s,t)-.5)*2*(c.amt/100);mod=true;}}
+    if(c.to.n===n.id&&c.to.p==='p:'+q.k){const s=nodeById(g,c.from.n);if(s){
+      /* a macro adds its knob on top of the parameter (0 = the parameter as set); other modulators swing both ways */
+      nm+=s.type==='macro'?modOut(g,s,t)*(c.amt/100):(modOut(g,s,t)-.5)*2*(c.amt/100);mod=true;}}
   });
   nm=clamp(nm,0,1);
-  return{v:q.min+nm*(q.max-q.min),mod};
+  return{v:realOfNorm(q,nm),mod};
 }
 function parReal(g,n,q,t){const r=paramReal(g,n,q,t);return typeof r==='number'?{v:r,mod:false,sync:true}:r;}
 function fmtPar(q,v){

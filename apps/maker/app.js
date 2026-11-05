@@ -1911,7 +1911,7 @@ const FXT={
     params:[FP('rate','Rate',0.05,20,'Hz',1),FP('depth','Depth',0,100,'%',100)]},
   env:{label:'Follower',kind:'mod',cat:'Modulators',ins:['in'],outs:['out'],cpu:.4,lat:0,hint:'Envelope follower: turns the loudness of its audio input into a control signal.',
     params:[FP('attack','Attack',1,200,'ms',10),FP('release','Release',10,2000,'ms',200),FP('gain','Gain',0,100,'%',70)]},
-  macro:{label:'Macro',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:0,lat:0,hint:'Turns any tag (a knob, a button, the bank) into a control signal.',
+  macro:{label:'Macro',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:0,lat:0,hint:'Turns a tag (a knob, a button, the bank) into a control: drag its out to a parameter\'s dot. With the knob at 0 the parameter stays as you set it, so set it where the knob should start; the cable amount is how far the knob reaches (negative turns it down).',
     params:[FP('value','Value',0,100,'%',50)]}
 };
 const FX_CATS=['Time','Modulation','Tone','Dynamics','Modulators'];
@@ -1931,7 +1931,7 @@ function fxNode(type,x,y,o){
   d.params.forEach(q=>{n.p[q.k]=q.def;});
   return n;
 }
-function mkCable(a,ap,b,bp){return{id:nid('c'),from:{n:a.id,p:ap},to:{n:b.id,p:bp},amt:50};}
+function mkCable(a,ap,b,bp){return{id:nid('c'),from:{n:a.id,p:ap},to:{n:b.id,p:bp},amt:a.type==='macro'?100:50};}
 const nodeById=(g,id)=>g.nodes.find(n=>n.id===id)||null;
 const isCtlPort=p=>p.indexOf('p:')===0;
 function cableKind(g,c){const n=nodeById(g,c.from.n);return n&&fxIsMod(n)?'ctl':'audio';}
@@ -1969,20 +1969,26 @@ function modOut(g,n,t){
   if(n.type==='macro'){const tg=n.tag.value&&tagById(n.tag.value);return tg?tg.value:v.value/100;}
   return 0;
 }
+/* frequency-like parameters move on a log scale, so a knob spends its travel evenly across what you hear */
+const qLog=q=>!!q.log&&q.min>0;
+const normOf=(q,v)=>qLog(q)?clamp(Math.log(Math.max(q.min,v)/q.min)/Math.log(q.max/q.min),0,1):clamp((v-q.min)/(q.max-q.min),0,1);
+const realOfNorm=(q,nm)=>qLog(q)?q.min*Math.pow(q.max/q.min,nm):q.min+nm*(q.max-q.min);
 function paramNorm(n,q){
   const tg=n.tag[q.k]&&tagById(n.tag[q.k]);
   if(tg) return tg.value;
-  return clamp((n.p[q.k]-q.min)/(q.max-q.min),0,1);
+  return normOf(q,n.p[q.k]);
 }
 function paramReal(g,n,q,t,wantMod){
   const tg=n.tag[q.k]&&tagById(n.tag[q.k]);
   if(tg&&q.sync&&tg.kind==='sync') return msOfBeats(syncBeats(tg,S.sig));
   let nm=paramNorm(n,q),mod=false;
   if(wantMod!==false) g.cables.forEach(c=>{
-    if(c.to.n===n.id&&c.to.p==='p:'+q.k){const s=nodeById(g,c.from.n);if(s){nm+=(modOut(g,s,t)-.5)*2*(c.amt/100);mod=true;}}
+    if(c.to.n===n.id&&c.to.p==='p:'+q.k){const s=nodeById(g,c.from.n);if(s){
+      /* a macro adds its knob on top of the parameter (0 = the parameter as set); other modulators swing both ways */
+      nm+=s.type==='macro'?modOut(g,s,t)*(c.amt/100):(modOut(g,s,t)-.5)*2*(c.amt/100);mod=true;}}
   });
   nm=clamp(nm,0,1);
-  return{v:q.min+nm*(q.max-q.min),mod};
+  return{v:realOfNorm(q,nm),mod};
 }
 function parReal(g,n,q,t){const r=paramReal(g,n,q,t);return typeof r==='number'?{v:r,mod:false,sync:true}:r;}
 function fmtPar(q,v){
@@ -2208,6 +2214,9 @@ FXT.env.hint='Envelope follower: turns how loud its audio input is into a contro
 const fmtPar0=fmtPar;
 fmtPar=function(q,v){return q.opts?q.opts[clamp(Math.round(v),0,q.opts.length-1)]:fmtPar0(q,v);};
 
+/* Hz parameters with a wide range follow the ear (log scale) for knobs, macros and modulation */
+Object.values(FXT).forEach(d=>(d.params||[]).forEach(q=>{if(q.unit==='Hz'&&q.min>0&&q.max/q.min>=50&&!q.opts)q.log=1;}));
+
 /* ---------- modular FX: view ---------- */
 const PORT_LBL={out:'out',in:'in',sc:'side',dry:'dry',wet:'wet',mix:'mix',in1:'in 1',in2:'in 2',in3:'in 3',in4:'in 4',low:'low',mid:'mid',high:'high',side:'side'};
 const portBtn=(n,p,dir,kind,extra)=>'<button type="button" class="port '+dir+' k-'+kind+'" data-n="'+n.id+'" data-p="'+p+'" data-dir="'+dir+'" aria-label="'+esc(n.name+' '+(PORT_LBL[p]||p)+' '+dir+'put')+'"'+(extra||'')+'></button>';
@@ -2222,7 +2231,7 @@ function parRowHTML(g,n,q,stack){
 }
 function nodeHTML(g,n,an){
   const d=FXT[n.type],cls=['fxn','k-'+d.kind];if(d.pedal||n.skin==='pedal')cls.push('pedal');
-  if(n.bypass) cls.push('bypass'); if(an.idle.indexOf(n.id)>=0) cls.push('idle'); if(S.fx.sel===n.id) cls.push('sel');
+  if(n.bypass||fxTagOff(n)) cls.push('bypass'); if(an.idle.indexOf(n.id)>=0) cls.push('idle'); if(S.fx.sel===n.id) cls.push('sel');
   const rows=Math.max(d.ins.length,d.outs.length);let io='';
   for(let i=0;i<rows;i++){
     const a=d.ins[i],o=d.outs[i];
@@ -2232,7 +2241,7 @@ function nodeHTML(g,n,an){
     +(d.kind==='io'?'':'<button type="button" class="fxb" data-fa="byp" data-id="'+n.id+'" title="Bypass" aria-label="Bypass '+esc(n.name)+'" aria-pressed="'+n.bypass+'">⏻</button><button type="button" class="fxb" data-fa="del" data-id="'+n.id+'" title="Remove" aria-label="Remove '+esc(n.name)+'">✕</button>')+'</div>';
   const ps=d.params.map(q=>parRowHTML(g,n,q,false)).join('')
     +(n.type==='macro'?'<div class="fxp"><span class="pl">Tag</span><select class="mtag" data-n="'+n.id+'" aria-label="Macro tag">'+tagOpts().map(o=>'<option value="'+o[0]+'"'+(o[0]===(n.tag.value||'')?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select></div>':'');
-  const isPed=d.pedal||n.skin==='pedal',ped=isPed?'<div class="stomp"><span class="pled'+(n.bypass?'':' on')+'" aria-hidden="true"></span><button type="button" class="foot" data-fa="byp" data-id="'+n.id+'" aria-pressed="'+!n.bypass+'" aria-label="Footswitch '+esc(n.name)+'"></button></div>':'';
+  const isPed=d.pedal||n.skin==='pedal',ped=isPed?'<div class="stomp"><span class="pled'+(n.bypass||fxTagOff(n)?'':' on')+'" aria-hidden="true"></span><button type="button" class="foot" data-fa="byp" data-id="'+n.id+'" aria-pressed="'+!n.bypass+'" aria-label="Footswitch '+esc(n.name)+'"></button></div>':'';
   const pst=isPed?';--ped:'+(d.pedal||'#555'):'';
   return '<div class="'+cls.join(' ')+'" data-id="'+n.id+'" style="left:'+n.x+'px;top:'+n.y+'px'+pst+'">'+hd+'<div class="fxio">'+io+'</div>'+(ps?'<div class="fxps">'+ps+'</div>':'')+ped+'</div>';
 }
@@ -2269,7 +2278,7 @@ function fxInspHTML(){
   if(c){
     const a=nodeById(g,c.from.n),b=nodeById(g,c.to.n),ctl=cableKind(g,c)==='ctl';
     return sec('Cable','<p class="hint" style="margin-top:0">'+esc(a.name)+' · '+(PORT_LBL[c.from.p]||c.from.p)+' → '+esc(b.name)+' · '+(ctl?c.to.p.slice(2):PORT_LBL[c.to.p])+'</p>'
-      +(ctl?'<label class="f"><span>Amount</span><input type="range" data-fa="amt" min="0" max="100" value="'+c.amt+'"><output>'+c.amt+'%</output></label>':'')
+      +(ctl?'<label class="f"><span>Amount</span><input type="range" data-fa="amt" min="-100" max="100" value="'+c.amt+'"><output>'+c.amt+'%</output></label>':'')
       +'<div class="chips"><button type="button" class="btn" data-fa="insert">Insert effect here…</button><button type="button" class="btn danger" data-fa="delcab">Delete cable</button></div>');
   }
   if(!n) return '<p class="empty">Select a node or cable.<br>Double-click empty space to search and add.</p>';
@@ -2331,7 +2340,7 @@ function fxRefreshParams(){
     const n=nodeById(g,host.dataset.id); if(!n) return;
     const q=FXT[n.type].params.find(x=>x.k===row.dataset.k); if(!q) return;
     const r=parReal(g,n,q,t),tg=n.tag[q.k]&&tagById(n.tag[q.k]);
-    const rng=$('.pr',row); if(rng&&document.activeElement!==rng) rng.value=Math.round((tg?tg.value:clamp((r.v-q.min)/(q.max-q.min),0,1))*1000);
+    const rng=$('.pr',row); if(rng&&document.activeElement!==rng) rng.value=Math.round((tg?tg.value:normOf(q,r.v))*1000);
     $('.pv',row).textContent=fmtPar(q,r.v); row.classList.toggle('modd',!!r.mod);
   });
   S.fx.an=fxAnalyze(g); fxReport();
@@ -2479,7 +2488,7 @@ document.addEventListener('input',e=>{
   const t=e.target;
   if(t.classList&&t.classList.contains('pr')){
     const g=curG(),n=nodeById(g,t.dataset.n),q=n&&FXT[n.type].params.find(x=>x.k===t.dataset.pk); if(!q) return;
-    n.p[q.k]=q.min+(t.value/1000)*(q.max-q.min);if(q.opts)n.p[q.k]=Math.round(n.p[q.k]);
+    n.p[q.k]=realOfNorm(q,t.value/1000);if(q.opts)n.p[q.k]=Math.round(n.p[q.k]);
     const row=t.closest('.fxp');
     row.querySelector('.pv').textContent=fmtPar(q,parReal(g,n,q,fxClock()).v);
     S.fx.an=fxAnalyze(g); fxReport(); return;
@@ -2551,6 +2560,56 @@ function fxKey(e){
   else if(e.key==='a'||e.key==='/'){const p=centerSpot();openSearch(p.x,p.y,S.fx.cable);e.preventDefault();}
   else if(e.key==='Escape'){fxSelect(null,null);}
 }
+
+/* ---------- switching a module on and off from the interface ----------
+   n.byTag = {tag, inv, tails}: the module plays while the tag is on (or off, when reversed).
+   With tails, switching off closes the module's input and lets reverb and delay tails fade naturally.
+   The engine does the switching, so it works the same in the Maker and in VisuPlayer. */
+function fxTagOff(n){
+  const b=n.byTag,t=b&&b.tag&&tagById(b.tag);if(!t)return false;
+  return (t.value>=.5)===!!b.inv;
+}
+function fxByTagHTML(n){
+  const b=n.byTag||{},opts=S.tags.filter(t=>!t.sys||t.name==='page');
+  let h='<label class="f"><span>On / off by</span><select data-fn="bytag" aria-label="Tag that switches '+esc(n.name)+' on and off"><option value="">— always on —</option>'
+    +opts.map(t=>'<option value="'+t.id+'"'+(b.tag===t.id?' selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select></label>';
+  if(b.tag)h+='<label class="f chk"><input type="checkbox" data-fn="byinv"'+(b.inv?' checked':'')+'><span>Reverse: on while the tag is off</span></label>'
+    +'<label class="f chk"><input type="checkbox" data-fn="bytails"'+(b.tails?' checked':'')+'><span>Let tails ring out when switched off</span></label>'
+    +'<p class="hint">Now '+(fxTagOff(n)?'off':'on')+'. A Toggle button on this tag in the Interface tab switches it; buttons, rules and knobs (past halfway) all work.</p>';
+  else h+='<div class="chips"><button type="button" class="btn" data-fa="mkbybtn">Make an on/off button</button></div><p class="hint">Adds a Toggle button with a light to your interface and links this module to it.</p>';
+  return sec('Switch from the interface',h);
+}
+const fxInspHTMLBy=fxInspHTML;
+fxInspHTML=function(){
+  const h=fxInspHTMLBy(),g=curG(),n=S.fx.sel&&nodeById(g,S.fx.sel);
+  if(!n||FXT[n.type].kind!=='fx')return h;
+  const i=h.lastIndexOf('<div class="chips"><button type="button" class="btn" data-fa="byp"');
+  return i<0?h+fxByTagHTML(n):h.slice(0,i)+fxByTagHTML(n)+h.slice(i);
+};
+document.addEventListener('change',e=>{
+  const t=e.target,k=t.dataset&&t.dataset.fn;if(k!=='bytag'&&k!=='byinv'&&k!=='bytails')return;
+  const n=nodeById(curG(),S.fx.sel);if(!n)return;
+  if(k==='bytag'){if(t.value)n.byTag=Object.assign({inv:false,tails:false},n.byTag||{},{tag:t.value});else delete n.byTag;}
+  else if(n.byTag)n.byTag[k==='byinv'?'inv':'tails']=t.checked;
+  fxRender();
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('[data-fa="mkbybtn"]'))return;
+  const n=nodeById(curG(),S.fx.sel);if(!n)return;
+  /* a new knob-style tag (on) and a toggle button with a light, placed in the middle of the page being edited */
+  const t=mkTag(n.name+' on','number',{value:1,def:1});S.tags.push(t);
+  n.byTag={tag:t.id,inv:false,tails:/reverb|delay|echo|shimmer|spring|verb/i.test(n.type)};
+  const el=mk('button',{name:n.name+' on/off',label:n.name,tag:t.id,mode:'toggle',led:true});
+  el.w=Math.max(72,Math.min(160,10+n.name.length*9));el.x=Math.round((S.canvas.w-el.w)/2);el.y=Math.round((S.canvas.h-el.h)/2);
+  S.els.push(el);const node=document.createElement('div');node.className='el button';node.dataset.id=el.id;canvas.appendChild(node);nodes.set(el.id,node);renderEl(el);renderLayers();
+  fxRender();flash('Button "'+n.name+'" added to the Interface tab. Move it where you like.');
+});
+/* the editor shows the module as bypassed while its tag has it off */
+const fxRefreshBy=fxRefreshParams;
+fxRefreshParams=function(){
+  fxRefreshBy();if(S.view!=='fx')return;
+  curG().nodes.forEach(n=>{if(!n.byTag)return;const el=$('#centerF .fxn[data-id="'+n.id+'"]');if(!el)return;const off=n.bypass||fxTagOff(n);el.classList.toggle('bypass',off);const led=el.querySelector('.pled');if(led)led.classList.toggle('on',!off);});
+};
 
 /* ---------- FX audio: turns the FX graphs into real Web Audio ----------
    voices -> group input -> [group graph] -> master input -> [master graph] -> sampler bus -> output
@@ -3000,7 +3059,7 @@ async function engineBytes(){
   }
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
   sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;}
-  const fxRanges={};Object.keys(FXT).forEach(k=>{fxRanges[k]={};FXT[k].params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0];});});
+  const fxRanges={};Object.keys(FXT).forEach(k=>{fxRanges[k]={};FXT[k].params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0];});});
   const zones=JSON.parse(JSON.stringify(S.zones));
   const manifest={format:'vsamp',formatVersion:1,lib:{id:'maker-live',name:S.lib.name},banner:{images:{}},project:sn,fxRanges,features:[],samples:smeta,zones};
   return writeVsamp(manifest,pack);
@@ -4796,7 +4855,7 @@ async function buildVsamp(progress){
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
   sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;}
   /* parameter ranges of every FX module, so the player can apply knobs and modulation exactly like the Maker */
-  const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0];});});
+  const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0];});});
   const est=estimate(o),dropped=set.stats.unusedSkipped;
   const lib={id:L.id,name:L.name,author:L.author,version:L.version,desc:L.desc,tags:L.tags,category:L.category,web:L.web,licence:L.licence,changelog:L.changelog,accent:L.accent};
   delete banner.bgImg;delete banner.logoImg;delete banner.iconImg;
@@ -5036,6 +5095,6 @@ S.tab='props';
 syncToolbar(); layout(); mountAll(); renderLayers(); renderRight();
 new ResizeObserver(()=>{if(S.view==='design')layout();}).observe(vp);
 setView('sound');
-if(window.__VSTEST) window.__vs={S,rerender:()=>{rerenderAll();placeSel();},ensureAudio,renderZone,touchMap,noteOn,noteOff,addBuffer,autoMapSamples,zoneConflicts,AU,SV,smOf,zoneData,uniVoices,BUF,sampleById,demoExtras,mapSlices,smOp,mkZone,detectTransients,smSample,previewOn,previewOff,PV,estimate,buildVsamp,parseVsamp,exRender,exBuild,bannerRedraw,crc32,fmtBytes,saveProject,openProject,restore,snapshot,FXT,FXA,graphOf,fxNode,mkCable,fxRender,sampBus,sampPanic,mapLeftRender,soundEnter,ENG};
+if(window.__VSTEST) window.__vs={S,setTag:(t,v)=>setTag(t,v),rerender:()=>{rerenderAll();placeSel();},ensureAudio,renderZone,touchMap,noteOn,noteOff,addBuffer,autoMapSamples,zoneConflicts,AU,SV,smOf,zoneData,uniVoices,BUF,sampleById,demoExtras,mapSlices,smOp,mkZone,detectTransients,smSample,previewOn,previewOff,PV,estimate,buildVsamp,parseVsamp,exRender,exBuild,bannerRedraw,crc32,fmtBytes,saveProject,openProject,restore,snapshot,FXT,FXA,graphOf,fxNode,mkCable,fxRender,sampBus,sampPanic,mapLeftRender,soundEnter,ENG};
 
 })();
