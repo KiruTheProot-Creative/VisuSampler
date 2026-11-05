@@ -11,6 +11,14 @@ ok(await vis('#snInsGroup .snhead'),'clicking a group shows the group inspector'
 const oldName=await p.evaluate(()=>window.__vs.S.map.group);
 await p.fill('#snInsGroup [data-sg=name]','Renamed Group');await p.press('#snInsGroup [data-sg=name]','Enter');await p.waitForTimeout(150);
 ok(await p.evaluate(o=>{const S=window.__vs.S;return S.groups.includes('Renamed Group')&&!S.groups.includes(o)&&S.zones.every(z=>z.group!==o);},oldName),'renaming a group updates zones');
+/* per-note envelope on the group */
+await p.check('#snInsGroup [data-se=on]');await p.waitForTimeout(150);
+ok(await vis('#snInsGroup .envsvg')&&await vis('#snInsGroup [data-se=a]'),'turning on the envelope shows A, D, S, R and its shape');
+await p.fill('#snInsGroup [data-se=a]','450');await p.press('#snInsGroup [data-se=a]','Tab');await p.waitForTimeout(100);
+const knobId=await p.evaluate(()=>{const t=window.__vs.S.tags.find(x=>!x.sys&&x.kind==='number');return t?t.id:'';});
+if(knobId){await p.selectOption('#snInsGroup [data-setag=s]',knobId);await p.waitForTimeout(100);}
+ok(await p.evaluate(k=>{const S=window.__vs.S,e=S.gset[S.map.group].env;return e&&e.on&&e.a===450&&(!k||e.tags.s===k);},knobId),'envelope settings and the knob link are stored on the group');
+ok(knobId===''||await p.evaluate(()=>document.querySelector('#snInsGroup [data-se=s]').disabled),'a linked value is driven by its knob');
 /* sample focus */
 await p.click('#leftM .prow >> nth=3');await p.waitForTimeout(150);
 ok(await vis('#rightS [data-sk="sm.mode"]'),'clicking a sample shows the sample inspector');

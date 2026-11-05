@@ -4456,6 +4456,7 @@ function snGroupHTML(){
     +'<label class="f"><span>Name</span><input type="text" data-sg="name" value="'+esc(g)+'"></label>'
     +'<label class="f"><span>Plays</span><select data-sg="mode">'+mopt(MODES,c.mode)+'</select></label>'
     +nf('Volume','data-sg="vol"',c.vol,-48,24,.5,'dB')+nf('Pan','data-sg="pan"',c.pan,-100,100,1,'L–R')+nf('Tune','data-sg="tune"',c.tune,-2400,2400,1,'cents')
+    +snEnvHTML(c)
     +'<div class="snmores"><details class="snmore"><summary>More</summary><div>'
     +nf('Choke group','data-sg="choke"',c.choke,0,999,1)+'<p class="hint">Groups with the same choke number cut each other off, like open and closed hi-hats.</p>'
     +nf('Voice limit','data-sg="voices"',c.voices,0,9999,1)+'<p class="hint">0 means unlimited.</p>'
@@ -4464,8 +4465,32 @@ function snGroupHTML(){
     +'<label class="f"><span>Colour</span><input type="color" data-sg="color" value="'+c.color+'"></label>'
     +'</div></details></div><div class="snacts"><button type="button" class="btn" data-sga="selall">Select its zones</button><button type="button" class="btn danger" data-sga="del">Delete group</button></div>';
 }
+/* ---- per-note ADSR for the group (the engine runs one per note) ---- */
+const ENV_DEF={on:false,a:5,d:300,s:100,r:300,tags:{}};
+const envOf=c=>{const e=Object.assign({},ENV_DEF,c.env||{});e.tags=Object.assign({},e.tags||{});return e;};
+function envSvg(e){
+  const T=x=>Math.sqrt(Math.max(0,x)),a=T(e.a),d=T(e.d),r=T(e.r),hold=Math.max(12,(a+d+r)*.35),tot=a+d+hold+r||1,W=220,H=54,X=v=>4+v/tot*(W-8),Y=v=>H-4-v*(H-8),s=e.s/100;
+  const pts=[[0,0],[a,1],[a+d,s],[a+d+hold,s],[tot,0]].map(p=>X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)).join(' ');
+  return '<svg class="envsvg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Envelope shape"><polyline points="'+pts+'"/></svg>';
+}
+function snEnvHTML(c){
+  const e=envOf(c),knobs=[['','no knob']].concat(S.tags.filter(t=>!t.sys&&t.kind==='number').map(t=>[t.id,t.name]));
+  const row=(k,l,mx,u)=>'<div class="envrow"><label class="f"><span>'+l+'</span><input type="number" data-se="'+k+'" min="0" max="'+mx+'" step="1" value="'+e[k]+'"'+(e.tags[k]?' disabled':'')+'><em class="sfx">'+u+'</em></label>'
+    +'<select data-setag="'+k+'" aria-label="Knob for '+l+'">'+mopt(knobs,e.tags[k]||'')+'</select></div>';
+  return '<div class="snenv"><label class="f chk"><input type="checkbox" data-se="on"'+(e.on?' checked':'')+'><span>Envelope (ADSR, one per note)</span></label>'
+    +(e.on?envSvg(e)+row('a','Attack',10000,'ms')+row('d','Decay',10000,'ms')+row('s','Sustain',100,'%')+row('r','Release',10000,'ms')
+      +'<p class="hint">Replaces the zones\' own attack and release in this group. A knob linked here sets 0–10 s (or 0–100 % for sustain), and held notes follow it live.</p>':'')+'</div>';
+}
+$('#snInsGroup').addEventListener('change',e=>{
+  const t=e.target,g=S.map.group;if(!g||!(t.dataset.se||t.dataset.setag))return;
+  const c=gcfg(g),en=envOf(c);
+  if(t.dataset.se==='on')en.on=t.checked;
+  else if(t.dataset.se){const v=parseFloat(t.value);en[t.dataset.se]=isFinite(v)?Math.max(0,Math.min(+t.max,v)):ENV_DEF[t.dataset.se];}
+  else{if(t.value)en.tags[t.dataset.setag]=t.value;else delete en.tags[t.dataset.setag];}
+  c.env=en;touchMap();$('#snInsGroup').innerHTML=snGroupHTML();
+});
 $('#snInsGroup').addEventListener('input',e=>{
-  const t=e.target,k=t.dataset.sg,g=S.map.group;if(!k||!g||k==='name')return;
+  const t=e.target,k=t.dataset.sg,g=S.map.group;if(!k||!g||k==='name')return;   /* envelope fields use data-se */
   const c=gcfg(g);c[k]=t.type==='number'||t.type==='range'?parseFloat(t.value)||0:t.value;
   if(k==='color'){mapInvalidate();mapLeftRender();}else touchMap();
 });
@@ -4640,7 +4665,7 @@ function libraryFeatures(set){
   S.samples.forEach(s=>{const sm=smOf(s);if(S.zones.some(z=>z.sample===s.id)){add(sm.mode);if(sm.uni.on)add('unison');}});
   set.zones.forEach(z=>{const g=gcfg(z.group);if(z.loop&&z.loop.on){add('loop');if(z.loop.pp)add('pingpong');}if(z.rev)add('reverse');if(z.vstart)add('velstart');
     if(z.fadeLo||z.fadeHi||z.vfadeLo||z.vfadeHi)add('crossfade');if(z.hum&&(z.hum.tune||z.hum.vol||z.hum.start))add('humanize');
-    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.voices)add('voicelimit');});
+    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.voices)add('voicelimit');});
   if(S.lists.length)add('lists');if(S.els.length)add('ui');
   Object.values(S.fx.graphs).forEach(g=>g.nodes.forEach(n=>{if(FXT[n.type]&&FXT[n.type].kind!=='io')add('fx:'+n.type);}));
   return [...f].sort();

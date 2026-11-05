@@ -48,8 +48,21 @@ float Engine::zoneGain(const Zone& z, int note, int vel) const {
     return (float) g;
 }
 
+void Engine::groupEnv(int group, float& a, float& d, float& s, float& r) const {
+    const GroupCfg& g = lib_->groups[(size_t) group]; float* out[4] = { &a, &d, &s, &r }; const float base[4] = { g.envA, g.envD, g.envS, g.envR };
+    for (int k = 0; k < 4; ++k) {
+        float v = base[k];
+        if (g.envTag[k] >= 0 && lib_->tagValues) { const float t = lib_->tagValues[(size_t) g.envTag[k]].load(); v = k == 2 ? t : t * t * 10000.f; }
+        *out[k] = v;
+    }
+}
+
 void Engine::kill(Voice& v, bool fast) {
     if (!v.on) return;
+    if (!fast && v.adsr) {   // group envelope: fall from wherever it is to silence in R
+        float a, d, s, r; groupEnv(v.group, a, d, s, r);
+        v.releasing = true; v.relInc = std::max(v.env, 1e-4f) / (float) (std::max(1.f, r) / 1000.0 * sr_); return;
+    }
     if (fast) { v.releasing = true; v.stolen = true; v.relInc = 1.f / (float) (0.03 * sr_); return; }   // short fade instead of a click
     v.releasing = true; float rel = std::max(.01f, v.zone->release / 1000.f); v.relInc = 1.f / (float) (rel * sr_);
 }
@@ -78,10 +91,12 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
         }
         v->gain = amp * u.gain;
         v->pan = std::min(1.f, std::max(-1.f, z.pan / 100.f + g.pan / 100.f + u.pan));
-        v->attackInc = z.attack > 0 ? 1.f / (float) (z.attack / 1000.0 * sr_) : 0; v->env = z.attack > 0 ? 0.f : 1.f;
+        if (!g.envOn) { v->attackInc = z.attack > 0 ? 1.f / (float) (z.attack / 1000.0 * sr_) : 0; v->env = z.attack > 0 ? 0.f : 1.f; }
         v->releasing = false; v->relInc = 0; v->on = true; v->note = note; v->group = z.group; v->choke = g.choke;
         v->oneshot = z.oneshot && !z.audio.loop; v->fromRelease = fromRelease; v->held = false; v->age = ++clock_;
         v->maxLife = fromRelease ? (long) (4 * sr_) : -1;
+        v->adsr = g.envOn; v->stage = 0;
+        if (v->adsr) { v->attackInc = 0; v->env = 0; }
         v->kind = s.mode == "granular" ? 2 : s.mode == "wavetable" ? 3 : 0;
         if (v->kind == 3) v->stereoIn = false;   // wavetables read the first channel, like the JS core
         if (v->kind) {
@@ -275,10 +290,17 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
         const double pm = (v.glide != 0.f || bendSemis != 0.0) && v.zone->keytrack ? std::pow(2.0, (v.glide + bendSemis) / 12.0) : 1.0;
         if (v.glide != 0.f) { const float mv = v.glideStep * (float) n; v.glide = std::fabs(v.glide) <= mv ? 0.f : v.glide - (v.glide > 0 ? mv : -mv); }
         const double ratio = v.ratio * pm;
+        float eAi = 0, eDi = 0, eS = 1;
+        if (v.adsr) { float a, d, s, r; groupEnv(v.group, a, d, s, r); (void) r; eS = s; eAi = a < .5f ? 2.f : 1.f / (float) (a / 1000.0 * sr_); eDi = d < .5f ? 2.f : (1.f - s) / (float) (d / 1000.0 * sr_); }
         const float x = v.pan <= 0 ? v.pan + 1 : v.pan, gL = std::cos(x * (float) kPi / 2), gR = std::sin(x * (float) kPi / 2), g = v.gain * gainScale;
         for (int i = 0; i < n; ++i) {
             if (!a.loop && v.pos >= (double) a.len) { v.on = false; break; }
             if (v.maxLife >= 0 && --v.maxLife < 0) kill(v, false);
+            if (v.adsr && !v.releasing) {
+                if (v.stage == 0) { v.env += eAi; if (v.env >= 1.f) { v.env = 1.f; v.stage = 1; } }
+                else if (v.stage == 1) { v.env -= eDi; if (v.env <= eS) { v.env = eS; v.stage = 2; } }
+                else v.env += (eS - v.env) * .002f;   // sustain follows its knob live, smoothly
+            }
             if (v.attackInc > 0 && v.env < 1.f && !v.releasing) { v.env += v.attackInc; if (v.env > 1.f) v.env = 1.f; }
             if (v.releasing) { v.env -= v.relInc; if (v.env <= 0) { v.on = false; break; } }
             float l, rr, oL, oR;

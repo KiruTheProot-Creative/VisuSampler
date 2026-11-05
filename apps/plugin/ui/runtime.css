@@ -619,3 +619,10 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 .laypage[aria-pressed="true"]{background:var(--sel);color:#fff;border-color:#5aa0ff}
 .pgrow{display:flex;gap:4px;margin:0 0 5px}
 .pgrow input{flex:1;min-width:0}
+
+/* group envelope */
+.snenv{margin:8px 0 4px;padding:6px 0 2px;border-top:1px solid #353535}
+.envsvg{display:block;width:100%;height:54px;margin:4px 0 6px;background:#1c1c1c;border-radius:4px}
+.envsvg polyline{fill:none;stroke:#5aa0ff;stroke-width:2;stroke-linejoin:round}
+.envrow{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:6px;align-items:center}
+.envrow select{min-width:0;font-size:11px}

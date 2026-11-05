@@ -94,7 +94,7 @@ bool Library::readInfo(const std::string& path, LibraryInfo& info, std::string& 
 
 const std::vector<std::string>& supportedFeatures() {
     static const std::vector<std::string> s = { "sampler", "slicer", "loop", "pingpong", "reverse", "unison", "rr", "release", "choke",
-        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep", "granular", "wavetable" };
+        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep", "granular", "wavetable", "envelope" };
     return s;
 }
 
@@ -165,6 +165,9 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         g.choke = j["choke"].integer(0); g.voices = j["voices"].integer(0); g.vol = (float) j["vol"].num(0); g.pan = (float) j["pan"].num(0); g.tune = (float) j["tune"].num(0);
         g.velcurve = (float) std::max(.1, j["velcurve"].num(1)); bool known; g.interp = parseInterp(j["interp"].str("inherit"), known); g.inheritInterp = !known;
         g.mute = j["mute"].boolean(); g.solo = j["solo"].boolean(); if (g.solo) L->anySolo = true;
+        { const Json& e = j["env"]; g.envOn = e["on"].boolean(false); g.envA = (float) std::max(0.0, e["a"].num(5)); g.envD = (float) std::max(0.0, e["d"].num(300));
+          g.envS = (float) std::min(1.0, std::max(0.0, e["s"].num(100) / 100.0)); g.envR = (float) std::max(0.0, e["r"].num(300));
+          const char* K[4] = { "a", "d", "s", "r" }; for (int k = 0; k < 4; ++k) g.envTagId[k] = e["tags"][K[k]].str(""); }
         int id = (int) L->groups.size(); gidx[name] = id; L->groups.push_back(g); return id;
     };
     for (size_t i = 0; i < m["zones"].size(); ++i) {
@@ -200,6 +203,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         d.steps = (int) tj[i]["steps"].size(); d.def = (float) tj[i]["value"].num(tj[i]["def"].num(0)); L->tags.push_back(d); }
     L->tagValues.reset(new std::atomic<float>[std::max<size_t>(1, L->tags.size())]);
     for (size_t i = 0; i < L->tags.size(); ++i) L->tagValues[i].store(L->tags[i].def);
+    for (auto& g : L->groups) for (int k = 0; k < 4; ++k) if (!g.envTagId[k].empty()) for (size_t i = 0; i < L->tags.size(); ++i) if (L->tags[i].id == g.envTagId[k]) g.envTag[k] = (int) i;
     for (auto& s : L->samples) if (!s.wtTagId.empty()) for (size_t i = 0; i < L->tags.size(); ++i) if (L->tags[i].id == s.wtTagId) s.wtTag = (int) i;
     L->sampleRate = sampleRate;
     std::vector<std::string> gnames; for (auto& g : L->groups) gnames.push_back(g.name);

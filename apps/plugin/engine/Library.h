@@ -32,6 +32,9 @@ struct Sample {
 struct GroupCfg {
     std::string name; GroupMode mode = GroupMode::Normal; int choke = 0, voices = 0;
     float vol = 0, pan = 0, tune = 0, velcurve = 1; Interp interp = Interp::Linear; bool inheritInterp = true, mute = false, solo = false;
+    // per-note ADSR for the whole group (replaces the zones' own attack and release when on).
+    // A, D, R in ms, S 0..1. A knob (tag) can drive each one: 0..1 maps to 0..10 s (squared) and 0..100 %.
+    bool envOn = false; float envA = 5, envD = 300, envS = 1, envR = 300; int envTag[4] = { -1, -1, -1, -1 }; std::string envTagId[4];
 };
 
 // audio a zone plays: either the sample itself, or a prepared copy (loop crossfade baked in, or reversed)

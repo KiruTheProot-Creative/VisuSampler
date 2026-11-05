@@ -129,6 +129,35 @@ static void testLiveModes() {
     CHECK(std::fabs(hz2 / hz - 3) < .05, "a knob moves the wavetable position live (frame 2 is the third harmonic: x%.2f)", hz2 / hz);
 }
 
+// per-note ADSR on a group
+static void testGroupEnv() {
+    std::string err; auto lib = Library::load(std::string(TEST_DATA_DIR) + "/golden.vsamp", err, 44100);
+    if (!lib) { CHECK(false, "golden loads"); return; }
+    // the looped zone (keys 70-79) holds a tone; compare its level every 10 ms with the same note played without the envelope
+    auto levels = [&](Engine& e, int blocks, std::vector<double>& out) {
+        std::vector<float> L(441), R(441);
+        for (int b = 0; b < blocks; ++b) { std::fill(L.begin(), L.end(), 0.f); std::fill(R.begin(), R.end(), 0.f); e.render(L.data(), R.data(), 441);
+            double sq = 0; for (float x : L) sq += (double) x * x; out.push_back(std::sqrt(sq / 441)); }
+    };
+    std::vector<double> ref; { Engine e0; e0.prepare(44100); e0.setMasterGain(1); e0.setLibrary(lib); e0.noteOn(72, 127); levels(e0, 200, ref); }
+    for (auto& g : lib->groups) { g.envOn = true; g.envA = 100; g.envD = 100; g.envS = .5f; g.envR = 200; }
+    Engine e; e.prepare(44100); e.setMasterGain(1); e.setLibrary(lib); e.noteOn(72, 127);
+    std::vector<double> lv; levels(e, 50, lv);
+    const double at5 = lv[4] / ref[4], sus = lv[45] / ref[45];
+    CHECK(at5 < .65 && at5 > .3, "attack rises over 100 ms (%.2f after 45 ms)", at5);
+    CHECK(std::fabs(sus - .5) < .04, "decay settles on the 50%% sustain (%.2f)", sus);
+    e.noteOff(72); std::vector<double> rl; levels(e, 30, rl);
+    CHECK(rl[9] / ref[59] < .3 && rl[9] / ref[59] > .15 && e.activeVoices() == 0, "release fades out over 200 ms (%.2f after 100 ms, %d voices left)", rl[9] / ref[59], e.activeVoices());
+    // a knob drives the sustain live
+    for (auto& g : lib->groups) g.envTag[2] = 0;
+    lib->setTag("wtpos", .2f);
+    Engine e2; e2.prepare(44100); e2.setMasterGain(1); e2.setLibrary(lib); e2.noteOn(72, 127); std::vector<double> k; levels(e2, 60, k);
+    lib->setTag("wtpos", .8f); levels(e2, 80, k);
+    CHECK(std::fabs(k[59] / ref[59] - .2) < .03 && std::fabs(k[139] / ref[139] - .8) < .04, "a knob on sustain changes held notes (%.2f then %.2f)", k[59] / ref[59], k[139] / ref[139]);
+    for (auto& g : lib->groups) { g.envOn = false; g.envTag[2] = -1; }
+    lib->setTag("wtpos", 0.f);
+}
+
 static void testDemo() {
     std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
     CHECK(lib != nullptr, "demo library loads %s", err.c_str());
@@ -199,7 +228,7 @@ static void testFx() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }
