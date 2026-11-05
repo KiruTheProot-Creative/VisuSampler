@@ -22,7 +22,12 @@ document.addEventListener('keydown',e=>{
   if(S.view==='samples'){if(!typing(e.target))smKey(e);return;}
   if(S.view!=='design'){if(!typing(e.target)&&!e.ctrlKey&&!e.metaKey)fxKey(e);return;}
   if(typing(e.target)||e.ctrlKey||e.metaKey) {
-    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='d'&&S.mode==='design'&&!typing(e.target)&&sel()){e.preventDefault();dupEl();}
+    if((e.ctrlKey||e.metaKey)&&S.mode==='design'&&!typing(e.target)){
+      const k=e.key.toLowerCase();
+      if(k==='d'&&sel()){e.preventDefault();dupEl();}
+      else if(k==='a'){e.preventDefault();setSel(S.els.map(x=>x.id),S.sel);}
+      else if(k==='g'&&sel()){e.preventDefault();if(e.shiftKey)ungroupSel();else groupSel();}
+    }
     return;
   }
   if(S.mode==='test'){
@@ -35,9 +40,7 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='Escape') select(null);
   else if(e.key.startsWith('Arrow')){
     e.preventDefault(); const s=e.shiftKey?10:1;
-    if(e.key==='ArrowLeft') el.x-=s; if(e.key==='ArrowRight') el.x+=s;
-    if(e.key==='ArrowUp') el.y-=s; if(e.key==='ArrowDown') el.y+=s;
-    renderEl(el); placeSel(); syncPosFields();
+    nudgeSel(e.key==='ArrowLeft'?-s:e.key==='ArrowRight'?s:0,e.key==='ArrowUp'?-s:e.key==='ArrowDown'?s:0);
   }
 });
 document.addEventListener('keyup',e=>{

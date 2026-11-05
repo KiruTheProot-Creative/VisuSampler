@@ -588,3 +588,22 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 #rightN details.sec>:not(summary){margin-left:10px;margin-right:10px}
 #rightN details.sec[open]{padding-bottom:6px}
 #rightN .phead{margin:6px 0 8px}
+
+/* multi selection and layer groups */
+#mselLayer{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none}
+.mselOne{position:absolute;outline:1px dashed #5aa0ff;outline-offset:0}
+#marquee{position:absolute;border:1px solid #5aa0ff;background:rgba(90,160,255,.12);pointer-events:none}
+#selbox.multi .hd{display:none}
+.lr.msel{background:color-mix(in srgb,var(--sel) 50%,transparent);color:#fff}
+#layers .lg{list-style:none}
+#layers .lg ul{list-style:none;margin:0;padding:0 0 0 14px;display:flex;flex-direction:column;gap:2px}
+#layers .lgh{display:flex;align-items:center;border-bottom:1px solid #2f2f2f;cursor:grab}
+#layers .lgh:hover{background:#444}
+#layers .lgh.on{background:color-mix(in srgb,var(--sel) 50%,transparent);color:#fff}
+#layers .lgt{background:none;border:0;color:inherit;width:22px;height:26px;cursor:pointer;padding:0}
+#layers .lgn{flex:1;min-width:0;display:flex;justify-content:space-between;gap:6px;background:none;border:0;color:inherit;text-align:left;padding:5px 7px 5px 0;cursor:pointer;font:inherit;font-weight:600}
+#layers .lgn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#layers .lgn small{color:var(--muted);font-weight:400}
+#layers [data-drag]{cursor:grab}
+#layers .dropA{box-shadow:inset 0 2px 0 #5aa0ff}
+#layers .dropB{box-shadow:inset 0 -2px 0 #5aa0ff}

@@ -1,7 +1,7 @@
 /* ---------- presets ---------- */
 function baseProject(){
   addTexAssets();
-  S.sel=null; S.els=[]; S.tags=sysTags(); S.groups=[]; S.lists=[]; S.banks=defaultBanks(['','','','','','','','']);
+  S.sel=null; S.msel=[]; S.lgroups=[]; S.els=[]; S.tags=sysTags(); S.groups=[]; S.lists=[]; S.banks=defaultBanks(['','','','','','','','']);
   S.fx.graphs={}; S.fx.scope='master'; S.fx.sel=null; S.fx.cable=null; S.fx.view='nodes';
   S.light=315; S.bpm=120; S.sig={n:4,d:4}; S.tab='props'; S.canvas={w:960,h:540,bg:'#26222e'};
   RT.load=1; RT.hover=null; RT.down=null; resetMapper();S.lib=defaultLib();S.build.last=null;S.build.report=null;S.build.verify=null;
