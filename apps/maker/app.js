@@ -3918,6 +3918,18 @@ const smCv=$('#smCanvas');
 const smSample=()=>sampleById(S.smp.sel);
 const smBuf=()=>{const s=smSample();return s&&BUF.get(s.id);};
 function smInvalidate(){S.smp.dirty=true;}
+/* ---- which loop the waveform edits: the selected zones' loop (what plays) in the Sound tab, else the sample's default loop ---- */
+function loopZones(){const s=smSample();if(!s||S.view!=='sound')return [];return selZones().filter(z=>z.sample===s.id);}
+function loopView(){
+  const s=smSample();if(!s)return null;const zs=loopZones();
+  if(zs.length){const L=zs[0].loop;return{zone:true,zs,on:!!L.on,s:L.s,e:L.e||s.frames,xf:L.xf||0,pp:!!L.pp,curve:L.xcurve||'power'};}
+  return s.loop?{zone:false,on:true,s:s.loop.s,e:s.loop.e,xf:s.loop.xf||0,pp:false,curve:'power'}:{zone:false,on:false,s:0,e:s.frames,xf:0,pp:false,curve:'power'};
+}
+function loopSet(p){
+  const s=smSample();if(!s)return;const zs=loopZones();
+  if(zs.length)zs.forEach(z=>{Object.assign(z.loop,p);});
+  else{const cur=s.loop||{s:0,e:s.frames,xf:0};const n=Object.assign({},cur,p);if(p.on===false)s.loop=null;else{delete n.on;s.loop=n;}}
+}
 function smSize(){
   const wrap=$('#smWrap'),w=Math.max(200,wrap.clientWidth),h=Math.max(140,wrap.clientHeight),d=Math.min(2,dpr());
   SM.W=w;SM.H=h;smCv.width=Math.round(w*d);smCv.height=Math.round(h*d);smCv.style.width=w+'px';smCv.style.height=h+'px';
@@ -3945,11 +3957,13 @@ function smDraw(){
     const x=fx2x(t*b.sr);ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(x,top,1,H);ctx.fillStyle='#aaa';ctx.fillText(t.toFixed(stepS<1?2:1)+'s',x+3,3);
   }
   ctx.fillStyle='rgba(255,255,255,.18)';ctx.fillRect(0,mid,W,1);
-  /* loop region */
-  if(s.loop){
-    const x1=fx2x(s.loop.s),x2=fx2x(s.loop.e);
+  /* loop region (with a bar in the ruler to drag the whole loop) */
+  const LV=loopView();
+  if(LV&&LV.on){
+    const x1=fx2x(LV.s),x2=fx2x(LV.e);
     ctx.fillStyle='rgba(90,160,255,.16)';ctx.fillRect(x1,top,x2-x1,H);
-    if(s.loop.xf>0){ctx.fillStyle='rgba(240,194,74,.25)';ctx.fillRect(fx2x(s.loop.e-s.loop.xf),top,s.loop.xf/fpp,H);ctx.fillRect(fx2x(s.loop.s-s.loop.xf),top,s.loop.xf/fpp,H);}
+    ctx.fillStyle=S.smp.loopHot?'rgba(90,160,255,.75)':'rgba(90,160,255,.45)';ctx.fillRect(x1,0,x2-x1,top-2);
+    if(LV.xf>0){ctx.fillStyle='rgba(240,194,74,.25)';ctx.fillRect(fx2x(LV.e-LV.xf),top,LV.xf/fpp,H);ctx.fillRect(fx2x(LV.s-LV.xf),top,LV.xf/fpp,H);}
   }
   /* selection */
   if(S.smp.a!=null){const a=Math.min(S.smp.a,S.smp.b),c=Math.max(S.smp.a,S.smp.b);ctx.fillStyle='rgba(255,255,255,.14)';ctx.fillRect(fx2x(a),top,Math.max(1,(c-a)/fpp),H);}
@@ -3964,7 +3978,7 @@ function smDraw(){
   }
   /* loop edges, slices, playhead */
   const line=(f,col,lab)=>{const x=fx2x(f);if(x<-2||x>W+2)return;ctx.fillStyle=col;ctx.fillRect(Math.round(x)-1,top,2,H);if(lab){ctx.font='10px "JetBrains Mono",monospace';ctx.fillText(lab,x+3,H-14);}};
-  if(s.loop){line(s.loop.s,'#5aa0ff','L');line(s.loop.e,'#5aa0ff','E');}
+  if(LV&&LV.on){line(LV.s,'#5aa0ff','L');line(LV.e,'#5aa0ff','E');if(LV.xf>0)line(LV.e-LV.xf,'#f0c24a','X');}
   const sm=smOf(s);
   if(sm.mode==='slicer'||S.smp.tool==='slice') sm.slices.forEach((f,i)=>line(f,'#f08a3a',String(i+1)));
   if(sm.mode==='wavetable'){
@@ -3972,6 +3986,7 @@ function smDraw(){
     for(let f=fl;f<n;f+=fl){const x=fx2x(f);if(x>0&&x<W&&fl/fpp>3)ctx.fillRect(Math.round(x),top,1,H);}
   }
   if(S.smp.play){const f=S.smp.play.from+(AU.ctx.currentTime-S.smp.play.t0)*b.sr;if(f<=S.smp.play.to)line(f,'#8ac76a');else S.smp.play=null;}
+  if(LV&&LV.on&&S.view==='sound')loopSeam(ctx,b,LV,W,H);
   $('#smInfo').textContent=(S.smp.a!=null?'Selection '+(Math.abs(S.smp.b-S.smp.a)/b.sr).toFixed(3)+' s  ·  ':'')+(n/b.sr).toFixed(2)+' s · '+b.sr+' Hz · '+b.ch.length+' ch';
 }
 function smLoop(){
@@ -3989,31 +4004,37 @@ function zeroSnap(b,f,range){
 }
 /* ---- pointer ---- */
 function smPt(e){const r=smCv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
-function smHit(x){
+function smHit(x,y){
   const s=smSample(); if(!s) return null; const sm=smOf(s),near=f=>Math.abs(fx2x(f)-x)<=6;
-  if(s.loop){
-    if(near(s.loop.s))return{k:'ls'};if(near(s.loop.e))return{k:'le'};if(near(s.loop.e-s.loop.xf)&&s.loop.xf>0)return{k:'xf'};
+  const LV=loopView();
+  if(LV&&LV.on){
+    if(near(LV.s))return{k:'ls'};if(near(LV.e))return{k:'le'};if(LV.xf>0&&near(LV.e-LV.xf))return{k:'xf'};
+    if(y!=null&&y<16&&x>fx2x(LV.s)&&x<fx2x(LV.e))return{k:'lmove'};
   }
   if(sm.mode==='slicer'||S.smp.tool==='slice'){for(let i=0;i<sm.slices.length;i++)if(near(sm.slices[i]))return{k:'slice',i};}
   return null;
 }
 smCv.addEventListener('pointermove',e=>{
-  const p=smPt(e);if(S.smp.drag)return;const h=smHit(p.x);smCv.style.cursor=h?'ew-resize':(S.smp.tool==='slice'?'copy':'text');
+  const p=smPt(e);if(S.smp.drag)return;const h=smHit(p.x,p.y);smCv.style.cursor=h?(h.k==='lmove'?'grab':'ew-resize'):(S.smp.tool==='slice'?'copy':'text');
+  const hot=!!h&&h.k==='lmove';if(hot!==!!S.smp.loopHot){S.smp.loopHot=hot;smInvalidate();}
 });
 smCv.addEventListener('pointerdown',e=>{
   const s=smSample(),b=smBuf(); if(!s||!b||e.button>1) return; e.preventDefault();
-  const p=smPt(e),h=smHit(p.x),sm=smOf(s);
+  const p=smPt(e),h=smHit(p.x,p.y),sm=smOf(s);
   if(h&&h.k==='slice'&&e.altKey){sm.slices.splice(h.i,1);touchMap();smInvalidate();smPanelRender();return;}
   if(h){
-    S.smp.drag=true;
+    S.smp.drag=true;const L0=loopView(),f0=x2f(p.x),n=b.ch[0].length;
+    /* loop points land on rising zero crossings (hold Shift for free placement) */
+    const zs=(f,ev)=>S.smp.loopSnap!==false&&!ev.shiftKey?zeroSnap(b,f,Math.max(32,Math.round(S.smp.fpp*8))):f;
     drag(ev=>{
-      const f=clamp(x2f(smPt(ev).x),0,b.ch[0].length);
-      if(h.k==='ls')s.loop.s=Math.min(f,s.loop.e-64);
-      else if(h.k==='le')s.loop.e=Math.max(f,s.loop.s+64);
-      else if(h.k==='xf')s.loop.xf=clamp(s.loop.e-f,0,Math.min(s.loop.s,(s.loop.e-s.loop.s)>>1));
-      else{sm.slices[h.i]=h.i===0?0:clamp(f,1,b.ch[0].length-1);}
+      const f=clamp(x2f(smPt(ev).x),0,n);
+      if(h.k==='ls')loopSet({s:clamp(zs(f,ev),0,L0.e-64)});
+      else if(h.k==='le')loopSet({e:clamp(zs(f,ev),L0.s+64,n)});
+      else if(h.k==='xf')loopSet({xf:clamp(L0.e-f,0,Math.min(L0.s,(L0.e-L0.s)>>1))});
+      else if(h.k==='lmove'){const len=L0.e-L0.s,ns=clamp(zs(L0.s+(f-f0),ev),0,n-len);loopSet({s:ns,e:ns+len,xf:Math.min(L0.xf,ns,len>>1)});}
+      else{sm.slices[h.i]=h.i===0?0:clamp(f,1,n-1);}
       smInvalidate();
-    },()=>{S.smp.drag=null;if(h.k==='slice'){sm.slices.sort((a,c)=>a-c);}touchMap();smPanelRender();smInvalidate();});
+    },()=>{S.smp.drag=null;if(h.k==='slice'){sm.slices.sort((a,c)=>a-c);}touchMap();smPanelRender();smInvalidate();loopUI();if(h.k!=='slice'&&loopZones().length)mapRightRender();});
     return;
   }
   if(S.smp.tool==='slice'){
@@ -4572,6 +4593,79 @@ snShow=function(keepIns){
   snShowPlay(keepIns);const el=$('#snInsPlay'),on=S.snd.focus==='play';el.hidden=!on;
   if(on){$('#rightM').hidden=true;if(!keepIns||!el.innerHTML)el.innerHTML=snPlayHTML();}
 };
+
+/* ---------- visual loop editor (Sound tab) ----------
+   The waveform edits the loop of the selected zones (the loop that plays), or the sample's default loop when no zone is picked.
+   Drag L / E (they land on zero crossings), the yellow X for the crossfade, or the blue bar in the ruler to move the whole loop.
+   The seam view shows the join exactly as it will play, crossfade included. */
+const fadeC=(t,c)=>{t=clamp(t,0,1);return c==='linear'?t:c==='s'?t*t*(3-2*t):Math.sin(t*Math.PI/2);};
+function seamData(b,L,N){
+  const d=b.ch[0],n=d.length,out=new Float32Array(N*2),xf=Math.min(L.xf,L.s,(L.e-L.s)>>1);
+  for(let k=0;k<N;k++){
+    const i=L.e-N+k;let v=i>=0&&i<n?d[i]:0;
+    if(xf>0&&i>=L.e-xf){const j=i-(L.e-xf),t=(j+.5)/xf,o=L.s-xf+j;v=v*fadeC(1-t,L.curve)+(o>=0&&o<n?d[o]:0)*fadeC(t,L.curve);}
+    out[k]=v;
+  }
+  for(let k=0;k<N;k++){const i=L.pp?L.e-1-k:L.s+k;out[N+k]=i>=0&&i<n?d[i]:0;}
+  return out;
+}
+function seamVerdict(v,N){
+  let pk=1e-4;for(let i=0;i<v.length;i++)pk=Math.max(pk,Math.abs(v[i]));
+  const jump=Math.abs(v[N]-v[N-1]),slopeA=v[N-1]-v[N-2],slopeB=v[N+1]-v[N],typ=(Math.abs(slopeA)+Math.abs(slopeB))/2+pk*.01;
+  return jump<=typ*2.2?'smooth':jump<=typ*6?'small bump':'click';
+}
+function loopSeam(ctx,b,L,W,H){
+  const bw=Math.min(280,W*.42),bh=Math.min(92,H*.42),y0=H-bh-8,N=Math.max(32,Math.round(b.sr*.005));
+  /* sit in the bottom corner that hides no loop marker */
+  const marks=[fx2x(L.s),fx2x(L.e),fx2x(L.e-L.xf)],free=x=>marks.every(m=>m<x-4||m>x+bw+4),x0=free(W-bw-8)||!free(8)?W-bw-8:8;
+  const v=seamData(b,L,N),verdict=seamVerdict(v,N);
+  let pk=1e-4;for(let i=0;i<v.length;i++)pk=Math.max(pk,Math.abs(v[i]));
+  ctx.fillStyle='rgba(20,20,22,.88)';ctx.fillRect(x0,y0,bw,bh);ctx.strokeStyle='#555';ctx.strokeRect(x0+.5,y0+.5,bw-1,bh-1);
+  const mid=y0+bh/2+6,amp=(bh-22)/2/pk;
+  ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(x0,mid,bw,1);
+  ctx.setLineDash([3,3]);ctx.strokeStyle='#5aa0ff';ctx.beginPath();ctx.moveTo(x0+bw/2,y0+14);ctx.lineTo(x0+bw/2,y0+bh);ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle='#cfe0f4';ctx.lineWidth=1.3;ctx.beginPath();
+  for(let i=0;i<v.length;i++){const x=x0+i/(v.length-1)*bw,y=mid-v[i]*amp;if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);}
+  ctx.stroke();ctx.lineWidth=1;
+  ctx.font='10px "JetBrains Mono",monospace';ctx.textBaseline='top';ctx.fillStyle='#aaa';ctx.fillText('…E | L…  seam'+(L.pp?' (ping-pong)':''),x0+6,y0+3);
+  ctx.fillStyle=verdict==='smooth'?'#7fd18b':verdict==='small bump'?'#f0c24a':'#ff8a6a';ctx.textAlign='right';ctx.fillText(verdict,x0+bw-6,y0+3);ctx.textAlign='left';
+  S.smp.seam=verdict;
+}
+/* ---- loop bar above the waveform ---- */
+(function(){const bar=document.createElement('span');bar.id='loopBar';bar.className='loopbar';$('#snWaveSlot').before(bar);})();
+const LOOPH={note:null};
+function loopUI(){
+  const bar=$('#loopBar');if(!bar)return;const s=smSample();
+  if(!s||S.view!=='sound'){bar.innerHTML='';return;}
+  const L=loopView(),zs=loopZones(),who=zs.length?(zs.length===1?'zone':zs.length+' zones'):'sample default';
+  bar.innerHTML='<span class="muted">Loop · '+who+'</span>'
+    +'<button type="button" class="btn ghost" data-lp="on" aria-pressed="'+L.on+'">'+(L.on?'On':'Off')+'</button>'
+    +(L.on?'<button type="button" class="btn ghost" data-lp="snap" aria-pressed="'+(S.smp.loopSnap!==false)+'" title="Loop points land on zero crossings (hold Shift to place freely)">Snap</button>'
+      +'<button type="button" class="btn ghost" data-lp="fit" title="Zoom to the loop">Zoom</button>':'')
+    +'<button type="button" class="btn ghost" data-lp="find" title="Look for a loop that joins smoothly">Find</button>'
+    +(zs.length&&L.on?'<button type="button" class="btn ghost" data-lp="hear" aria-pressed="'+(LOOPH.note!=null)+'" title="Hold the zone\'s root note so you hear the loop">▶ Hear</button>':'');
+}
+$('#loopBar').addEventListener('click',e=>{
+  const b=e.target.closest('[data-lp]');if(!b)return;const s=smSample(),bf=smBuf();if(!s||!bf)return;
+  const a=b.dataset.lp,L=loopView(),zs=loopZones();
+  if(a==='on'){
+    if(L.on)loopSet({on:false});
+    else{const ok=L.e-L.s>=64&&L.e<=s.frames;loopSet(ok?{on:true}:{on:true,s:Math.floor(s.frames*.3),e:Math.floor(s.frames*.9),xf:Math.min(Math.floor(bf.sr*.1),Math.floor(s.frames*.1))});}
+    touchMap();
+  }else if(a==='snap'){S.smp.loopSnap=S.smp.loopSnap===false;}
+  else if(a==='fit'){const len=L.e-L.s;S.smp.fpp=Math.max(.05,len*1.4/SM.W);S.smp.sx=Math.max(0,L.s-len*.2);smClampView();}
+  else if(a==='find'){
+    if(zs.length){let n=0;zs.forEach(z=>{if(findLoop(z))n++;});flash(n?'Found a loop for '+n+' zone'+(n>1?'s':''):'No smooth loop found');}
+    else{const z=mkZone({sample:s.id,loop:{on:false,s:0,e:s.frames,xf:0,xcurve:'power',pp:false}});if(findLoop(z)){s.loop={s:z.loop.s,e:z.loop.e,xf:z.loop.xf};flash('Found a loop');}else flash('No smooth loop found');}
+    touchMap();
+  }else if(a==='hear'){
+    if(LOOPH.note!=null){noteOff(LOOPH.note);LOOPH.note=null;}
+    else{ensureAudio();LOOPH.note=zs[0].root;noteOn(LOOPH.note,100);}
+  }
+  smInvalidate();loopUI();if(zs.length&&a!=='hear'&&a!=='snap'&&a!=='fit')mapRightRender();else if(!zs.length&&a!=='hear')smPanelRender();
+});
+const snShowLoop=snShow;
+snShow=function(keepIns){snShowLoop(keepIns);loopUI();smInvalidate();};
 
 /* ---------- library info + two-layer banner ---------- */
 const uuid4=()=>(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16);});
