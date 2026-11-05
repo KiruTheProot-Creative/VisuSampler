@@ -72,7 +72,7 @@ async function open(id){
 }
 async function leave(){releaseAll();hideUI();await call('unload');cur=null;st={};setMode('browse');}
 $('#btnBack').onclick=leave;
-addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.dataset.mode==='play')leave();});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&!e.defaultPrevented&&!ctxOpen&&document.body.dataset.mode==='play')leave();});
 function renderDetail(){
   const m=cur;if(!m)return;const tags=tagsOf(m),lists=st.lists||[];
   const wide=m.hasWide?'<img class="wide" alt="'+esc(m.name)+' banner" src="'+img(m,'wide')+'">':'<div class="wide fb" style="background:linear-gradient(135deg,'+esc(m.accent||'#4f7db8')+',#10161f)">'+esc(m.name)+'</div>';
@@ -124,6 +124,33 @@ on('status',d=>{const was=st;st=d||{};
   if(cur&&document.body.dataset.mode==='play')renderDetail();});
 on('meter',d=>{$('#voices').textContent=(d&&d.voices||0)+' voices';});
 on('volume',v=>{$('#vol').value=v;$('#vol2').value=v;});
+/* knobs moved by DAW automation or a MIDI controller: the interface follows */
+on('tags',d=>{if(uiReady&&d)frame.contentWindow.postMessage({t:'tags',values:d},'*');});
+on('mappings',d=>{maps=d||{};if(ctxOpen)ctxRender();});
+/* right-click a knob: its automation slot, and MIDI learn */
+let maps={},ctxOpen=null;
+const ctxEl=document.createElement('div');ctxEl.className='ctxmenu';ctxEl.hidden=true;ctxEl.setAttribute('role','menu');document.body.appendChild(ctxEl);
+function ctxClose(){if(ctxOpen&&maps.__learning===ctxOpen.name)call('midiCancel');ctxOpen=null;ctxEl.hidden=true;}
+function ctxRender(){
+  const m=ctxOpen,mp=maps[m.name]||{},learning=maps.__learning===m.name;
+  ctxEl.innerHTML='<div class="ctxh">'+esc(m.name)+'</div>'
+    +'<div class="ctxi muted">'+(mp.slot?'DAW automation: '+esc(m.name)+' (slot '+mp.slot+')':'Not automatable (more than 64 knobs)')+'</div>'
+    +(mp.slot?(learning?'<button type="button" class="ctxi on" data-c="cancel">Move a knob on your MIDI controller… (click to stop)</button>'
+      :'<button type="button" class="ctxi" data-c="learn">'+(mp.cc!=null?'MIDI: CC '+mp.cc+' · learn again':'MIDI learn')+'</button>'
+        +(mp.cc!=null?'<button type="button" class="ctxi" data-c="forget">Forget CC '+mp.cc+'</button>':'')):'');
+}
+async function ctxMenu(m){
+  const r=frame.getBoundingClientRect();ctxOpen=m;maps=await call('getMappings')||{};ctxRender();ctxEl.hidden=false;
+  const x=Math.min(r.left+m.x,innerWidth-ctxEl.offsetWidth-6),y=Math.min(r.top+m.y,innerHeight-ctxEl.offsetHeight-6);
+  ctxEl.style.left=Math.max(4,x)+'px';ctxEl.style.top=Math.max(4,y)+'px';
+}
+ctxEl.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-c]');if(!b||!ctxOpen)return;const c=b.dataset.c,n=ctxOpen.name;
+  if(c==='learn')maps=await call('midiLearn',n)||maps;else if(c==='cancel'){maps=await call('midiCancel')||maps;}else if(c==='forget')maps=await call('midiForget',n)||maps;
+  ctxRender();
+});
+addEventListener('pointerdown',e=>{if(ctxOpen&&!ctxEl.contains(e.target))ctxClose();},true);
+addEventListener('keydown',e=>{if(e.key==='Escape'&&ctxOpen){e.preventDefault();e.stopImmediatePropagation();ctxClose();}},true);   /* Escape closes only the menu, it does not leave play mode */
 /* ---------- the library's own interface (drawn by runtime.html with the Designer's code) ---------- */
 let uiFor=null,uiReady=false,uiMsg=null;
 const frame=$('#uiFrame');
@@ -145,6 +172,7 @@ addEventListener('message',e=>{
   if(m.t==='ready'){uiReady=true;if(uiMsg)frame.contentWindow.postMessage(uiMsg,'*');}
   else if(m.t==='list'&&m.index>=0){if(st.list!==m.index){st.list=m.index;call('setList',m.index);}}
   else if(m.t==='tag'){call('setTag',m.name,m.value);}
+  else if(m.t==='ctx'){ctxMenu(m);}
 });
 $('#btnAbout').onclick=()=>{const on=!$('#stage').classList.contains('about');$('#stage').classList.toggle('about',on);$('#btnAbout').setAttribute('aria-pressed',String(on));};
 buildPiano();

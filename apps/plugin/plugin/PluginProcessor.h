@@ -7,9 +7,20 @@
 #include <memory>
 #include <vector>
 
-class VisuProcessor : public juce::AudioProcessor, public juce::ChangeBroadcaster
+class VisuProcessor : public juce::AudioProcessor, public juce::ChangeBroadcaster, private juce::AudioProcessorParameter::Listener
 {
 public:
+    // DAW automation: a fixed set of slots the host sees; each library's knobs (tags) take them in order and lend them their names.
+    static constexpr int kMacros = 64;
+    struct MacroParam : public juce::AudioParameterFloat
+    {
+        explicit MacroParam(int i);
+        juce::String getName(int maximumStringLength) const override;
+        void setLabel(const juce::String& s) { const juce::SpinLock::ScopedLockType l(lock_); label_ = s; }
+        int slot;
+    private:
+        juce::String label_; juce::SpinLock lock_;
+    };
     struct Entry { juce::String id; juce::File file; visu::LibraryInfo info; juce::int64 size = 0; };
 
     VisuProcessor();
@@ -34,6 +45,15 @@ public:
     std::shared_ptr<const visu::Library> currentLibrary() const { return current_; }
     const juce::String& currentId() const { return currentId_; }
     juce::var tagsVar() const;   // knob (tag) values the user set, by tag name
+    // automation and MIDI learn (message thread)
+    juce::var mappingsVar() const;              // { tag name: { slot, cc } }
+    void startLearn(const juce::String& tag);   // the next MIDI controller moved drives this knob
+    void cancelLearn() { learning_ = false; learnTag_.clear(); }
+    void forgetMidi(const juce::String& tag);
+    bool pollLearned();                         // true when a learn finished (mappings changed)
+    juce::var takeUiChanges();                  // knob values moved by the DAW or MIDI, for the interface
+    void endIdleGestures();
+    const juce::String& learning() const { return learnTag_; }
     int currentList() const { return list_ == -2 && current_ ? current_->defaultList : list_; }
 
     juce::MidiKeyboardState keyboardState;
@@ -60,6 +80,19 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
 private:
+    void parameterValueChanged(int parameterIndex, float newValue) override;
+    void parameterGestureChanged(int, bool) override {}
+    void assignSlots();   // after a library loads
+    int slotOf(const juce::String& tag) const { for (int i = 0; i < kMacros; ++i) if (slotTag_[i] == tag && tag.isNotEmpty()) return i; return -1; }
+    MacroParam* macros_[kMacros] = {};
+    juce::String slotTag_[kMacros];
+    std::atomic<int> slotTagIndex_[kMacros];
+    std::atomic<float> slotValue_[kMacros];
+    std::atomic<bool> slotDirty_[kMacros], slotUiDirty_[kMacros], slotFromUi_[kMacros];
+    bool gesture_[kMacros] = {}; double gestureTime_[kMacros] = {};
+    std::atomic<int> ccSlot_[128];
+    std::map<juce::String, int> ccOfTag_;   // saved with the project
+    juce::String learnTag_; std::atomic<bool> learning_{ false }; std::atomic<int> learnedCc_{ -1 };
     visu::Engine engine_;
     juce::AudioParameterFloat* volume_ = nullptr;
     std::vector<Entry> catalog_;

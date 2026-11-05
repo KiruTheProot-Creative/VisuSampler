@@ -20,6 +20,10 @@ const fns={
   getInterface:()=>{const L=libs.find(l=>l.id===state.status.currentId);return L?{manifest:JSON.stringify(L._m),id:L.id,list:0,tags:state.tags||{}}:null;},
   unload:()=>{state.status={text:'No library loaded'};return true;},
   setList:i=>{state.status.list=i;return true;},setVolume:v=>{state.volume=v;return true;},
+  getMappings:()=>Object.assign({},state.maps||{}),
+  midiLearn:n=>{state.maps=state.maps||{};state.maps.__learning=n;return Object.assign({},state.maps);},
+  midiCancel:()=>{if(state.maps)delete state.maps.__learning;return Object.assign({},state.maps||{});},
+  midiForget:n=>{if(state.maps&&state.maps[n])state.maps[n].cc=null;return Object.assign({},state.maps||{});},
   noteOn:(n,v)=>true,noteOff:n=>true,panic:()=>true,setTag:(n,v)=>{(state.tags=state.tags||{})[n]=v;return true;},openFolder:()=>true,addLibrary:()=>({added:0})
 };
 window.__JUCE__={initialisationData:{__juce__functions:Object.keys(fns)},backend:{

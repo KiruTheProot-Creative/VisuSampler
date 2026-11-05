@@ -859,7 +859,16 @@ window.addEventListener('message',async e=>{
     lastList=-2;reportList();
     document.fonts.ready.then(()=>rerenderAll());
   }else if(m.t==='list'){chooseList(m.index);}
+  else if(m.t==='tags'){   /* moved by DAW automation or a MIDI controller: show it, do not send it back */
+    Object.keys(m.values||{}).forEach(n=>{const t=tagByName(n);if(t)setTag0(t,+m.values[n]);});
+  }
 });
 parent.postMessage({t:'ready'},'*');
+
+/* right-click a knob, fader, button or dropdown: the plugin shows its automation slot and MIDI learn */
+canvas.addEventListener('contextmenu',e=>{
+  const n=e.target.closest('.el');if(!n)return;const el=S.els.find(x=>x.id===n.dataset.id),t=el&&el.tag&&tagById(el.tag);
+  if(!t||t.sys)return;e.preventDefault();parent.postMessage({t:'ctx',name:t.name,x:e.clientX,y:e.clientY},'*');
+});
 
 })();

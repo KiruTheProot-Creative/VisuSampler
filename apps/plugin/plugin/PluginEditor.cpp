@@ -28,7 +28,7 @@ VisuEditor::VisuEditor(VisuProcessor& p)
     setResizable(true, true); setResizeLimits(640, 440, 2400, 1600); setSize(1000, 660);
     browser_.goToURL(juce::WebBrowserComponent::getResourceProviderRoot());
     proc_.addChangeListener(this);
-    startTimerHz(8);
+    startTimerHz(20);
 }
 
 VisuEditor::~VisuEditor() { proc_.removeChangeListener(this); }
@@ -59,6 +59,10 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
             o->setProperty("id", proc_.currentId()); o->setProperty("list", proc_.currentList()); o->setProperty("tags", proc_.tagsVar());
             reply(done, juce::var(o)); })
         .withNativeFunction("setTag", [this, reply](const juce::Array<juce::var>& a, auto done) { if (a.size() >= 2) proc_.setTag(a[0].toString(), (float) (double) a[1]); reply(done, juce::var(true)); })
+        .withNativeFunction("getMappings", [this, reply](const juce::Array<juce::var>&, auto done) { reply(done, proc_.mappingsVar()); })
+        .withNativeFunction("midiLearn", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.startLearn(a[0].toString()); reply(done, proc_.mappingsVar()); })
+        .withNativeFunction("midiCancel", [this, reply](const juce::Array<juce::var>&, auto done) { proc_.cancelLearn(); reply(done, proc_.mappingsVar()); })
+        .withNativeFunction("midiForget", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.forgetMidi(a[0].toString()); reply(done, proc_.mappingsVar()); })
         .withNativeFunction("unload", [this, reply](const juce::Array<juce::var>&, auto done) { proc_.unloadLibrary(); reply(done, juce::var(true)); })
         .withNativeFunction("setList", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setList((int) a[0]); reply(done, juce::var(true)); })
         .withNativeFunction("setVolume", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setVolume((float) (double) a[0]); reply(done, juce::var(true)); })
@@ -126,6 +130,9 @@ void VisuEditor::timerCallback()
 {
     const int v = proc_.activeVoices();
     if (v != lastVoices_) { lastVoices_ = v; auto* o = new juce::DynamicObject(); o->setProperty("voices", v); browser_.emitEventIfBrowserIsVisible("meter", juce::var(o)); }
+    proc_.endIdleGestures();
+    if (proc_.pollLearned()) browser_.emitEventIfBrowserIsVisible("mappings", proc_.mappingsVar());
+    { const auto ch = proc_.takeUiChanges(); if (!ch.isVoid()) browser_.emitEventIfBrowserIsVisible("tags", ch); }
     const float vol = proc_.volume();
     if (std::abs(vol - lastVol_) > 1e-4f) { lastVol_ = vol; browser_.emitEventIfBrowserIsVisible("volume", vol); }
 }

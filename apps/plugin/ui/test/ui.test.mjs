@@ -32,6 +32,26 @@ ok(await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='setTag')),'turning a
 /* a knob drag changes its tag */
 const knob=fr.locator('.el.knob').first();const kb=await knob.boundingBox();
 if(kb){await p.mouse.move(kb.x+kb.width/2,kb.y+kb.height/2);await p.mouse.down();await p.mouse.move(kb.x+kb.width/2,kb.y+kb.height/2-60,{steps:5});await p.mouse.up();}
+/* right-click a knob: automation slot and MIDI learn; DAW automation moves the knob */
+await p.evaluate(()=>{window.__mock.state.maps={Cutoff:{slot:1,cc:null}};});
+const kbc=await fr.locator('.el.knob:visible').first().boundingBox();
+await p.mouse.click(kbc.x+kbc.width/2,kbc.y+kbc.height/2,{button:'right'});await p.waitForTimeout(250);
+ok(await p.locator('.ctxmenu:not([hidden])').count()===1,'right-clicking a knob opens its menu');
+const ctxName=await p.textContent('.ctxmenu .ctxh');
+await p.evaluate(n=>{window.__mock.state.maps[n]={slot:3,cc:null};},ctxName);await p.evaluate(()=>document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})));await p.waitForTimeout(100);
+ok(await p.locator('.ctxmenu[hidden]').count()===1,'a click elsewhere closes the menu');
+await p.mouse.click(kbc.x+kbc.width/2,kbc.y+kbc.height/2,{button:'right'});await p.waitForTimeout(250);
+ok(/slot 3/.test(await p.textContent('.ctxmenu')),'the menu shows the DAW automation slot ('+(await p.textContent('.ctxmenu'))+' / '+ctxName+')');
+await p.click('.ctxmenu [data-c="learn"]');await p.waitForTimeout(100);
+ok(await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='midiLearn'))&&/Move a knob/.test(await p.textContent('.ctxmenu')),'MIDI learn waits for a controller');
+await p.evaluate(()=>document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));await p.waitForTimeout(100);
+ok(await p.locator('.ctxmenu[hidden]').count()===1&&await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='midiCancel')),'Escape closes the menu and stops learning');
+const before=await fr.locator('.el.knob:visible').first().evaluate(n=>n.querySelector('.cap').style.transform);
+await p.evaluate(n=>window.__mock.emit('tags',{[n]:.25}),ctxName);await p.waitForTimeout(200);
+const after=await fr.locator('.el.knob:visible').first().evaluate(n=>n.querySelector('.cap').style.transform);
+ok(before!==after,'DAW automation turns the knob in the interface ('+before+' -> '+after+')');
+const echoed=await p.evaluate(n=>window.__mock.calls.filter(c=>c[0]==='setTag'&&c[1]===n&&Math.abs(c[2]-.25)<1e-6).length,ctxName);
+ok(echoed===0,'and it is not sent back to the plugin');
 await p.click('#btnAbout');await p.waitForTimeout(100);
 const nl=await p.locator('[data-list]').count();ok(nl>1,'About shows the info page with the lists ('+nl+')');
 await p.click('[data-list="2"]');ok(await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='setList'&&c[1]===2)),'choosing a list tells the plugin');

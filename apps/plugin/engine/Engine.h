@@ -29,7 +29,8 @@ public:
     void sustain(bool down);
     void allNotesOff();
     void render(float* left, float* right, int numFrames);   // adds into the buffers
-    void controller(int cc, int value);    // mod wheel (1), expression (11), sustain (64)
+    void controller(int cc, int value);
+    void setTagIndex(int index, float value01);   // audio thread: a knob moved by DAW automation or a MIDI controller    // mod wheel (1), expression (11), sustain (64)
     void pitchBend(float v01);
     void aftertouch(float v01);
     int activeVoices() const { return active_.load(); }

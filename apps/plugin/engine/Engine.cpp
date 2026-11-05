@@ -463,6 +463,10 @@ void Engine::controller(int cc, int value) {
     if (cc == 1) ctl_.mod = value / 127.f; else if (cc == 11) ctl_.expr = value / 127.f; else if (cc == 64) sustain(value >= 64);
 }
 void Engine::pitchBend(float v01) { ctl_.bend = v01; }
+void Engine::setTagIndex(int i, float v) {
+    adopt();
+    if (lib_ && lib_->tagValues && i >= 0 && i < (int) lib_->tags.size()) lib_->tagValues[(size_t) i].store(std::min(1.f, std::max(0.f, v)));
+}
 void Engine::aftertouch(float v01) { ctl_.at = v01; }
 
 } // namespace visu

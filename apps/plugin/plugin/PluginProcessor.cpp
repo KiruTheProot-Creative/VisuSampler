@@ -5,12 +5,24 @@ VisuProcessor::VisuProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true))
 {
     addParameter(volume_ = new juce::AudioParameterFloat({ "volume", 1 }, "Volume", 0.0f, 1.0f, 0.8f));
+    for (int i = 0; i < kMacros; ++i)
+    {
+        slotTagIndex_[i] = -1; slotValue_[i] = 0; slotDirty_[i] = false; slotUiDirty_[i] = false; slotFromUi_[i] = false;
+        addParameter(macros_[i] = new MacroParam(i));
+        macros_[i]->addListener(this);
+    }
+    for (auto& c : ccSlot_) c = -1;
     libraryFolder().createDirectory();
     rescan();
 }
 
+VisuProcessor::MacroParam::MacroParam(int i)
+    : juce::AudioParameterFloat({ "macro" + juce::String(i + 1), 1 }, "Macro " + juce::String(i + 1), 0.0f, 1.0f, 0.0f), slot(i), label_("Macro " + juce::String(i + 1)) {}
+juce::String VisuProcessor::MacroParam::getName(int n) const { const juce::SpinLock::ScopedLockType l(lock_); return label_.substring(0, n); }
+
 VisuProcessor::~VisuProcessor()
 {
+    for (auto* m : macros_) if (m) m->removeListener(this);
     *alive_ = false;
     engine_.setLibrary(nullptr);
 }
@@ -52,7 +64,7 @@ const VisuProcessor::Entry* VisuProcessor::entryById(const juce::String& id) con
 
 void VisuProcessor::loadLibrary(const juce::String& id, bool keepTags)
 {
-    if (!keepTags && id != currentId_) { const juce::ScopedLock l(tagLock_); tagState_.clear(); }   // another library: start from its own knob values
+    if (!keepTags && id != currentId_) { const juce::ScopedLock l(tagLock_); tagState_.clear(); ccOfTag_.clear(); }   // another library: start from its own knob values
     const auto* e = entryById(id);
     if (!e) { pendingId_ = id; pendingKeep_ = true; return; }   // the scan has not finished yet
     auto alive = alive_; const int ticket = ++loadTicket_; const juce::File file = e->file;
@@ -67,6 +79,7 @@ void VisuProcessor::loadLibrary(const juce::String& id, bool keepTags)
             if (!lib) { status_ = "Could not load: " + juce::String(err); sendChangeMessage(); return; }
             { const juce::ScopedLock l(tagLock_); for (auto& t : tagState_) lib->setTag(t.first.toStdString(), t.second); }
             current_ = lib; currentFile_ = file; currentId_ = id;
+            assignSlots();
             engine_.setList(list_); engine_.setLibrary(lib);
             status_ = juce::String((int) lib->zones.size()) + " zones ready · " + juce::String(lib->memoryBytes() / 1048576.0, 1) + " MB in memory";
             if (lib->streamedSamples() > 0) status_ << " · " << lib->streamedSamples() << " samples stream from disk";
@@ -79,6 +92,7 @@ void VisuProcessor::loadLibrary(const juce::String& id, bool keepTags)
 void VisuProcessor::unloadLibrary()
 {
     { const juce::ScopedLock l(tagLock_); tagState_.clear(); }
+    ccOfTag_.clear();
     ++loadTicket_; loading_ = false; engine_.setLibrary(nullptr); current_.reset(); currentId_.clear(); currentFile_ = juce::File();
     list_ = -2; status_ = "No library loaded"; sendChangeMessage();
 }
@@ -150,6 +164,93 @@ void VisuProcessor::setTag(const juce::String& name, float value)
 {
     { const juce::ScopedLock l(tagLock_); tagState_[name] = value; }
     if (current_) current_->setTag(name.toStdString(), value);
+    /* the DAW records the move: one gesture per drag, ended when the knob rests */
+    const int s = slotOf(name);
+    if (s >= 0)
+    {
+        if (!gesture_[s]) { macros_[s]->beginChangeGesture(); gesture_[s] = true; }
+        gestureTime_[s] = juce::Time::getMillisecondCounterHiRes();
+        slotFromUi_[s] = true; macros_[s]->setValueNotifyingHost(value); slotFromUi_[s] = false;
+    }
+}
+
+void VisuProcessor::endIdleGestures()
+{
+    const double now = juce::Time::getMillisecondCounterHiRes();
+    for (int i = 0; i < kMacros; ++i) if (gesture_[i] && now - gestureTime_[i] > 300) { macros_[i]->endChangeGesture(); gesture_[i] = false; }
+}
+
+void VisuProcessor::parameterValueChanged(int parameterIndex, float v)
+{
+    // macro parameters only (any thread): the audio thread applies the value, the interface follows unless it moved it
+    const int i = parameterIndex - 1;   // the volume is parameter 0
+    if (i < 0 || i >= kMacros) return;
+    slotValue_[i] = v; slotDirty_[i] = true;
+    if (!slotFromUi_[i]) slotUiDirty_[i] = true;
+}
+
+void VisuProcessor::assignSlots()
+{
+    for (int i = 0; i < kMacros; ++i) { slotTag_[i].clear(); slotTagIndex_[i] = -1; macros_[i]->setLabel("Macro " + juce::String(i + 1)); }
+    if (current_)
+    {
+        int s = 0;
+        for (size_t t = 0; t < current_->tags.size() && s < kMacros; ++t)
+        {
+            const auto& td = current_->tags[t];
+            if (td.kind == "bank" || td.kind == "list" || td.name == "page" || td.name.empty()) continue;   // built in: not knobs
+            slotTag_[s] = juce::String(td.name); slotTagIndex_[s] = (int) t; macros_[s]->setLabel(juce::String(td.name));
+            float v = td.def; { const juce::ScopedLock l(tagLock_); auto it = tagState_.find(slotTag_[s]); if (it != tagState_.end()) v = it->second; }
+            slotFromUi_[s] = true; macros_[s]->setValueNotifyingHost(v); slotFromUi_[s] = false;
+            ++s;
+        }
+    }
+    for (auto& c : ccSlot_) c = -1;
+    for (auto& kv : ccOfTag_) { const int s = slotOf(kv.first); if (s >= 0 && kv.second >= 0 && kv.second < 128) ccSlot_[kv.second] = s; }
+    updateHostDisplay(juce::AudioProcessorListener::ChangeDetails().withParameterInfoChanged(true));
+}
+
+juce::var VisuProcessor::mappingsVar() const
+{
+    auto* o = new juce::DynamicObject();
+    for (int i = 0; i < kMacros; ++i)
+    {
+        if (slotTag_[i].isEmpty()) continue;
+        auto* m = new juce::DynamicObject(); m->setProperty("slot", i + 1);
+        auto it = ccOfTag_.find(slotTag_[i]); m->setProperty("cc", it != ccOfTag_.end() ? juce::var(it->second) : juce::var());
+        o->setProperty(juce::Identifier(slotTag_[i]), juce::var(m));
+    }
+    if (learnTag_.isNotEmpty()) o->setProperty("__learning", learnTag_);
+    return juce::var(o);
+}
+void VisuProcessor::startLearn(const juce::String& tag) { if (slotOf(tag) < 0) return; learnTag_ = tag; learnedCc_ = -1; learning_ = true; }
+void VisuProcessor::forgetMidi(const juce::String& tag)
+{
+    auto it = ccOfTag_.find(tag); if (it == ccOfTag_.end()) return;
+    if (it->second >= 0 && it->second < 128) ccSlot_[it->second] = -1;
+    ccOfTag_.erase(it);
+}
+bool VisuProcessor::pollLearned()
+{
+    const int cc = learnedCc_.exchange(-1);
+    if (cc < 0 || learnTag_.isEmpty()) return false;
+    for (auto it = ccOfTag_.begin(); it != ccOfTag_.end();) { if (it->second == cc) { ccSlot_[cc] = -1; it = ccOfTag_.erase(it); } else ++it; }   // one knob per controller
+    forgetMidi(learnTag_);
+    ccOfTag_[learnTag_] = cc; const int s = slotOf(learnTag_); if (s >= 0) ccSlot_[cc] = s;
+    learnTag_.clear();
+    return true;
+}
+juce::var VisuProcessor::takeUiChanges()
+{
+    juce::DynamicObject::Ptr o;
+    for (int i = 0; i < kMacros; ++i)
+        if (slotUiDirty_[i].exchange(false) && slotTag_[i].isNotEmpty())
+        {
+            if (!o) o = new juce::DynamicObject();
+            const float v = slotValue_[i].load(); o->setProperty(juce::Identifier(slotTag_[i]), v);
+            const juce::ScopedLock l(tagLock_); tagState_[slotTag_[i]] = v;
+        }
+    return o ? juce::var(o.get()) : juce::var();
 }
 
 juce::var VisuProcessor::tagsVar() const
@@ -173,6 +274,7 @@ void VisuProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuf
     buffer.clear();
     engine_.setMasterGain(volume_->get());
     if (panicRequest_.exchange(false)) engine_.allNotesOff();
+    for (int i = 0; i < kMacros; ++i) if (slotDirty_[i].exchange(false)) engine_.setTagIndex(slotTagIndex_[i].load(), slotValue_[i].load());
     keyboardState.processNextMidiBuffer(midi, 0, n, true);
     float* L = buffer.getWritePointer(0);
     float* R = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : L;
@@ -184,7 +286,13 @@ void VisuProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuf
         const auto m = meta.getMessage();
         if (m.isNoteOn()) engine_.noteOn(m.getNoteNumber(), m.getVelocity());
         else if (m.isNoteOff()) engine_.noteOff(m.getNoteNumber());
-        else if (m.isController()) engine_.controller(m.getControllerNumber(), m.getControllerValue());
+        else if (m.isController())
+        {
+            const int cc = m.getControllerNumber(), val = m.getControllerValue();
+            if (learning_.load() && cc != 64 && cc != 120 && cc != 121 && cc != 123) { learnedCc_ = cc; learning_ = false; }
+            else if (const int s = ccSlot_[juce::jlimit(0, 127, cc)].load(); s >= 0) macros_[s]->setValueNotifyingHost(val / 127.0f);   // a learned controller moves its knob
+            engine_.controller(cc, val);
+        }
         else if (m.isPitchWheel()) engine_.pitchBend(m.getPitchWheelValue() / 16383.0f);
         else if (m.isChannelPressure()) engine_.aftertouch(m.getChannelPressureValue() / 127.0f);
         else if (m.isAftertouch()) engine_.aftertouch(m.getAfterTouchValue() / 127.0f);
@@ -207,9 +315,12 @@ void VisuProcessor::getStateInformation(juce::MemoryBlock& dest)
     xml.setAttribute("volume", (double) volume_->get());
     {   // knob and page positions
         const juce::ScopedLock l(tagLock_);
+        for (int i = 0; i < kMacros; ++i) if (slotTag_[i].isNotEmpty()) tagState_[slotTag_[i]] = macros_[i]->get();   // automated values too
         auto* tags = xml.createNewChildElement("Tags");
         for (auto& t : tagState_) { auto* x = tags->createNewChildElement("Tag"); x->setAttribute("name", t.first); x->setAttribute("value", (double) t.second); }
     }
+    auto* midiMap = xml.createNewChildElement("MidiMap");
+    for (auto& kv : ccOfTag_) { auto* x = midiMap->createNewChildElement("Cc"); x->setAttribute("tag", kv.first); x->setAttribute("cc", kv.second); }
     copyXmlToBinary(xml, dest);
 }
 
@@ -225,6 +336,9 @@ void VisuProcessor::setStateInformation(const void* data, int size)
             if (auto* tags = xml->getChildByName("Tags"))
                 for (auto* x : tags->getChildIterator()) tagState_[x->getStringAttribute("name")] = (float) x->getDoubleAttribute("value");
         }
+        ccOfTag_.clear();
+        if (auto* mm = xml->getChildByName("MidiMap"))
+            for (auto* x : mm->getChildIterator()) ccOfTag_[x->getStringAttribute("tag")] = x->getIntAttribute("cc", -1);
         const auto id = xml->getStringAttribute("libraryId");
         if (id.isNotEmpty()) loadLibrary(id, true);
     }
