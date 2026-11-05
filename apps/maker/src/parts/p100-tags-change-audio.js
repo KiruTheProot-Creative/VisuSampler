@@ -23,6 +23,11 @@ function onTag(t){
 }
 function setStep(t,i){const n=stepCount(t);setTag(t,n>1?i/(n-1):0);}
 function stepBy(t,d){
+  if(t.kind==='list'){   /* next/previous list runs through every bank's lists, moving the bank along when it has to */
+    const all=S.lists.slice().sort((a,b)=>a.bank-b.bank||S.lists.indexOf(a)-S.lists.indexOf(b)),cur=t.layer?curListB():curList(),bt=t.layer?bankTagB():bankTag();
+    if(all.length&&bt){const i=all.indexOf(cur),nx=all[((i<0?0:i+d)%all.length+all.length)%all.length];
+      if(nx.bank!==(t.layer?bankIdxB():bankIdx()))setStep(bt,nx.bank);setStep(t,listsInBank(nx.bank).indexOf(nx));return;}
+  }
   const n=stepCount(t);
   if(n>1) setStep(t,(stepIdx(t)+d+n)%n); else if(t.kind==='number') setTag(t,t.value+d*.05);
 }
