@@ -205,6 +205,7 @@ const DEF={
 function mk(type,over){
   const n=S.els.filter(e=>e.type===type).length+1;
   const base={id:nid('e'),type,name:TYPE_NAMES[type]+' '+n,x:0,y:0};
+  if(S.pages&&S.pages.length) base.page=S.pages[curPageIdx()].id;   /* new elements land on the page being edited */
   return Object.assign(base,DEF[type](),over||{});
 }
 function mkTag(name,kind,o){
@@ -350,6 +351,12 @@ function textCss(el){
   if(f.length) css+='filter:'+f.join(' ')+';';
   return css;
 }
+/* pages: an element shows on its own page, or on every page when "always show" is on */
+function pageTag(){return S.tags.find(t=>t.name==='page'&&t.sys)||null;}
+function curPageIdx(){const t=pageTag();return t?stepIdx(t):0;}
+function elPageIdx(el){const i=(S.pages||[]).findIndex(p=>p.id===el.page);return i<0?0:i;}
+function elShown(el){const P=S.pages||[];return P.length<2||!!el.always||elPageIdx(el)===curPageIdx();}
+function showPage(){S.els.forEach(e=>{const n=nodes.get(e.id);if(n)n.style.display=elShown(e)?'':'none';});}
 function renderEl(el){
   const n=nodes.get(el.id); if(!n) return;
   let css='left:'+el.x+'px;top:'+el.y+'px;width:'+el.w+'px;height:'+el.h+'px;z-index:'+(S.els.indexOf(el)+1)+';';
@@ -364,6 +371,7 @@ function renderEl(el){
     n.style.cssText=css+'justify-content:'+j+';';
     n.innerHTML='<div class="tx" style="'+textCss(el)+'">'+expand(el.text)+'</div>';
   }
+  if(!elShown(el)) n.style.display='none';
 }
 function valKnob(el){
   const n=nodes.get(el.id); if(!n) return;
@@ -484,6 +492,7 @@ function setTag(t,v){
   fireChange(t);
 }
 function onTag(t){
+  if(t.sys&&t.name==='page') showPage();
   S.els.forEach(el=>{
     if(el.type==='knob'&&el.tag===t.id) valKnob(el);
     else if(el.type==='fader'&&el.tag===t.id) valFader(el);
@@ -792,11 +801,14 @@ window.addEventListener('message',async e=>{
   const m=e.data||{};
   if(m.t==='load'){
     const p=m.project||{};
-    Object.assign(S,{canvas:p.canvas||S.canvas,light:p.light==null?315:p.light,bpm:p.bpm||120,sig:p.sig||{n:4,d:4},els:p.els||[],tags:p.tags||[],groups:p.groups||[],lists:p.lists||[],banks:p.banks||[],gset:p.gset||{}});
+    Object.assign(S,{canvas:p.canvas||S.canvas,light:p.light==null?315:p.light,bpm:p.bpm||120,sig:p.sig||{n:4,d:4},els:p.els||[],pages:p.pages||[],tags:p.tags||[],groups:p.groups||[],lists:p.lists||[],banks:p.banks||[],gset:p.gset||{}});
     S.assets={};addTexAssets();
     Object.keys(m.assets||{}).forEach(id=>{const a=m.assets[id];S.assets[id]={name:a.name,w:a.w||256,h:a.h||256,svg:/svg/.test(a.mime||''),mips:[{s:Math.max(a.w||256,a.h||256),url:a.url}]};});
     for(const fam of Object.keys(m.fonts||{})){try{const ff=new FontFace(fam,'url('+m.fonts[fam]+')');await ff.load();document.fonts.add(ff);}catch(err){}}
     mountAll();layout();
+    /* knob and page positions saved with the DAW project */
+    Object.keys(m.tags||{}).forEach(name=>{const t=tagByName(name);if(t&&t.kind!=='bank'&&t.kind!=='list')t.value=Math.min(1,Math.max(0,+m.tags[name]||0));});
+    if(m.tags&&Object.keys(m.tags).length){rerenderAll();showPage();}
     if(m.list!=null&&m.list>=0)chooseList(m.list);else refreshDisplays();
     lastList=-2;reportList();
     document.fonts.ready.then(()=>rerenderAll());

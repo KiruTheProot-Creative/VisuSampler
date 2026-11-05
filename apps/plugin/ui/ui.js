@@ -136,7 +136,7 @@ async function showUI(){
   const assets={},fonts={};
   Object.keys(m.assets||{}).forEach(id=>{const a=m.assets[id];assets[id]={name:a.name,w:a.w,h:a.h,mime:a.mime,url:url('asset',id)};});
   Object.keys(m.fonts||{}).forEach(f=>{fonts[f]=url('font',f);});
-  uiFor=r.id;uiMsg={t:'load',project:p,assets,fonts,list:r.list};
+  uiFor=r.id;uiMsg={t:'load',project:p,assets,fonts,list:r.list,tags:r.tags||{}};
   $('#stage').classList.add('hasui');$('#btnAbout').hidden=false;frame.hidden=false;
   uiReady=false;frame.src='runtime.html?'+Date.now();
 }

@@ -25,7 +25,7 @@ document.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey)&&S.mode==='design'&&!typing(e.target)){
       const k=e.key.toLowerCase();
       if(k==='d'&&sel()){e.preventDefault();dupEl();}
-      else if(k==='a'){e.preventDefault();setSel(S.els.map(x=>x.id),S.sel);}
+      else if(k==='a'){e.preventDefault();setSel(S.els.filter(elShown).map(x=>x.id),S.sel);}
       else if(k==='g'&&sel()){e.preventDefault();if(e.shiftKey)ungroupSel();else groupSel();}
     }
     return;

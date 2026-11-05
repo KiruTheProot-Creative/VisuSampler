@@ -12,6 +12,7 @@ const DEF={
 function mk(type,over){
   const n=S.els.filter(e=>e.type===type).length+1;
   const base={id:nid('e'),type,name:TYPE_NAMES[type]+' '+n,x:0,y:0};
+  if(S.pages&&S.pages.length) base.page=S.pages[curPageIdx()].id;   /* new elements land on the page being edited */
   return Object.assign(base,DEF[type](),over||{});
 }
 function mkTag(name,kind,o){

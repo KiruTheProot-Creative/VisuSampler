@@ -125,13 +125,13 @@ stageEl.addEventListener('pointerdown',e=>{
     const p1={x:(ev.clientX-r.left)/S.z,y:(ev.clientY-r.top)/S.z},x0=Math.min(p0.x,p1.x),y0=Math.min(p0.y,p1.y),x1=Math.max(p0.x,p1.x),y1=Math.max(p0.y,p1.y);
     if(x1-x0<3&&y1-y0<3)return;
     swept=true;box.hidden=false;box.style.cssText='left:'+(x0*S.z)+'px;top:'+(y0*S.z)+'px;width:'+((x1-x0)*S.z)+'px;height:'+((y1-y0)*S.z)+'px';
-    const hit=S.els.filter(q=>q.x<x1&&q.x+q.w>x0&&q.y<y1&&q.y+q.h>y0).map(q=>q.id);
+    const hit=S.els.filter(q=>elShown(q)&&q.x<x1&&q.x+q.w>x0&&q.y<y1&&q.y+q.h>y0).map(q=>q.id);
     setSel(base.concat(withGroups(hit)));
   },()=>{box.remove();if(!swept&&backdrop)setSel(add?base.concat([backdrop.id]):[backdrop.id],backdrop.id);});
 },true);
 /* ---- layers panel: groups as folders, Ctrl/Shift-click, drag to reorder or move into a group ---- */
 renderLayers=function(){
-  const ids=mselIds(),rows=S.els.slice().reverse(),row=e=>'<li draggable="true" data-drag="'+e.id+'"><button type="button" class="lr'+(e.id===S.sel?' on':ids.indexOf(e.id)>=0?' msel':'')+'" data-id="'+e.id+'"><i class="ic '+e.type+'"></i><span>'+esc(e.name)+'</span><small>'+e.type+'</small></button></li>';
+  const ids=mselIds(),rows=S.els.slice().reverse().filter(e=>!S.layThisPage||elShown(e)),row=e=>'<li draggable="true" data-drag="'+e.id+'"><button type="button" class="lr'+(e.id===S.sel?' on':ids.indexOf(e.id)>=0?' msel':'')+'" data-id="'+e.id+'"><i class="ic '+e.type+'"></i><span>'+esc(e.name)+'</span><small>'+e.type+'</small></button></li>';
   let h='';
   for(let i=0;i<rows.length;){
     const e=rows[i],g=e.grp&&lgById(e.grp);

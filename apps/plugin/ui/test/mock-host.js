@@ -17,10 +17,10 @@ const fns={
     const m=L._m;state.status={text:'Loading…',loading:true,currentId:id};emit('status',state.status);
     setTimeout(()=>{state.status={text:m.zones.length+' zones ready',loading:false,currentId:id,zones:m.zones.length,groups:new Set(m.zones.map(z=>z.group)).size,
       lists:(m.project.lists||[]).map(l=>({name:l.name,bank:l.bank})),list:0,unsupported:id.endsWith('~1')?['granular']:[]};emit('status',state.status);},50);return true;},
-  getInterface:()=>{const L=libs.find(l=>l.id===state.status.currentId);return L?{manifest:JSON.stringify(L._m),id:L.id,list:0}:null;},
+  getInterface:()=>{const L=libs.find(l=>l.id===state.status.currentId);return L?{manifest:JSON.stringify(L._m),id:L.id,list:0,tags:state.tags||{}}:null;},
   unload:()=>{state.status={text:'No library loaded'};return true;},
   setList:i=>{state.status.list=i;return true;},setVolume:v=>{state.volume=v;return true;},
-  noteOn:(n,v)=>true,noteOff:n=>true,panic:()=>true,setTag:(n,v)=>true,openFolder:()=>true,addLibrary:()=>({added:0})
+  noteOn:(n,v)=>true,noteOff:n=>true,panic:()=>true,setTag:(n,v)=>{(state.tags=state.tags||{})[n]=v;return true;},openFolder:()=>true,addLibrary:()=>({added:0})
 };
 window.__JUCE__={initialisationData:{__juce__functions:Object.keys(fns)},backend:{
   addEventListener(ev,fn){if(!listeners.has(ev))listeners.set(ev,[]);listeners.get(ev).push(fn);},

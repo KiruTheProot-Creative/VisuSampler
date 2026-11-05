@@ -210,6 +210,7 @@ const DEF={
 function mk(type,over){
   const n=S.els.filter(e=>e.type===type).length+1;
   const base={id:nid('e'),type,name:TYPE_NAMES[type]+' '+n,x:0,y:0};
+  if(S.pages&&S.pages.length) base.page=S.pages[curPageIdx()].id;   /* new elements land on the page being edited */
   return Object.assign(base,DEF[type](),over||{});
 }
 function mkTag(name,kind,o){
@@ -355,6 +356,12 @@ function textCss(el){
   if(f.length) css+='filter:'+f.join(' ')+';';
   return css;
 }
+/* pages: an element shows on its own page, or on every page when "always show" is on */
+function pageTag(){return S.tags.find(t=>t.name==='page'&&t.sys)||null;}
+function curPageIdx(){const t=pageTag();return t?stepIdx(t):0;}
+function elPageIdx(el){const i=(S.pages||[]).findIndex(p=>p.id===el.page);return i<0?0:i;}
+function elShown(el){const P=S.pages||[];return P.length<2||!!el.always||elPageIdx(el)===curPageIdx();}
+function showPage(){S.els.forEach(e=>{const n=nodes.get(e.id);if(n)n.style.display=elShown(e)?'':'none';});}
 function renderEl(el){
   const n=nodes.get(el.id); if(!n) return;
   let css='left:'+el.x+'px;top:'+el.y+'px;width:'+el.w+'px;height:'+el.h+'px;z-index:'+(S.els.indexOf(el)+1)+';';
@@ -369,6 +376,7 @@ function renderEl(el){
     n.style.cssText=css+'justify-content:'+j+';';
     n.innerHTML='<div class="tx" style="'+textCss(el)+'">'+expand(el.text)+'</div>';
   }
+  if(!elShown(el)) n.style.display='none';
 }
 function valKnob(el){
   const n=nodes.get(el.id); if(!n) return;
@@ -604,6 +612,7 @@ function setTag(t,v){
   fireChange(t);
 }
 function onTag(t){
+  if(t.sys&&t.name==='page') showPage();
   S.els.forEach(el=>{
     if(el.type==='knob'&&el.tag===t.id) valKnob(el);
     else if(el.type==='fader'&&el.tag===t.id) valFader(el);
@@ -783,7 +792,7 @@ document.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey)&&S.mode==='design'&&!typing(e.target)){
       const k=e.key.toLowerCase();
       if(k==='d'&&sel()){e.preventDefault();dupEl();}
-      else if(k==='a'){e.preventDefault();setSel(S.els.map(x=>x.id),S.sel);}
+      else if(k==='a'){e.preventDefault();setSel(S.els.filter(elShown).map(x=>x.id),S.sel);}
       else if(k==='g'&&sel()){e.preventDefault();if(e.shiftKey)ungroupSel();else groupSel();}
     }
     return;
@@ -1206,13 +1215,13 @@ stageEl.addEventListener('pointerdown',e=>{
     const p1={x:(ev.clientX-r.left)/S.z,y:(ev.clientY-r.top)/S.z},x0=Math.min(p0.x,p1.x),y0=Math.min(p0.y,p1.y),x1=Math.max(p0.x,p1.x),y1=Math.max(p0.y,p1.y);
     if(x1-x0<3&&y1-y0<3)return;
     swept=true;box.hidden=false;box.style.cssText='left:'+(x0*S.z)+'px;top:'+(y0*S.z)+'px;width:'+((x1-x0)*S.z)+'px;height:'+((y1-y0)*S.z)+'px';
-    const hit=S.els.filter(q=>q.x<x1&&q.x+q.w>x0&&q.y<y1&&q.y+q.h>y0).map(q=>q.id);
+    const hit=S.els.filter(q=>elShown(q)&&q.x<x1&&q.x+q.w>x0&&q.y<y1&&q.y+q.h>y0).map(q=>q.id);
     setSel(base.concat(withGroups(hit)));
   },()=>{box.remove();if(!swept&&backdrop)setSel(add?base.concat([backdrop.id]):[backdrop.id],backdrop.id);});
 },true);
 /* ---- layers panel: groups as folders, Ctrl/Shift-click, drag to reorder or move into a group ---- */
 renderLayers=function(){
-  const ids=mselIds(),rows=S.els.slice().reverse(),row=e=>'<li draggable="true" data-drag="'+e.id+'"><button type="button" class="lr'+(e.id===S.sel?' on':ids.indexOf(e.id)>=0?' msel':'')+'" data-id="'+e.id+'"><i class="ic '+e.type+'"></i><span>'+esc(e.name)+'</span><small>'+e.type+'</small></button></li>';
+  const ids=mselIds(),rows=S.els.slice().reverse().filter(e=>!S.layThisPage||elShown(e)),row=e=>'<li draggable="true" data-drag="'+e.id+'"><button type="button" class="lr'+(e.id===S.sel?' on':ids.indexOf(e.id)>=0?' msel':'')+'" data-id="'+e.id+'"><i class="ic '+e.type+'"></i><span>'+esc(e.name)+'</span><small>'+e.type+'</small></button></li>';
   let h='';
   for(let i=0;i<rows.length;){
     const e=rows[i],g=e.grp&&lgById(e.grp);
@@ -1306,6 +1315,106 @@ rbody.addEventListener('input',e=>{const t=e.target;if(!t.dataset.gname)return;c
   const s0=snapshot;snapshot=function(){const s=s0();s.lgroups=JSON.parse(JSON.stringify(S.lgroups));return s;};
   const r0=restore;restore=function(sn){r0(sn);S.lgroups=sn&&sn.lgroups?JSON.parse(JSON.stringify(sn.lgroups)):[];S.msel=[];tidyGroups();};
 })();
+
+/* ---------- pages (tabs inside one instrument) ----------
+   S.pages lists the pages. The page being shown is a system tag named "page" whose steps are the page names,
+   so a radio button on it works as a tab, rules can switch pages, and the player needs nothing new. */
+S.pages=[];S.layThisPage=true;
+function syncPageTag(){
+  let t=pageTag();
+  if(S.pages.length&&!t){t=mkTag('page','steps',{sys:true,steps:[]});S.tags.push(t);}
+  if(!t)return;
+  if(!S.pages.length){S.tags=S.tags.filter(x=>x!==t);S.els.forEach(e=>{if(e.tag===t.id)e.tag='';});return;}
+  t.steps=S.pages.map(p=>p.name);const n=t.steps.length;t.value=n>1?Math.round(t.value*(n-1))/(n-1):0;t.def=0;
+}
+function pagesChanged(){syncPageTag();rerenderAll();showPage();refreshDisplays();mselIds();S.msel=S.msel.filter(id=>{const e=S.els.find(x=>x.id===id);return e&&elShown(e);});if(S.sel&&S.msel.indexOf(S.sel)<0)S.sel=S.msel[S.msel.length-1]||null;renderPageBar();renderLayers();placeSel();renderRight();}
+function goPage(i){const t=pageTag();if(!t)return;setStep(t,i);}
+function addPage(){
+  const p={id:nid('pg'),name:'Page '+(S.pages.length+1)};S.pages.push(p);
+  /* a background that fills the canvas belongs on every page */
+  if(S.pages.length===1)S.els.forEach(e=>{if(e.x<=1&&e.y<=1&&e.x+e.w>=S.canvas.w-1&&e.y+e.h>=S.canvas.h-1)e.always=true;});
+  pagesChanged();goPage(S.pages.length-1);
+  flash(S.pages.length===1?'Page 1 holds everything so far. Add another page to start a second tab.':p.name+' added. Elements you add now go on it.');
+}
+function delPage(id){
+  const i=S.pages.findIndex(p=>p.id===id);if(i<0)return;const name=S.pages[i].name;
+  S.pages.splice(i,1);S.els.forEach(e=>{if(e.page===id)delete e.page;});pagesChanged();
+  flash(name+' removed. Its elements moved to the first page.');
+}
+function renderPageBar(){
+  const pb=$('#pageBar'),cur=curPageIdx();
+  pb.innerHTML='<span class="muted">Pages</span>'+S.pages.map((p,i)=>'<button type="button" class="pgchip" data-pgo="'+i+'" aria-pressed="'+(i===cur)+'" title="Double-click to rename">'+esc(p.name)+'</button>').join('')
+    +'<button type="button" class="pgchip add" data-pgadd="1" title="Add a page" aria-label="Add a page">+</button>';
+  $('#layPage').hidden=S.pages.length<2;$('#layPage').setAttribute('aria-pressed',String(S.layThisPage));
+}
+$('#pageBar').addEventListener('click',e=>{
+  if(e.target.closest('[data-pgadd]')){addPage();return;}
+  const b=e.target.closest('[data-pgo]');if(b)goPage(+b.dataset.pgo);
+});
+$('#pageBar').addEventListener('dblclick',e=>{
+  const b=e.target.closest('[data-pgo]');if(!b)return;const p=S.pages[+b.dataset.pgo];
+  const inp=document.createElement('input');inp.type='text';inp.className='pgedit';inp.value=p.name;inp.setAttribute('aria-label','Page name');b.replaceWith(inp);inp.focus();inp.select();
+  let done=false;const fin=ok=>{if(done)return;done=true;const v=inp.value.trim();if(ok&&v)p.name=v;pagesChanged();};
+  inp.addEventListener('keydown',ev=>{if(ev.key==='Enter')fin(true);else if(ev.key==='Escape')fin(false);ev.stopPropagation();});
+  inp.addEventListener('blur',()=>fin(true));
+});
+$('#layPage').addEventListener('click',()=>{S.layThisPage=!S.layThisPage;renderPageBar();renderLayers();});
+/* switching pages anywhere (tab buttons in Test, rules, the bar) keeps the editor in step */
+const onTagPg=onTag;
+onTag=function(t){onTagPg(t);if(t.sys&&t.name==='page'){renderPageBar();renderLayers();if(S.mode==='design'){S.msel=mselIds().filter(id=>{const x=S.els.find(q=>q.id===id);return x&&elShown(x);});if(S.sel&&S.msel.indexOf(S.sel)<0)S.sel=S.msel[S.msel.length-1]||null;placeSel();renderRight();}}};
+/* ---- inspector: which page, always show, and "opens page" for buttons ---- */
+function pageSecHTML(els){
+  if(!S.pages.length)return sec('Page','<p class="hint">One page so far. Add pages with + above the canvas to make tabs.</p><div class="chips"><button type="button" class="btn" data-pgadd2="1">Add pages</button></div>');
+  const ps=new Set(els.map(e=>S.pages[elPageIdx(e)].id)),pv=ps.size===1?[...ps][0]:'',al=els.every(e=>e.always),some=!al&&els.some(e=>e.always);
+  let h='<label class="f"><span>Page</span><select data-pgset="1"'+(al?' disabled':'')+'>'+(pv?'':'<option value="" selected>Mixed</option>')+S.pages.map(p=>'<option value="'+p.id+'"'+(p.id===pv?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select></label>'
+    +'<label class="f chk"><input type="checkbox" data-pgalways="1"'+(al?' checked':'')+'><span>Always show (on every page)'+(some?' · some are':'')+'</span></label>';
+  const pt=pageTag();
+  if(els.length===1&&els[0].type==='button'&&pt){
+    const b=els[0],opens=b.tag===pt.id&&b.mode==='radio'?(S.pages[b.value]||{}).id||'':'';
+    h+='<label class="f"><span>Opens page</span><select data-pgopen="1"><option value="">— nothing —</option>'+S.pages.map(p=>'<option value="'+p.id+'"'+(p.id===opens?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select></label>'
+      +'<p class="hint">Makes this button a tab: clicking it shows that page, and its light shows when the page is open. Tab buttons usually want Always show.</p>';
+  }
+  return sec('Page',h);
+}
+const propsHTMLPg=propsHTML;
+propsHTML=function(){
+  const h=propsHTMLPg(),els=selEls();if(!els.length)return h;
+  const i=h.indexOf('<div class="acts">'),j=i<0?-1:h.indexOf('</div>',i);
+  return j<0?h+pageSecHTML(els):h.slice(0,j+6)+pageSecHTML(els)+h.slice(j+6);
+};
+rbody.addEventListener('change',e=>{
+  const t=e.target,els=selEls();if(!els.length)return;
+  if(t.dataset.pgset&&t.value){els.forEach(x=>{x.page=t.value;});pagesChanged();}
+  else if(t.dataset.pgalways){els.forEach(x=>{x.always=t.checked;});pagesChanged();}
+  else if(t.dataset.pgopen!=null&&t.dataset.pgopen!==undefined&&t.matches('[data-pgopen]')){
+    const b=els[0],pt=pageTag(),i=S.pages.findIndex(p=>p.id===t.value);
+    if(i<0){if(b.tag===pt.id)b.tag='';}else{b.tag=pt.id;b.mode='radio';b.value=i;b.led=true;}
+    renderEl(b);renderRight();
+  }
+});
+rbody.addEventListener('click',e=>{if(e.target.closest('[data-pgadd2]')){addPage();addPage();}});
+/* ---- Project tab: rename, reorder and remove pages ---- */
+const projectHTMLPg=projectHTML;
+projectHTML=function(){
+  return sec('Pages',(S.pages.length?S.pages.map((p,i)=>'<div class="pgrow"><input type="text" data-pgname="'+p.id+'" value="'+esc(p.name)+'" aria-label="Page '+(i+1)+' name">'
+      +'<button type="button" class="btn" data-pgup="'+i+'"'+(i?'':' disabled')+' aria-label="Move '+esc(p.name)+' up">↑</button><button type="button" class="btn danger" data-pgdel="'+p.id+'" aria-label="Remove '+esc(p.name)+'">✕</button></div>').join(''):'<p class="hint">No pages: everything is on one screen.</p>')
+    +'<div class="chips"><button type="button" class="btn" data-pgadd3="1">Add a page</button></div><p class="hint">Each page is a tab of the instrument. Elements with Always show appear on every page.</p>')+projectHTMLPg();
+};
+rbody.addEventListener('input',e=>{const t=e.target;if(!t.dataset.pgname)return;const p=S.pages.find(x=>x.id===t.dataset.pgname);if(p){p.name=t.value||p.name;syncPageTag();renderPageBar();refreshDisplays();}});
+rbody.addEventListener('click',e=>{
+  const a=e.target.closest('[data-pgadd3]'),d=e.target.closest('[data-pgdel]'),u=e.target.closest('[data-pgup]');
+  if(a)addPage();
+  else if(d)delPage(d.dataset.pgdel);
+  else if(u){const i=+u.dataset.pgup;if(i>0){const cur=curPageIdx(),p=S.pages.splice(i,1)[0];S.pages.splice(i-1,0,p);
+    S.els.forEach(x=>{const pt=pageTag();if(pt&&x.tag===pt.id&&x.mode==='radio'){if(x.value===i)x.value=i-1;else if(x.value===i-1)x.value=i;}});
+    pagesChanged();goPage(cur===i?i-1:cur===i-1?i:cur);}}
+});
+/* ---- saved with the project ---- */
+(function(){
+  const s0=snapshot;snapshot=function(){const s=s0();s.pages=JSON.parse(JSON.stringify(S.pages));return s;};
+  const r0=restore;restore=function(sn){r0(sn);S.pages=sn&&sn.pages?JSON.parse(JSON.stringify(sn.pages)):[];syncPageTag();};
+})();
+renderPageBar();
 
 /* ---------- inspector events ---------- */
 rbody.addEventListener('toggle',e=>{const d=e.target;if(d&&d.dataset&&d.dataset.sec){if(d.open)closed.delete(d.dataset.sec);else closed.add(d.dataset.sec);}},true);
@@ -1639,7 +1748,7 @@ document.body.addEventListener('click',e=>{
 /* ---------- presets ---------- */
 function baseProject(){
   addTexAssets();
-  S.sel=null; S.msel=[]; S.lgroups=[]; S.els=[]; S.tags=sysTags(); S.groups=[]; S.lists=[]; S.banks=defaultBanks(['','','','','','','','']);
+  S.sel=null; S.msel=[]; S.lgroups=[]; S.pages=[]; S.els=[]; S.tags=sysTags(); S.groups=[]; S.lists=[]; S.banks=defaultBanks(['','','','','','','','']);
   S.fx.graphs={}; S.fx.scope='master'; S.fx.sel=null; S.fx.cable=null; S.fx.view='nodes';
   S.light=315; S.bpm=120; S.sig={n:4,d:4}; S.tab='props'; S.canvas={w:960,h:540,bg:'#26222e'};
   RT.load=1; RT.hover=null; RT.down=null; resetMapper();S.lib=defaultLib();S.build.last=null;S.build.report=null;S.build.verify=null;

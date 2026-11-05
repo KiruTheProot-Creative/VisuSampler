@@ -272,3 +272,15 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 #layers [data-drag]{cursor:grab}
 #layers .dropA{box-shadow:inset 0 2px 0 #5aa0ff}
 #layers .dropB{box-shadow:inset 0 -2px 0 #5aa0ff}
+/* pages */
+.pagebar{display:inline-flex;align-items:center;gap:4px;margin-left:8px}
+.pagebar .muted{margin-right:2px}
+.pgchip{background:#3a3a3a;border:1px solid #4a4a4a;color:#ddd;border-radius:4px;padding:2px 9px;font:inherit;font-size:12px;cursor:pointer;min-height:24px}
+.pgchip:hover{background:#474747}
+.pgchip[aria-pressed="true"]{background:var(--sel);border-color:#5aa0ff;color:#fff}
+.pgchip.add{padding:2px 8px;font-weight:700}
+.pgedit{width:110px;font:inherit;font-size:12px;padding:2px 6px}
+.laypage{float:right;font:inherit;font-size:10px;text-transform:none;letter-spacing:0;background:#3a3a3a;border:1px solid #4a4a4a;color:#bbb;border-radius:3px;padding:1px 6px;cursor:pointer}
+.laypage[aria-pressed="true"]{background:var(--sel);color:#fff;border-color:#5aa0ff}
+.pgrow{display:flex;gap:4px;margin:0 0 5px}
+.pgrow input{flex:1;min-width:0}

@@ -34,7 +34,7 @@
       <button type="button" class="btn" data-act="add" data-type="list"><i class="ic list"></i>List selector</button>
       <button type="button" class="btn" data-act="addcomp" data-comp="banks"><i class="ic banks"></i>Bank buttons</button>
     </div>
-    <h2>Layers <span id="layerCount" class="muted"></span></h2>
+    <h2>Layers <span id="layerCount" class="muted"></span><button type="button" id="layPage" class="laypage" aria-pressed="true" hidden title="Show only the layers on the page you are editing">This page</button></h2>
     <ul id="layers"></ul>
     <p class="tip">Top of the list is the front; drag rows to restack or into a group. <kbd>Shift</kbd>/<kbd>Ctrl</kbd>-click or drag across empty space to pick several, <kbd>Ctrl</kbd>+<kbd>G</kbd> groups them, <kbd>Ctrl</kbd>+<kbd>A</kbd> picks all. Drag corners to resize. Hold <kbd>Alt</kbd> to skip snapping. <kbd>Del</kbd> removes, arrows nudge, <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates.</p>
   </aside>
@@ -70,6 +70,7 @@
         </select>
       </label>
       <label class="chk"><input type="checkbox" id="snap" checked> Snap</label>
+      <span id="pageBar" class="pagebar" aria-label="Pages"></span>
       <span id="zl" class="muted"></span>
       <span id="msg" role="status" aria-live="polite"></span>
     </div>

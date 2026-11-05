@@ -72,6 +72,12 @@ function textCss(el){
   if(f.length) css+='filter:'+f.join(' ')+';';
   return css;
 }
+/* pages: an element shows on its own page, or on every page when "always show" is on */
+function pageTag(){return S.tags.find(t=>t.name==='page'&&t.sys)||null;}
+function curPageIdx(){const t=pageTag();return t?stepIdx(t):0;}
+function elPageIdx(el){const i=(S.pages||[]).findIndex(p=>p.id===el.page);return i<0?0:i;}
+function elShown(el){const P=S.pages||[];return P.length<2||!!el.always||elPageIdx(el)===curPageIdx();}
+function showPage(){S.els.forEach(e=>{const n=nodes.get(e.id);if(n)n.style.display=elShown(e)?'':'none';});}
 function renderEl(el){
   const n=nodes.get(el.id); if(!n) return;
   let css='left:'+el.x+'px;top:'+el.y+'px;width:'+el.w+'px;height:'+el.h+'px;z-index:'+(S.els.indexOf(el)+1)+';';
@@ -86,6 +92,7 @@ function renderEl(el){
     n.style.cssText=css+'justify-content:'+j+';';
     n.innerHTML='<div class="tx" style="'+textCss(el)+'">'+expand(el.text)+'</div>';
   }
+  if(!elShown(el)) n.style.display='none';
 }
 function valKnob(el){
   const n=nodes.get(el.id); if(!n) return;

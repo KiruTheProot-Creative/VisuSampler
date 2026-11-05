@@ -23,11 +23,14 @@ window.addEventListener('message',async e=>{
   const m=e.data||{};
   if(m.t==='load'){
     const p=m.project||{};
-    Object.assign(S,{canvas:p.canvas||S.canvas,light:p.light==null?315:p.light,bpm:p.bpm||120,sig:p.sig||{n:4,d:4},els:p.els||[],tags:p.tags||[],groups:p.groups||[],lists:p.lists||[],banks:p.banks||[],gset:p.gset||{}});
+    Object.assign(S,{canvas:p.canvas||S.canvas,light:p.light==null?315:p.light,bpm:p.bpm||120,sig:p.sig||{n:4,d:4},els:p.els||[],pages:p.pages||[],tags:p.tags||[],groups:p.groups||[],lists:p.lists||[],banks:p.banks||[],gset:p.gset||{}});
     S.assets={};addTexAssets();
     Object.keys(m.assets||{}).forEach(id=>{const a=m.assets[id];S.assets[id]={name:a.name,w:a.w||256,h:a.h||256,svg:/svg/.test(a.mime||''),mips:[{s:Math.max(a.w||256,a.h||256),url:a.url}]};});
     for(const fam of Object.keys(m.fonts||{})){try{const ff=new FontFace(fam,'url('+m.fonts[fam]+')');await ff.load();document.fonts.add(ff);}catch(err){}}
     mountAll();layout();
+    /* knob and page positions saved with the DAW project */
+    Object.keys(m.tags||{}).forEach(name=>{const t=tagByName(name);if(t&&t.kind!=='bank'&&t.kind!=='list')t.value=Math.min(1,Math.max(0,+m.tags[name]||0));});
+    if(m.tags&&Object.keys(m.tags).length){rerenderAll();showPage();}
     if(m.list!=null&&m.list>=0)chooseList(m.list);else refreshDisplays();
     lastList=-2;reportList();
     document.fonts.ready.then(()=>rerenderAll());

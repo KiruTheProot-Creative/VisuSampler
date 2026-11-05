@@ -10,6 +10,7 @@ function setTag(t,v){
   fireChange(t);
 }
 function onTag(t){
+  if(t.sys&&t.name==='page') showPage();
   S.els.forEach(el=>{
     if(el.type==='knob'&&el.tag===t.id) valKnob(el);
     else if(el.type==='fader'&&el.tag===t.id) valFader(el);

@@ -3,6 +3,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "Engine.h"
 #include <atomic>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -19,7 +20,7 @@ public:
     void rescan();
     const std::vector<Entry>& catalog() const { return catalog_; }
     const Entry* entryById(const juce::String& id) const;
-    void loadLibrary(const juce::String& id);
+    void loadLibrary(const juce::String& id, bool keepTags = false);   // keepTags: restoring a saved project, so the knob values stay
     void unloadLibrary();
     int addLibraryFiles(const juce::Array<juce::File>& files);
     void setList(int index);
@@ -32,6 +33,7 @@ public:
     juce::var statusVar() const;      // what play mode shows
     std::shared_ptr<const visu::Library> currentLibrary() const { return current_; }
     const juce::String& currentId() const { return currentId_; }
+    juce::var tagsVar() const;   // knob (tag) values the user set, by tag name
     int currentList() const { return list_ == -2 && current_ ? current_->defaultList : list_; }
 
     juce::MidiKeyboardState keyboardState;
@@ -62,7 +64,8 @@ private:
     juce::AudioParameterFloat* volume_ = nullptr;
     std::vector<Entry> catalog_;
     std::shared_ptr<const visu::Library> current_;
-    juce::String currentId_, status_ = "No library loaded", pendingId_;
+    juce::String currentId_, status_ = "No library loaded", pendingId_; bool pendingKeep_ = false;
+    std::map<juce::String, float> tagState_; juce::CriticalSection tagLock_;   // saved with the DAW project
     juce::File currentFile_;
     int list_ = -2; double sampleRate_ = 0;
     std::atomic<bool> loading_{ false }, panicRequest_{ false };

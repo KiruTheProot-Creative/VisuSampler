@@ -38,7 +38,7 @@ void VisuProcessor::rescan()
         juce::MessageManager::callAsync([this, alive, found = std::move(found)]() mutable {
             if (!*alive) return;
             catalog_ = std::move(found);
-            if (pendingId_.isNotEmpty()) { auto p = pendingId_; pendingId_.clear(); loadLibrary(p); }
+            if (pendingId_.isNotEmpty()) { auto p = pendingId_; pendingId_.clear(); loadLibrary(p, pendingKeep_); }
             sendChangeMessage();
         });
     });
@@ -50,10 +50,11 @@ const VisuProcessor::Entry* VisuProcessor::entryById(const juce::String& id) con
     return nullptr;
 }
 
-void VisuProcessor::loadLibrary(const juce::String& id)
+void VisuProcessor::loadLibrary(const juce::String& id, bool keepTags)
 {
+    if (!keepTags && id != currentId_) { const juce::ScopedLock l(tagLock_); tagState_.clear(); }   // another library: start from its own knob values
     const auto* e = entryById(id);
-    if (!e) { pendingId_ = id; return; }   // the scan has not finished yet
+    if (!e) { pendingId_ = id; pendingKeep_ = true; return; }   // the scan has not finished yet
     auto alive = alive_; const int ticket = ++loadTicket_; const juce::File file = e->file;
     loading_ = true; currentId_ = id; status_ = "Loading…"; sendChangeMessage();
     const double sr = sampleRate_ > 0 ? sampleRate_ : 48000.0;
@@ -64,6 +65,7 @@ void VisuProcessor::loadLibrary(const juce::String& id)
             if (!*alive || ticket != loadTicket_.load()) return;
             loading_ = false;
             if (!lib) { status_ = "Could not load: " + juce::String(err); sendChangeMessage(); return; }
+            { const juce::ScopedLock l(tagLock_); for (auto& t : tagState_) lib->setTag(t.first.toStdString(), t.second); }
             current_ = lib; currentFile_ = file; currentId_ = id;
             engine_.setList(list_); engine_.setLibrary(lib);
             status_ = juce::String((int) lib->zones.size()) + " zones ready";
@@ -75,6 +77,7 @@ void VisuProcessor::loadLibrary(const juce::String& id)
 
 void VisuProcessor::unloadLibrary()
 {
+    { const juce::ScopedLock l(tagLock_); tagState_.clear(); }
     ++loadTicket_; loading_ = false; engine_.setLibrary(nullptr); current_.reset(); currentId_.clear(); currentFile_ = juce::File();
     list_ = -2; status_ = "No library loaded"; sendChangeMessage();
 }
@@ -144,7 +147,16 @@ void VisuProcessor::prepareToPlay(double sampleRate, int)
 
 void VisuProcessor::setTag(const juce::String& name, float value)
 {
+    { const juce::ScopedLock l(tagLock_); tagState_[name] = value; }
     if (current_) current_->setTag(name.toStdString(), value);
+}
+
+juce::var VisuProcessor::tagsVar() const
+{
+    auto* o = new juce::DynamicObject();
+    const juce::ScopedLock l(tagLock_);
+    for (auto& t : tagState_) o->setProperty(juce::Identifier(t.first), (double) t.second);
+    return juce::var(o);
 }
 
 bool VisuProcessor::isBusesLayoutSupported(const BusesLayout& l) const
@@ -192,6 +204,11 @@ void VisuProcessor::getStateInformation(juce::MemoryBlock& dest)
     xml.setAttribute("libraryPath", currentFile_.getFullPathName());
     xml.setAttribute("list", list_);
     xml.setAttribute("volume", (double) volume_->get());
+    {   // knob and page positions
+        const juce::ScopedLock l(tagLock_);
+        auto* tags = xml.createNewChildElement("Tags");
+        for (auto& t : tagState_) { auto* x = tags->createNewChildElement("Tag"); x->setAttribute("name", t.first); x->setAttribute("value", (double) t.second); }
+    }
     copyXmlToBinary(xml, dest);
 }
 
@@ -202,8 +219,13 @@ void VisuProcessor::setStateInformation(const void* data, int size)
         if (!xml->hasTagName("VisuPlayerState")) return;
         volume_->setValueNotifyingHost(volume_->convertTo0to1((float) xml->getDoubleAttribute("volume", 0.8)));
         list_ = xml->getIntAttribute("list", -2);
+        {
+            const juce::ScopedLock l(tagLock_); tagState_.clear();
+            if (auto* tags = xml->getChildByName("Tags"))
+                for (auto* x : tags->getChildIterator()) tagState_[x->getStringAttribute("name")] = (float) x->getDoubleAttribute("value");
+        }
         const auto id = xml->getStringAttribute("libraryId");
-        if (id.isNotEmpty()) loadLibrary(id);
+        if (id.isNotEmpty()) loadLibrary(id, true);
     }
 }
 
