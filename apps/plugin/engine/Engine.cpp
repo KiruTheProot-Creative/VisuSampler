@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <mutex>
 
 namespace visu {
@@ -146,6 +147,7 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
 #ifndef VISU_NO_FILES
         v->slot = z.audio.streamSrc >= 0 && streamer_ ? streamer_->open(z.audio.streamSrc, z.audio.head) : -1;   // a long sample: the rest comes from disk
 #endif
+        v->fenv = 0; v->fRel = 0; v->fstage = 0; std::memset(v->fz, 0, sizeof(v->fz)); v->lfoPh = 0; v->lfoAge = 0;
         v->gmul = -1; v->stolen = false; v->vel = vel; v->glide = z.keytrack ? glideFrom : 0.f; v->glideStep = glideStepFor(v->glide);
     }
 }
@@ -357,6 +359,24 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
         }
         // pitch on top of the note: glide still to go plus the pitch wheel
         float lgGain = 1, lgPan = 0, lgSemis = 0; groupLive(v.group, lgGain, lgPan, lgSemis);
+        /* per-note LFO (to cutoff, pitch, volume) and per-note filter settings for this block */
+        const GroupCfg& gcf = lib_->groups[(size_t) v.group]; const GroupCfg::VFilter& vf = gcf.vf; const GroupCfg::VLfo& vl = gcf.vl;
+        float lfo = 0;
+        if (vl.on) {
+            const double ph = v.lfoPh + vl.rate * (n * .5) / sr_; const double fr = ph - std::floor(ph);
+            const float w = vl.shape == 1 ? (float) (1 - std::fabs(fr * 4 - 2)) : (float) std::sin(2 * kPi * fr);
+            const float fade = vl.delay > 0 ? (float) std::min(1.0, v.lfoAge / (vl.delay / 1000.0 * sr_)) : 1.f;
+            lfo = w * fade; v.lfoPh += vl.rate * n / sr_; v.lfoPh -= std::floor(v.lfoPh); v.lfoAge += n;
+            lgSemis += lfo * vl.pitch / 100.f;                          // vibrato
+            lgGain *= 1 - vl.vol * .5f * (1 - lfo);                   // tremolo
+        }
+        float fBase = vf.cutoff, fRes = vf.res, fSemis = 0, fAi = 0, fDi = 0;
+        if (vf.on) {
+            if (vf.cut.tag >= 0 && lib_->tagValues) fBase = 20.f * std::pow(1000.f, lib_->tagValues[(size_t) vf.cut.tag].load());
+            if (vf.reso.tag >= 0 && lib_->tagValues) fRes = lib_->tagValues[(size_t) vf.reso.tag].load();
+            fSemis = vf.key * (v.note - 60) + vf.vel * (v.vel / 127.f) + lfo * vl.cut * (vl.on ? 1.f : 0.f);
+            fAi = vf.a < .5f ? 2.f : 1.f / (float) (vf.a / 1000.0 * sr_); fDi = vf.d < .5f ? 2.f : (1.f - vf.s) / (float) (vf.d / 1000.0 * sr_);
+        }
         const double pm = (v.glide != 0.f || bendSemis != 0.0 || lgSemis != 0.f) ? std::pow(2.0, ((v.zone->keytrack ? v.glide + bendSemis : 0.0) + lgSemis) / 12.0) : 1.0;
         const float vpan = std::min(1.f, std::max(-1.f, v.pan + lgPan));
         const float gm0 = v.gmul < 0 ? lgGain : v.gmul, gmStep = (lgGain - gm0) / (float) std::max(1, n); float gm = gm0; v.gmul = lgGain;
@@ -436,6 +456,25 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
                 l = w0 * r0.read(v.read0, v.interp, step) + w1 * r0.read(v.read1, v.interp, step);
                 rr = v.stereoIn ? w0 * r1.read(v.read0, v.interp, step) + w1 * r1.read(v.read1, v.interp, step) : l;
                 v.read0 += step; v.read1 += step; if (++v.grainCounter >= G) v.grainCounter = 0;
+            }
+            if (vf.on) {   /* per-note filter with its own envelope (TPT state-variable filter) */
+                if (v.releasing && v.fstage < 3) { v.fstage = 3; v.fRel = std::max(v.fenv, 1e-4f) / (float) (std::max(1.f, vf.r) / 1000.0 * sr_); }
+                if (v.fstage == 0) { v.fenv += fAi; if (v.fenv >= 1) { v.fenv = 1; v.fstage = 1; } }
+                else if (v.fstage == 1) { v.fenv -= fDi; if (v.fenv <= vf.s) { v.fenv = vf.s; v.fstage = 2; } }
+                else if (v.fstage == 3) { v.fenv = std::max(0.f, v.fenv - v.fRel); }
+                if ((i & 15) == 0) {
+                    const double fc = std::min(sr_ * .45, std::max(20.0, fBase * std::pow(2.0, (fSemis + vf.env * v.fenv) / 12.0)));
+                    const double gg = std::tan(kPi * fc / sr_), q = .5 * std::pow(40.0, (double) fRes), k = 1 / (vf.type == 1 ? std::sqrt(q * .7071) : q);
+                    v.fk = (float) k; v.fa1 = (float) (1 / (1 + gg * (gg + k))); v.fa2 = (float) gg * v.fa1; v.fa3 = (float) gg * v.fa2;
+                }
+                auto svf = [&](float x, float* z) {
+                    const float v3 = x - z[1], v1 = v.fa1 * z[0] + v.fa2 * v3, v2 = z[1] + v.fa2 * z[0] + v.fa3 * v3;
+                    z[0] = 2 * v1 - z[0]; z[1] = 2 * v2 - z[1];
+                    switch (vf.type) { case 2: return x - v.fk * v1 - v2; case 3: return v.fk * v1; case 4: return x - v.fk * v1; default: return v2; }
+                };
+                l = svf(l, v.fz[0][0]); if (vf.type == 1) l = svf(l, v.fz[1][0]);
+                if (v.stereoIn) { rr = svf(rr, v.fz[0][1]); if (vf.type == 1) rr = svf(rr, v.fz[1][1]); } else rr = l;
+                if (!std::isfinite(l) || !std::isfinite(rr)) { std::memset(v.fz, 0, sizeof(v.fz)); l = rr = 0; }
             }
             if (!v.stereoIn) { const float m = std::cos((vpan + 1) * (float) kPi / 4), m2 = std::sin((vpan + 1) * (float) kPi / 4); oL = l * m; oR = l * m2; }
             else if (vpan <= 0) { oL = l + rr * gL; oR = rr * gR; } else { oL = l * gL; oR = rr + l * gR; }

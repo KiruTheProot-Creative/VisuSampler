@@ -41,6 +41,11 @@ struct GroupCfg {
     // a linked value replaces the fixed one. Volume fades with equal power, and -60 dB or lower is silent.
     struct Link { int tag = -1; std::string tagId; float from = 0, to = 0; };
     Link lVol, lPan, lTune, lFine;
+    // a filter per note: type, cutoff (Hz), resonance 0..1, key tracking 0..1, velocity and envelope in semitones, its own ADSR.
+    // cutoff and resonance can follow knobs (tag 0..1 = 20 Hz..20 kHz, 0..100 %).
+    struct VFilter { bool on = false; int type = 0; float cutoff = 8000, res = 0, key = 0, vel = 0, env = 0, a = 5, d = 300, s = 0, r = 300; Link cut, reso; } vf;   // type: 0 lp12, 1 lp24, 2 hp, 3 bp, 4 notch
+    // an LFO per note (starts with the note): to cutoff (semitones), pitch (cents) and volume (0..1), after a delay (ms)
+    struct VLfo { bool on = false; int shape = 0; float rate = 5, cut = 0, pitch = 0, vol = 0, delay = 0; } vl;
 };
 
 // audio a zone plays: either the sample itself, or a prepared copy (loop crossfade baked in, or reversed)

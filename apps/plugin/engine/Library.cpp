@@ -104,7 +104,7 @@ bool Library::readInfo(const std::string& path, LibraryInfo& info, std::string& 
 
 const std::vector<std::string>& supportedFeatures() {
     static const std::vector<std::string> s = { "sampler", "slicer", "loop", "pingpong", "reverse", "unison", "rr", "release", "choke",
-        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep", "granular", "wavetable", "envelope", "grouplinks" };
+        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep", "granular", "wavetable", "envelope", "grouplinks", "vfilter" };
     return s;
 }
 
@@ -212,6 +212,14 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         { const Json& e = j["env"]; g.envOn = e["on"].boolean(false); g.envA = (float) std::max(0.0, e["a"].num(5)); g.envD = (float) std::max(0.0, e["d"].num(300));
           g.envS = (float) std::min(1.0, std::max(0.0, e["s"].num(100) / 100.0)); g.envR = (float) std::max(0.0, e["r"].num(300));
           const char* K[4] = { "a", "d", "s", "r" }; for (int k = 0; k < 4; ++k) g.envTagId[k] = e["tags"][K[k]].str(""); }
+        { const Json& f = j["vfilter"]; GroupCfg::VFilter& v = g.vf; v.on = f["on"].boolean(false);
+          const std::string t = f["type"].str("lp12"); v.type = t == "lp24" ? 1 : t == "hp" ? 2 : t == "bp" ? 3 : t == "notch" ? 4 : 0;
+          v.cutoff = (float) std::min(20000.0, std::max(20.0, f["cutoff"].num(8000))); v.res = (float) std::min(1.0, std::max(0.0, f["res"].num(0) / 100.0));
+          v.key = (float) std::min(1.0, std::max(0.0, f["key"].num(0) / 100.0)); v.vel = (float) f["vel"].num(0); v.env = (float) f["env"].num(0);
+          v.a = (float) std::max(0.0, f["a"].num(5)); v.d = (float) std::max(0.0, f["d"].num(300)); v.s = (float) std::min(1.0, std::max(0.0, f["s"].num(0) / 100.0)); v.r = (float) std::max(0.0, f["r"].num(300));
+          v.cut.tagId = f["tags"]["cutoff"].str(""); v.reso.tagId = f["tags"]["res"].str("");
+          const Json& o = j["vlfo"]; GroupCfg::VLfo& l = g.vl; l.on = o["on"].boolean(false); l.shape = o["shape"].str("sine") == "tri" ? 1 : 0;
+          l.rate = (float) std::max(.01, o["rate"].num(5)); l.cut = (float) o["cut"].num(0); l.pitch = (float) o["pitch"].num(0); l.vol = (float) std::min(1.0, std::max(0.0, o["vol"].num(0) / 100.0)); l.delay = (float) std::max(0.0, o["delay"].num(0)); }
         { const Json& lk = j["links"]; GroupCfg::Link* L4[4] = { &g.lVol, &g.lPan, &g.lTune, &g.lFine }; const char* K[4] = { "vol", "pan", "tune", "fine" };
           for (int k = 0; k < 4; ++k) { const Json& x = lk[K[k]]; L4[k]->tagId = x["tag"].str(""); L4[k]->from = (float) x["from"].num(0); L4[k]->to = (float) x["to"].num(0); } }
         int id = (int) L->groups.size(); gidx[name] = id; L->groups.push_back(g); return id;
@@ -249,7 +257,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         d.steps = (int) tj[i]["steps"].size(); d.def = (float) tj[i]["value"].num(tj[i]["def"].num(0)); L->tags.push_back(d); }
     L->tagValues.reset(new std::atomic<float>[std::max<size_t>(1, L->tags.size())]);
     for (size_t i = 0; i < L->tags.size(); ++i) L->tagValues[i].store(L->tags[i].def);
-    for (auto& g : L->groups) for (GroupCfg::Link* lk : { &g.lVol, &g.lPan, &g.lTune, &g.lFine }) if (!lk->tagId.empty()) for (size_t i = 0; i < L->tags.size(); ++i) if (L->tags[i].id == lk->tagId) lk->tag = (int) i;
+    for (auto& g : L->groups) for (GroupCfg::Link* lk : { &g.lVol, &g.lPan, &g.lTune, &g.lFine, &g.vf.cut, &g.vf.reso }) if (!lk->tagId.empty()) for (size_t i = 0; i < L->tags.size(); ++i) if (L->tags[i].id == lk->tagId) lk->tag = (int) i;
     for (auto& g : L->groups) for (int k = 0; k < 4; ++k) if (!g.envTagId[k].empty()) for (size_t i = 0; i < L->tags.size(); ++i) if (L->tags[i].id == g.envTagId[k]) g.envTag[k] = (int) i;
     for (auto& s : L->samples) if (!s.wtTagId.empty()) for (size_t i = 0; i < L->tags.size(); ++i) if (L->tags[i].id == s.wtTagId) s.wtTag = (int) i;
     L->sampleRate = sampleRate;

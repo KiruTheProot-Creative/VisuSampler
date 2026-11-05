@@ -162,6 +162,42 @@ static void testGroupEnv() {
     lib->setTag("wtpos", 0.f);
 }
 
+// a filter per note: velocity, key tracking and its envelope move the cutoff; an LFO per note
+static void testVFilter() {
+    std::string err; auto lib = Library::load(std::string(TEST_DATA_DIR) + "/golden.vsamp", err, 44100);
+    if (!lib) { CHECK(false, "golden loads"); return; }
+    auto levels = [&](int note, int vel, int blocks, std::vector<double>& out, std::vector<int>* zc = nullptr) {
+        auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(44100); e.setMasterGain(1); e.setLibrary(lib); e.noteOn(note, vel);
+        std::vector<float> L(441), R(441); float prev = 0;
+        for (int b = 0; b < blocks; ++b) { std::fill(L.begin(), L.end(), 0.f); std::fill(R.begin(), R.end(), 0.f); e.render(L.data(), R.data(), 441);
+            double sq = 0; int c = 0; for (float x : L) { sq += (double) x * x; if (prev < 0 && x >= 0) ++c; prev = x; if (!std::isfinite(x)) sq = 1e9; }
+            out.push_back(std::sqrt(sq / 441)); if (zc) zc->push_back(c); }
+    };
+    auto avg = [](const std::vector<double>& v, int a, int b) { double s = 0; for (int i = a; i < b; ++i) s += v[(size_t) i]; return s / (b - a); };
+    std::vector<double> ref; levels(72, 127, 40, ref);
+    for (auto& g : lib->groups) { g.vf = {}; g.vf.on = true; g.vf.type = 1; g.vf.cutoff = 100; }
+    std::vector<double> lo; levels(72, 127, 40, lo);
+    CHECK(avg(lo, 20, 40) < avg(ref, 20, 40) * .02, "a 24 dB low-pass far below the note silences it (%.4f)", avg(lo, 20, 40) / avg(ref, 20, 40));
+    for (auto& g : lib->groups) g.vf.vel = 60;
+    std::vector<double> soft, hard; levels(72, 20, 40, soft); levels(72, 127, 40, hard);
+    CHECK(avg(hard, 20, 40) > avg(soft, 20, 40) * 5 && avg(hard, 20, 40) > avg(ref, 20, 40) * .8, "harder notes open the filter (soft %.3f, hard %.3f of the dry level)", avg(soft, 20, 40) / avg(ref, 20, 40), avg(hard, 20, 40) / avg(ref, 20, 40));
+    for (auto& g : lib->groups) { g.vf.vel = 0; g.vf.env = 60; g.vf.a = 0; g.vf.d = 150; g.vf.s = 0; }
+    std::vector<double> sw; levels(72, 127, 60, sw);
+    CHECK(sw[1] / ref[1] > .7 && sw[50] / ref[50] < .05, "the filter envelope sweeps from open to closed (%.2f then %.3f)", sw[1] / ref[1], sw[50] / ref[50]);
+    for (auto& g : lib->groups) { g.vf = {}; g.vf.on = true; g.vf.type = 2; g.vf.cutoff = 20000; }
+    std::vector<double> hp; levels(72, 127, 40, hp);
+    CHECK(avg(hp, 20, 40) < avg(ref, 20, 40) * .05, "a high-pass at the top removes the note (%.4f)", avg(hp, 20, 40) / avg(ref, 20, 40));
+    for (auto& g : lib->groups) { g.vf = {}; g.vl = {}; g.vl.on = true; g.vl.rate = 2; g.vl.pitch = 200; }
+    std::vector<double> d; std::vector<int> zc; levels(72, 127, 100, d, &zc);
+    int mn = 1 << 30, mx = 0; for (int i = 0; i + 10 <= 100; i += 10) { int s = 0; for (int k = i; k < i + 10; ++k) s += zc[(size_t) k]; mn = std::min(mn, s); mx = std::max(mx, s); }
+    CHECK(mx > mn * 1.15, "the LFO bends the pitch up and down (%d to %d cycles per 100 ms)", mn, mx);
+    for (auto& g : lib->groups) { g.vl = {}; g.vl.on = true; g.vl.rate = 5; g.vl.vol = 1; }
+    std::vector<double> tr; levels(72, 127, 60, tr); for (auto& g : lib->groups) g.vl = {}; std::vector<double> r60; levels(72, 127, 60, r60);
+    double tmn = 9, tmx = 0; for (int i = 20; i < 60; ++i) { tmn = std::min(tmn, tr[(size_t) i] / r60[(size_t) i]); tmx = std::max(tmx, tr[(size_t) i] / r60[(size_t) i]); }
+    CHECK(tmx > .8 && tmn < .2, "the LFO on volume makes a tremolo (%.2f to %.2f)", tmn, tmx);
+    for (auto& g : lib->groups) { g.vf = {}; g.vl = {}; }
+}
+
 // knobs on a group's volume, pan and tuning
 static void testGroupLinks() {
     std::string err; auto lib = Library::load(std::string(TEST_DATA_DIR) + "/golden.vsamp", err, 44100);
@@ -326,7 +362,7 @@ static void testFx() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testKeyswitch(); testStreaming(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testStreaming(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

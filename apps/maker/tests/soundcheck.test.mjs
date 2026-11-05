@@ -11,7 +11,7 @@ const r=await p.evaluate(async()=>{
   const z=S.zones.find(z=>z.loop&&z.loop.on),g=z.group,note=z.root;
   S.zones.forEach(x=>{if(x.group!==g)x.mute=true;});S.lists=[];
   const mk=(name,val)=>{const t={id:'tk'+name,name,kind:'number',min:0,max:1,unit:'',scale:'linear',dec:1,steps:[],basis:'note',value:val,def:val,target:'none',sys:false};S.tags.push(t);return t;};
-  const atk=mk('chk attack',0),pan=mk('chk pan',.5),tune=mk('chk tune',.5),fxon=mk('chk dist',0),mac=mk('chk macro',1);
+  const vcut=mk('chk vcut',1),atk=mk('chk attack',0),pan=mk('chk pan',.5),tune=mk('chk tune',.5),fxon=mk('chk dist',0),mac=mk('chk macro',1);
   const c=S.gset[g];c.env={on:true,a:5,d:300,s:100,r:200,tags:{a:atk.id}};c.links={pan:{tag:pan.id,from:-100,to:100},tune:{tag:tune.id,from:-12,to:12}};
   S.fx.graphs={};const G=v.graphOf('master'),inp=G.nodes[0],out=G.nodes[1],d=v.fxNode('dist',200,100);d.p.drive=80;d.byTag={tag:fxon.id,inv:false,tails:false};
   /* a macro on a knob sweeps a low-pass from 40 Hz (knob at 0) to fully open (knob at 1) */
@@ -34,8 +34,15 @@ const r=await p.evaluate(async()=>{
   v.setTag(tune,1);x=await play(900);o.upZc=zc(x.l);v.setTag(tune,.5);
   v.setTag(fxon,1);x=await play(900);o.distOn=mid(x);v.setTag(fxon,0);
   v.setTag(mac,0);x=await play(900);o.macroShut=mid(x);v.setTag(mac,1);
+  /* the per-note filter: a knob on its cutoff closes it */
+  c.vfilter={on:true,type:'lp24',cutoff:20000,res:0,key:0,vel:0,env:0,tags:{cutoff:vcut.id}};v.touchMap();await wait(1500);
+  x=await play(900);o.vfOpen=mid(x);v.setTag(vcut,.15);x=await play(900);o.vfShut=mid(x);v.setTag(vcut,1);
+  c.vfilter.on=false;c.vlfo={on:true,shape:'sine',rate:6,delay:0,cut:0,pitch:0,vol:100};v.touchMap();await wait(1500);
+  x=await play(900);{const w=Math.round(sr*.02),lv=[];for(let i=Math.round(sr*.2);i+w<Math.round(sr*.8);i+=w)lv.push(rms(x.l,i,i+w));o.trMin=Math.min(...lv);o.trMax=Math.max(...lv);}
   o.err=E.lastErr||'';return o;});
 console.log(JSON.stringify(r));
+ok(r.vfShut<r.vfOpen*.3,'a knob closes the per-note filter ('+r.vfShut.toFixed(4)+' vs '+r.vfOpen.toFixed(4)+')');
+ok(r.trMin<r.trMax*.2,'the per-note LFO makes a tremolo ('+r.trMin.toFixed(4)+' to '+r.trMax.toFixed(4)+')');
 ok(r.err==='','no errors in the engine thread '+r.err);
 ok(r.slowEarly<r.fastEarly*.3,'a knob on the group attack fades the sound in ('+r.slowEarly.toFixed(4)+' vs '+r.fastEarly.toFixed(4)+')');
 ok(r.panR<r.panL*.05,'a knob on the group pan moves the sound to the left ('+r.panR.toFixed(4)+' right vs '+r.panL.toFixed(4)+' left)');

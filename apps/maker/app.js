@@ -4658,7 +4658,7 @@ function snGroupHTML(){
     +'<label class="f"><span>Name</span><input type="text" data-sg="name" value="'+esc(g)+'"></label>'
     +'<label class="f"><span>Plays</span><select data-sg="mode">'+mopt(MODES,c.mode)+'</select></label>'
     +nf('Volume','data-sg="vol"',c.vol,-48,24,.5,'dB')+nf('Pan','data-sg="pan"',c.pan,-100,100,1,'L–R')+nf('Tune','data-sg="tune"',c.tune,-2400,2400,1,'cents')
-    +snLinksHTML(c)+snEnvHTML(c)
+    +snLinksHTML(c)+snEnvHTML(c)+snVfHTML(c)
     +'<div class="snmores"><details class="snmore"><summary>More</summary><div>'
     +nf('Choke group','data-sg="choke"',c.choke,0,999,1)+'<p class="hint">Groups with the same choke number cut each other off, like open and closed hi-hats.</p>'
     +nf('Voice limit','data-sg="voices"',c.voices,0,9999,1)+'<p class="hint">0 means unlimited.</p>'
@@ -4750,6 +4750,52 @@ $('#snInsList').addEventListener('change',e=>{
   else if(k==='grp'){const i=l.groups.indexOf(t.dataset.g);if(t.checked&&i<0)l.groups.push(t.dataset.g);else if(!t.checked&&i>=0)l.groups.splice(i,1);refreshDisplays();}
   else if(k==='follow'){S.map.follow=t.checked;}
   soundRefresh(true);
+});
+
+/* ---- per-note filter and LFO for the group (the engine runs one per note) ----
+   The filter has its own envelope; velocity, key and the envelope move the cutoff in semitones.
+   The LFO starts with each note and can wobble the cutoff, the pitch (vibrato) and the volume (tremolo). */
+const VF_DEF={on:false,type:'lp12',cutoff:8000,res:0,key:0,vel:0,env:0,a:5,d:300,s:0,r:300,tags:{}};
+const VL_DEF={on:false,shape:'sine',rate:5,delay:0,cut:0,pitch:0,vol:0};
+const VF_TYPES=[['lp12','Low-pass 12 dB'],['lp24','Low-pass 24 dB'],['hp','High-pass'],['bp','Band-pass'],['notch','Notch']];
+const vfOf=c=>{const f=Object.assign({},VF_DEF,c.vfilter||{});f.tags=Object.assign({},f.tags||{});return f;};
+const vlOf=c=>Object.assign({},VL_DEF,c.vlfo||{});
+function snVfHTML(c){
+  const f=vfOf(c),l=vlOf(c),knobs=[['','no knob']].concat(S.tags.filter(t=>!t.sys&&t.kind==='number').map(t=>[t.id,t.name]));
+  const num=(k,lab,mn,mx,st,u,o,attr)=>'<label class="f"><span>'+lab+'</span><input type="number" '+attr+'="'+k+'" min="'+mn+'" max="'+mx+'" step="'+st+'" value="'+o[k]+'"'+(attr==='data-vf'&&f.tags[k]?' disabled':'')+'><em class="sfx">'+u+'</em></label>';
+  const knobRow=(k,lab,mn,mx,st,u)=>'<div class="envrow">'+num(k,lab,mn,mx,st,u,f,'data-vf')+'<select data-vftag="'+k+'" aria-label="Knob for '+lab+'">'+mopt(knobs,f.tags[k]||'')+'</select></div>';
+  let h='<div class="snenv snvf"><label class="f chk"><input type="checkbox" data-vf="on"'+(f.on?' checked':'')+'><span>Filter (one per note)</span></label>';
+  if(f.on){
+    h+='<label class="f"><span>Type</span><select data-vf="type">'+mopt(VF_TYPES,f.type)+'</select></label>'
+      +knobRow('cutoff','Cutoff',20,20000,1,'Hz')+knobRow('res','Resonance',0,100,1,'%')
+      +num('key','Key tracking',0,100,1,'%',f,'data-vf')+num('vel','Velocity',-96,96,1,'st',f,'data-vf')
+      +'<p class="hint">Velocity: how far the hardest note moves the cutoff. Key tracking at 100 % moves it with the keys (from C4).</p>'
+      +num('env','Envelope amount',-96,96,1,'st',f,'data-vf')
+      +(f.env?envSvg({a:f.a,d:f.d,s:f.s,r:f.r})+num('a','Attack',0,10000,1,'ms',f,'data-vf')+num('d','Decay',0,10000,1,'ms',f,'data-vf')+num('s','Sustain',0,100,1,'%',f,'data-vf')+num('r','Release',0,10000,1,'ms',f,'data-vf'):'')
+      +'<p class="hint">A knob on cutoff sweeps 20 Hz – 20 kHz, on resonance 0–100 %; held notes follow it live.</p>';
+  }
+  h+='</div><div class="snenv snvl"><label class="f chk"><input type="checkbox" data-vl="on"'+(l.on?' checked':'')+'><span>LFO (one per note)</span></label>';
+  if(l.on){
+    h+='<label class="f"><span>Shape</span><select data-vl="shape">'+mopt([['sine','Sine'],['tri','Triangle']],l.shape)+'</select></label>'
+      +num('rate','Rate',.01,40,.1,'Hz',l,'data-vl')+num('delay','Fade in',0,10000,1,'ms',l,'data-vl')
+      +num('pitch','To pitch',0,1200,1,'cents',l,'data-vl')+num('vol','To volume',0,100,1,'%',l,'data-vl')
+      +(f.on?num('cut','To cutoff',0,96,1,'st',l,'data-vl'):'')
+      +'<p class="hint">Starts fresh with every note. Pitch makes vibrato, volume makes tremolo'+(f.on?', cutoff makes the filter wobble':'')+'.</p>';
+  }
+  return h+'</div>';
+}
+$('#snInsGroup').addEventListener('change',e=>{
+  const t=e.target,g=S.map.group;if(!g||!(t.dataset.vf||t.dataset.vftag||t.dataset.vl))return;
+  const c=gcfg(g);
+  if(t.dataset.vl){const l=vlOf(c),k=t.dataset.vl;
+    if(k==='on')l.on=t.checked;else if(k==='shape')l[k]=t.value;else{const v=parseFloat(t.value);l[k]=isFinite(v)?Math.max(+t.min,Math.min(+t.max,v)):VL_DEF[k];}
+    c.vlfo=l;}
+  else{const f=vfOf(c),k=t.dataset.vf;
+    if(t.dataset.vftag){if(t.value)f.tags[t.dataset.vftag]=t.value;else delete f.tags[t.dataset.vftag];}
+    else if(k==='on')f.on=t.checked;else if(k==='type')f.type=t.value;
+    else{const v=parseFloat(t.value);f[k]=isFinite(v)?Math.max(+t.min,Math.min(+t.max,v)):VF_DEF[k];}
+    c.vfilter=f;}
+  touchMap();$('#snInsGroup').innerHTML=snGroupHTML();
 });
 
 /* ---------- how the library plays: mono / legato / glide, pitch-bend range, voice limit (the engine reads project.play) ---------- */
@@ -5020,7 +5066,7 @@ function libraryFeatures(set){
   S.samples.forEach(s=>{const sm=smOf(s);if(S.zones.some(z=>z.sample===s.id)){add(sm.mode);if(sm.uni.on)add('unison');}});
   set.zones.forEach(z=>{const g=gcfg(z.group);if(z.loop&&z.loop.on){add('loop');if(z.loop.pp)add('pingpong');}if(z.rev)add('reverse');if(z.vstart)add('velstart');
     if(z.fadeLo||z.fadeHi||z.vfadeLo||z.vfadeHi)add('crossfade');if(z.hum&&(z.hum.tune||z.hum.vol||z.hum.start))add('humanize');
-    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.links&&Object.keys(g.links).length)add('grouplinks');if(g.voices)add('voicelimit');});
+    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.links&&Object.keys(g.links).length)add('grouplinks');if((g.vfilter&&g.vfilter.on)||(g.vlfo&&g.vlfo.on))add('vfilter');if(g.voices)add('voicelimit');});
   if(S.lists.length)add('lists');if(S.els.length)add('ui');
   Object.values(S.fx.graphs).forEach(g=>g.nodes.forEach(n=>{if(FXT[n.type]&&FXT[n.type].kind!=='io')add('fx:'+n.type);}));
   return [...f].sort();
