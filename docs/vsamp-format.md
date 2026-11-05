@@ -34,3 +34,7 @@ Audio blobs are interleaved PCM.
 2. Check each blob CRC before use.
 3. Ignore unknown manifest keys (forward compatible).
 4. Baking only changes the exported file. Zones with `baked` samples play with `keytrack` and `tune` 0 at the baked note.
+
+## project.play
+How the library plays: `{mono, legato, glide (ms), bend (semitones, default 2), maxVoices (0 = 256), steal ("oldest" | "quietest")}`.
+Glide works in mono. Released notes are stolen first. The player also lowers the voice limit for a moment when the CPU cannot keep up.

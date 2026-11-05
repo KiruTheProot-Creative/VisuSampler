@@ -28,6 +28,7 @@ void Engine::adopt() {
     for (auto& v : voices_) v.on = false;
     lib_ = p;
     for (auto& r : rr_) r = 0;
+    stackSize_ = 0; monoNote_ = lastNote_ = -1;
     active_.store(0);
 }
 
@@ -49,19 +50,20 @@ float Engine::zoneGain(const Zone& z, int note, int vel) const {
 
 void Engine::kill(Voice& v, bool fast) {
     if (!v.on) return;
-    if (fast) { v.releasing = true; v.relInc = 1.f / (float) (0.03 * sr_); return; }
+    if (fast) { v.releasing = true; v.stolen = true; v.relInc = 1.f / (float) (0.03 * sr_); return; }   // short fade instead of a click
     v.releasing = true; float rel = std::max(.01f, v.zone->release / 1000.f); v.relInc = 1.f / (float) (rel * sr_);
 }
 
-void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease) {
+void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float glideFrom) {
     const Sample& s = lib_->samples[(size_t) z.sample]; const GroupCfg& g = lib_->groups[(size_t) z.group];
     const float jt = (rnd() * 2 - 1) * z.humTune, jv = (rnd() * 2 - 1) * z.humVol, js = rnd() * z.humStart;
     const double startMsBase = z.start + z.vstart * (vel / 127.0) + js;
     float amp = dbToGain(z.vol + g.vol + jv) * (float) std::pow(vel / 127.0, g.velcurve) * zoneGain(z, note, vel);
     for (const UnisonVoice& u : s.unison) {
+        while (sounding() >= limit() && stealOne()) {}   // over the limit: fade one out (released notes first)
         Voice* v = nullptr; unsigned long oldest = ~0ul; Voice* ov = nullptr;
         for (auto& c : voices_) { if (!c.on) { v = &c; break; } if (c.age < oldest) { oldest = c.age; ov = &c; } }
-        if (!v) v = ov;                                  // steal the oldest
+        if (!v) v = ov;                                  // every slot busy (fading voices): reuse the oldest
         const double semis = (z.keytrack ? note - z.root : 0) + (z.tune + g.tune + u.tuneCents + jt) / 100.0;
         v->zone = &z; v->sample = &s; v->audio = &z.audio; v->interp = interpFor(z);
         v->ratio = std::pow(2.0, semis / 12.0) * s.sr / sr_;
@@ -80,6 +82,7 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease) {
         v->releasing = false; v->relInc = 0; v->on = true; v->note = note; v->group = z.group; v->choke = g.choke;
         v->oneshot = z.oneshot && !z.audio.loop; v->fromRelease = fromRelease; v->held = false; v->age = ++clock_;
         v->maxLife = fromRelease ? (long) (4 * sr_) : -1;
+        v->stolen = false; v->vel = vel; v->glide = z.keytrack ? glideFrom : 0.f; v->glideStep = glideStepFor(v->glide);
     }
 }
 
@@ -91,10 +94,69 @@ bool Engine::groupAllowed(int g) const {
     return std::find(gs.begin(), gs.end(), g) != gs.end();
 }
 
+float Engine::glideStepFor(float semis) const { const float t = lib_ ? lib_->play.glideMs : 0.f; return t > 0 ? std::fabs(semis) / (float) (t / 1000.0 * sr_) : 0.f; }
+int Engine::limit() const { int l = lib_ && lib_->play.maxVoices > 0 ? std::min(kMaxVoices, lib_->play.maxVoices) : kMaxVoices; return std::max(1, std::min(l, guard_.load())); }
+int Engine::sounding() const { int n = 0; for (auto& v : voices_) if (v.on && !v.stolen) ++n; return n; }
+bool Engine::stealOne() {
+    // released notes go first, then the oldest (or quietest) sounding voice (from EmulonX)
+    Voice* victim = nullptr;
+    for (auto& v : voices_) if (v.on && !v.stolen && v.releasing && (!victim || v.age < victim->age)) victim = &v;
+    if (!victim) for (auto& v : voices_) if (v.on && !v.stolen) {
+        if (!victim) { victim = &v; continue; }
+        if (lib_ && lib_->play.quietest ? v.gain * v.env < victim->gain * victim->env : v.age < victim->age) victim = &v;
+    }
+    if (!victim) return false;
+    kill(*victim, true); return true;
+}
+void Engine::reportLoad(float f) {
+    int g = guard_.load();
+    if (f > .9f) { int s = 0; for (auto& v : voices_) if (v.on && !v.stolen) ++s; g = std::max(8, std::min(g, (int) (s * .8f))); }
+    else if (f < .6f && g < kMaxVoices) g += 1;
+    guard_.store(g);
+}
+
 void Engine::noteOn(int note, int vel) {
     adopt();
     if (!lib_ || note < 0 || note > 127) return;
     vel = std::min(127, std::max(1, vel));
+    heldNotes_[note] = true;
+    ctl_.vel = (float) vel; ctl_.key = (float) note; ctl_.gate = true; ctl_.tOn = ctl_.time;
+    if (!lib_->play.mono) { startNote(note, vel, 0, nullptr, 0); return; }
+    // mono: remember the order of held keys, so letting go returns to the previous one
+    int k = 0; for (int i = 0; i < stackSize_; ++i) if (stack_[i] != note) stack_[k++] = stack_[i];
+    stackSize_ = k; if (stackSize_ < 128) stack_[stackSize_++] = note;
+    const int previous = monoNote_ >= 0 ? monoNote_ : lastNote_;
+    monoNote_ = note; monoVel_ = vel;
+    monoNoteOn(note, vel, previous);
+}
+
+void Engine::monoNoteOn(int note, int vel, int previous) {
+    const bool glide = lib_->play.glideMs > 0;
+    float from = (float) previous; bool overlapping = false;
+    for (auto& v : voices_) if (v.on && !v.stolen && !v.releasing && !v.fromRelease && previous >= 0 && v.note == previous) { overlapping = true; from = (float) v.note + v.glide; break; }
+    if (lib_->play.legato && overlapping) {
+        // legato: voices whose zone also plays the new note just change pitch, no restart
+        const Zone* handled[64]; int nh = 0;
+        for (auto& v : voices_) {
+            if (!v.on || v.stolen || v.releasing || v.fromRelease || v.note != previous) continue;
+            const Zone& z = *v.zone;
+            if (note >= z.lo && note <= z.hi && vel >= z.vlo && vel <= z.vhi) {
+                const float cur = (float) v.note + v.glide;
+                if (z.keytrack) v.ratio *= std::pow(2.0, (note - v.note) / 12.0);
+                v.note = note; v.glide = glide && z.keytrack ? cur - (float) note : 0.f; v.glideStep = glideStepFor(v.glide);
+                bool seen = false; for (int i = 0; i < nh; ++i) if (handled[i] == &z) seen = true;
+                if (!seen && nh < 64) handled[nh++] = &z;
+            } else kill(v, true);   // a different zone takes over
+        }
+        startNote(note, vel, glide ? from - (float) note : 0.f, handled, nh);
+        return;
+    }
+    // retrigger: fade what is sounding and start the new note (gliding from the old pitch)
+    for (auto& v : voices_) if (v.on && !v.stolen && !v.fromRelease) kill(v, true);
+    startNote(note, vel, glide && previous >= 0 ? from - (float) note : 0.f, nullptr, 0);
+}
+
+void Engine::startNote(int note, int vel, float glideFrom, const Zone* const* skip, int nskip) {
     const std::vector<int>& list = lib_->byNote[(size_t) note];
     int hits[64]; int nh = 0;
     for (int zi : list) {
@@ -122,11 +184,11 @@ void Engine::noteOn(int note, int vel) {
     for (int i = 0; i < nc; ++i) {
         const Zone& z = lib_->zones[(size_t) chosen[i]]; const GroupCfg& g = lib_->groups[(size_t) z.group];
         if (g.choke) for (auto& v : voices_) if (v.on && !v.releasing && v.group == z.group && v.choke) kill(v, true);
+        bool skipIt = false; for (int k = 0; k < nskip; ++k) if (skip[k] == &z) skipIt = true;
+        if (skipIt) continue;
         if (g.voices > 0) { int cnt = 0; unsigned long oldest = ~0ul; Voice* ov = nullptr; for (auto& v : voices_) if (v.on && !v.releasing && v.group == z.group) { cnt++; if (v.age < oldest) { oldest = v.age; ov = &v; } } if (cnt >= g.voices && ov) kill(*ov, true); }
-        startZone(z, note, vel, false);
+        startZone(z, note, vel, false, glideFrom);
     }
-    heldNotes_[note] = true;
-    ctl_.vel = (float) vel; ctl_.key = (float) note; ctl_.gate = true; ctl_.tOn = ctl_.time;
 }
 
 void Engine::noteOff(int note) {
@@ -134,6 +196,16 @@ void Engine::noteOff(int note) {
     if (ctl_.gate) { ctl_.gate = false; ctl_.tOff = ctl_.time; }
     if (!lib_ || note < 0 || note > 127) return;
     heldNotes_[note] = false;
+    if (lib_->play.mono) {
+        int k = 0; for (int i = 0; i < stackSize_; ++i) if (stack_[i] != note) stack_[k++] = stack_[i];
+        stackSize_ = k;
+        if (note == monoNote_ && !sustain_ && stackSize_ > 0) {   // return to the key still held
+            const int back = stack_[stackSize_ - 1], prev = monoNote_; monoNote_ = back;
+            ctl_.gate = true; ctl_.key = (float) back;
+            monoNoteOn(back, monoVel_, prev); return;
+        }
+        if (note == monoNote_ && stackSize_ == 0) { lastNote_ = monoNote_; monoNote_ = -1; }
+    }
     if (sustain_) { for (auto& v : voices_) if (v.on && !v.fromRelease && v.note == note) v.held = true; return; }
     for (auto& v : voices_) if (v.on && !v.releasing && !v.fromRelease && v.note == note && !v.oneshot) kill(v, false);
     for (int zi : lib_->byNote[(size_t) note]) {
@@ -147,7 +219,7 @@ void Engine::sustain(bool down) {
     sustain_ = down;
     if (!down) for (auto& v : voices_) if (v.on && v.held) { v.held = false; if (!heldNotes_[v.note] && !v.oneshot) kill(v, false); }
 }
-void Engine::allNotesOff() { adopt(); for (auto& v : voices_) if (v.on) kill(v, true); for (auto& h : heldNotes_) h = false; sustain_ = false; }
+void Engine::allNotesOff() { adopt(); for (auto& v : voices_) if (v.on) kill(v, true); for (auto& h : heldNotes_) h = false; sustain_ = false; stackSize_ = 0; monoNote_ = -1; }
 
 // ---- interpolation, same formulas as the JS core ----
 static inline double lanczos(double x, double a) { if (x == 0) return 1; if (x <= -a || x >= a) return 0; double px = kPi * x; return a * std::sin(px) * std::sin(px / a) / (px * px); }
@@ -176,12 +248,18 @@ struct Reader {
 int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
     fx::System* fx = (lib_->fx && lib_->fx->hasAny()) ? lib_->fx.get() : nullptr;
     int active = 0;
+    const double bendSemis = (ctl_.bend - .5) * 2.0 * lib_->play.bend;
+    { int over = sounding() - limit(); while (over-- > 0 && stealOne()) {} }   // CPU guard lowered the limit
     for (auto& v : voices_) {
         if (!v.on) continue;
         float* dL = L; float* dR = R;
         if (fx) { fx::Stereo& s = fx->groupIn(v.group); dL = s.l; dR = s.r; }
         const ZoneAudio& a = *v.audio;
         Reader r0{ a.ch[0], a.len, a.loop, a.loopS, a.loopE }, r1{ a.ch[1] ? a.ch[1] : a.ch[0], a.len, a.loop, a.loopS, a.loopE };
+        // pitch on top of the note: glide still to go plus the pitch wheel
+        const double pm = (v.glide != 0.f || bendSemis != 0.0) && v.zone->keytrack ? std::pow(2.0, (v.glide + bendSemis) / 12.0) : 1.0;
+        if (v.glide != 0.f) { const float mv = v.glideStep * (float) n; v.glide = std::fabs(v.glide) <= mv ? 0.f : v.glide - (v.glide > 0 ? mv : -mv); }
+        const double ratio = v.ratio * pm;
         const float x = v.pan <= 0 ? v.pan + 1 : v.pan, gL = std::cos(x * (float) kPi / 2), gR = std::sin(x * (float) kPi / 2), g = v.gain * gainScale;
         for (int i = 0; i < n; ++i) {
             if (!a.loop && v.pos >= (double) a.len) { v.on = false; break; }
@@ -189,10 +267,10 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
             if (v.attackInc > 0 && v.env < 1.f && !v.releasing) { v.env += v.attackInc; if (v.env > 1.f) v.env = 1.f; }
             if (v.releasing) { v.env -= v.relInc; if (v.env <= 0) { v.on = false; break; } }
             float l, rr, oL, oR;
-            if (!v.keepSpeed) { l = r0.read(v.pos, v.interp, v.ratio); rr = v.stereoIn ? r1.read(v.pos, v.interp, v.ratio) : l; }
+            if (!v.keepSpeed) { l = r0.read(v.pos, v.interp, ratio); rr = v.stereoIn ? r1.read(v.pos, v.interp, ratio) : l; }
             else {
                 /* keep-speed (port of EmulonX's grain reader): WSOLA picks each new grain start where the waveform lines up */
-                const int G = v.grain, h = G >> 1; const double step = v.ratio, k = v.k;
+                const int G = v.grain, h = G >> 1; const double step = ratio, k = v.k;
                 auto align = [&](double target, double otherX) {
                     if (!v.wsola || std::abs(step - k) < 1e-9) return target;
                     constexpr int M = 32; float ref[M];
@@ -213,7 +291,7 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
             if (!v.stereoIn) { const float m = std::cos((v.pan + 1) * (float) kPi / 4), m2 = std::sin((v.pan + 1) * (float) kPi / 4); oL = l * m; oR = l * m2; }
             else if (v.pan <= 0) { oL = l + rr * gL; oR = rr * gR; } else { oL = l * gL; oR = rr + l * gR; }
             const float e = g * v.env; dL[i] += oL * e; dR[i] += oR * e;
-            v.pos += v.keepSpeed ? v.k : v.ratio;
+            v.pos += v.keepSpeed ? v.k : ratio;
             if (a.loop && v.pos >= (double) a.loopE) v.pos -= (double) (a.loopE - a.loopS);
         }
         if (v.on) ++active;

@@ -67,6 +67,42 @@ static void testKeepSpeed() {
     CHECK(ratio > 1.4 && ratio < 1.6, "a fifth up raises the pitch by about 1.5x (%.2f)", ratio);
 }
 
+// mono / legato / glide, pitch-bend range, voice limit and stealing (ported from EmulonX)
+static void testPlay() {
+    std::string err; auto lib = Library::load(std::string(TEST_DATA_DIR) + "/golden.vsamp", err, 44100);
+    if (!lib) { CHECK(false, "golden loads"); return; }
+    // the looped zone (keys 70-79, a 220 Hz sine at root 57) gives a steady tone
+    auto hz = [](Engine& e, double secs) {
+        const int n = (int) (secs * 44100); std::vector<float> L((size_t) n, 0.f), R((size_t) n, 0.f); e.render(L.data(), R.data(), n);
+        int c = 0; for (int i = 1; i < n; ++i) if (L[(size_t) i - 1] < 0 && L[(size_t) i] >= 0) ++c; return c / secs;
+    };
+    const double base = 220 * std::pow(2.0, 15 / 12.0);   // note 72
+    {   lib->play = {}; lib->play.bend = 12; Engine e; e.prepare(44100); e.setLibrary(lib); e.noteOn(72, 110); hz(e, .05);
+        const double f0 = hz(e, .2); e.pitchBend(1.f); hz(e, .02); const double f1 = hz(e, .2); e.pitchBend(0.f); hz(e, .02); const double f2 = hz(e, .2);
+        CHECK(std::fabs(f0 / base - 1) < .03 && std::fabs(f1 / f0 - 2) < .06 && std::fabs(f2 / f0 - .5) < .03, "pitch bend with a 12-semitone range: up an octave and down an octave (%.0f, %.0f, %.0f Hz)", f0, f1, f2); }
+    {   lib->play = {}; lib->play.mono = true; Engine e; e.prepare(44100); e.setLibrary(lib);
+        e.noteOn(72, 110); hz(e, .05); e.noteOn(76, 110); hz(e, .1); const int v = e.activeVoices(); const double f = hz(e, .2);
+        CHECK(v == 1 && std::fabs(f / (base * std::pow(2.0, 4 / 12.0)) - 1) < .03, "mono: a new key replaces the old one (%d voice, %.0f Hz)", v, f);
+        e.noteOff(76); hz(e, .02); const double back = hz(e, .2);
+        CHECK(std::fabs(back / base - 1) < .03, "mono: letting go returns to the key still held (%.0f Hz)", back); }
+    {   lib->play = {}; lib->play.mono = true; lib->play.legato = true; Engine e; e.prepare(44100); e.setLibrary(lib);
+        e.noteOn(72, 110); hz(e, .05); e.noteOn(76, 110); std::vector<float> L(64), R(64); e.render(L.data(), R.data(), 64);
+        CHECK(e.activeVoices() == 1, "legato: the voice changes pitch without restarting (%d voice right after)", e.activeVoices()); }
+    {   lib->play = {}; lib->play.mono = true; lib->play.glideMs = 300; Engine e; e.prepare(44100); e.setLibrary(lib);
+        e.noteOn(72, 110); hz(e, .05); e.noteOn(79, 110); const double early = hz(e, .04); hz(e, .3); const double late = hz(e, .1);
+        CHECK(early < late * .85 && std::fabs(late / (base * std::pow(2.0, 7 / 12.0)) - 1) < .04, "glide slides up to the new note (%.0f Hz at first, %.0f Hz after)", early, late); }
+    {   lib->play = {}; lib->play.maxVoices = 4; Engine e; e.prepare(44100); e.setLibrary(lib);
+        for (int k = 70; k < 78; ++k) e.noteOn(k, 100); hz(e, .1);
+        CHECK(e.activeVoices() == 4, "a voice limit of 4 keeps 4 voices (%d)", e.activeVoices()); }
+    {   lib->play = {}; Engine e; e.prepare(44100); e.setLibrary(lib);
+        for (int k = 70; k < 80; ++k) e.noteOn(k, 100); for (int k = 40; k < 50; ++k) e.noteOn(k, 100); hz(e, .02);
+        const int before = e.activeVoices(); e.reportLoad(.97f); hz(e, .1);
+        CHECK(before == 20 && e.activeVoices() <= 16 && e.voiceLimit() <= 16, "CPU guard: under load the voice limit drops (%d -> %d voices)", before, e.activeVoices());
+        for (int i = 0; i < 400; ++i) e.reportLoad(.2f);
+        CHECK(e.voiceLimit() == Engine::kMaxVoices, "CPU guard recovers when the load drops (%d)", e.voiceLimit()); }
+    lib->play = {};
+}
+
 static void testDemo() {
     std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
     CHECK(lib != nullptr, "demo library loads %s", err.c_str());
@@ -137,7 +173,7 @@ static void testFx() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

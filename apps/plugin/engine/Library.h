@@ -73,6 +73,8 @@ public:
     std::vector<ListDef> lists;           // empty: every group plays
     int defaultList = -1;                 // the list the library was saved with
     Interp projectInterp = Interp::Linear;
+    // how the library plays (project.play): mono / legato / glide, pitch-bend range, voice limit and stealing
+    struct Play { bool mono = false, legato = false, quietest = false; float glideMs = 0, bend = 2; int maxVoices = 0; } play;
     std::vector<std::string> features;    // what the file says it uses
     // for drawing the library's own interface in the plugin window
     struct Blob { std::string mime, name; int w = 0, h = 0; std::string data; };

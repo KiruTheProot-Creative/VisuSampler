@@ -1852,11 +1852,14 @@ Object.assign(FXT,{
 FXT.filter.label='Filter';FXT.filter.hint='Multi-mode filter: low-pass, high-pass, band-pass, notch or peak, 12 or 24 dB.';
 FXT.filter.params=[OPT('type','Type',['Low-pass','High-pass','Band-pass','Notch','Peak'],0),FP('cutoff','Cutoff',20,20000,'Hz',8000),FP('res','Resonance',0,100,'%',20),
   OPT('slope','Slope',['12 dB','24 dB'],0,{stat:1}),FP('gain','Peak gain',-18,18,'dB',6),FP('mix','Mix',0,100,'%',100)];
-FXT.dist.params=[OPT('type','Type',['Tube','Tape','Hard clip','Foldback','Fuzz'],0,{stat:1}),FP('drive','Drive',0,100,'%',30),FP('tone','Tone',0,100,'%',50),FP('level','Level',-24,12,'dB',0),FP('mix','Mix',0,100,'%',100)];
-FXT.delay.params.splice(3,0,OPT('pp','Ping-pong',['Off','On'],0,{stat:1}));
-FXT.reverb.params=[OPT('type','Type',['Room','Hall','Plate'],1,{ir:1}),FP('size','Size',0,100,'%',60,{ir:1}),FP('decay','Decay',0.1,12,'s',2.4,{ir:1}),FP('damp','Damping',0,100,'%',40,{ir:1}),FP('pre','Pre-delay',0,200,'ms',10),FP('mix','Mix',0,100,'%',30)];
-FXT.comp.params=[FP('thresh','Threshold',-60,0,'dB',-18),FP('ratio','Ratio',1,20,':1',3),FP('attack','Attack',0.1,100,'ms',10),FP('release','Release',10,1000,'ms',150),FP('makeup','Makeup',0,24,'dB',0),FP('mix','Mix',0,100,'%',100)];
-FXT.comp.ins=['in'];FXT.comp.hint='Evens out level.';
+FXT.dist.params=[OPT('type','Type',['Tube','Tape','Hard clip','Foldback','Fuzz','Soft clip','Bitcrush','Rectify','Sine shaper','Diode'],0,{stat:1}),FP('drive','Drive',0,100,'%',30),FP('tone','Tone',0,100,'%',50),FP('level','Level',-24,12,'dB',0),FP('mix','Mix',0,100,'%',100)];
+FXT.delay.params.splice(3,0,OPT('pp','Mode',['Stereo','Ping-pong','Tape','Diffuse'],0,{stat:1}));
+FXT.delay.hint='Echo. Modes: stereo, ping-pong, tape (wobbly, warm repeats) and diffuse (repeats smear into a wash). Time can sync to the project tempo.';
+FXT.reverb.hint='Room, hall, plate, ambience, cathedral, spring and shimmer tails.';
+FXT.reverb.params=[OPT('type','Type',['Room','Hall','Plate','Ambience','Cathedral','Spring','Shimmer'],1,{ir:1}),FP('size','Size',0,100,'%',60,{ir:1}),FP('decay','Decay',0.1,12,'s',2.4,{ir:1}),FP('damp','Damping',0,100,'%',40,{ir:1}),FP('pre','Pre-delay',0,200,'ms',10),FP('mix','Mix',0,100,'%',30)];
+FXT.comp.params=[OPT('mode','Mode',['Compressor','Limiter','OTT'],0),FP('thresh','Threshold',-60,0,'dB',-18),FP('ratio','Ratio',1,20,':1',3),FP('attack','Attack',0.1,100,'ms',10),FP('release','Release',10,1000,'ms',150),FP('makeup','Makeup',0,24,'dB',0),FP('mix','Mix',0,100,'%',100)];
+FXT.comp.ins=['in'];FXT.comp.hint='Evens out level. Limiter mode catches peaks at the threshold. OTT squashes three bands up and down at once (ratio = depth, attack = speed).';
+FXT.chorus.params.unshift(OPT('mode','Mode',['Chorus','Flanger','Ensemble'],0));FXT.chorus.hint='Thickens the sound. Modes: chorus, flanger (jet sweep) and ensemble (lush string-machine chorus).';
 FXT.limiter.params=[FP('ceiling','Ceiling',-12,0,'dB',-0.3),FP('release','Release',10,500,'ms',60),FP('mix','Mix',0,100,'%',100)];
 FXT.lfo.params=[FP('rate','Rate',0.02,20,'Hz',1,{sync:1}),OPT('shape','Shape',['Sine','Triangle','Saw','Square','Random steps'],0),FP('depth','Depth',0,100,'%',100),OPT('retrig','Restart on note',['Off','On'],0)];
 FXT.env.hint='Envelope follower: turns how loud its audio input is into a control signal.';
@@ -2273,7 +2276,12 @@ function shaperCurve(type,drive){
     else if(type===1) y=Math.atan(k*x)/Math.atan(k);                              /* tape: smooth */
     else if(type===2) y=clamp(x*k,-1,1);                                          /* hard clip */
     else if(type===3){let z=x*(1+drive*6);while(Math.abs(z)>1)z=z>0?2-z:-2-z;y=z;} /* foldback */
-    else y=Math.sign(x)*(1-Math.exp(-Math.abs(x)*k*2))*(x<0?.85:1);               /* fuzz: hard and gated-ish */
+    else if(type===4) y=Math.sign(x)*(1-Math.exp(-Math.abs(x)*k*2))*(x<0?.85:1);  /* fuzz: hard and gated-ish */
+    else if(type===5){const z=clamp(x*k*.5,-1.5,1.5);y=z-z*z*z/6.75;}            /* soft clip */
+    else if(type===6){const q=Math.max(2,32-drive*30);y=clamp(Math.round(x*k*.3*q)/q,-1,1);} /* bitcrush */
+    else if(type===7){const z=Math.tanh(x*k*.5);y=.75*Math.abs(z)+.25*z;}        /* rectify */
+    else if(type===8) y=Math.sin(x*(1+drive*8)*Math.PI/2);                        /* sine shaper */
+    else y=x>=0?Math.tanh(x*k):Math.tanh(x*k*.25)*.6;                             /* diode */
     c[i]=y;
   }
   /* level compensation: drive adds grit, not a big volume jump */
@@ -2327,7 +2335,7 @@ const FXI={
     inp.connect(mono);chain(mono,dl,lp,fr,dr);chain(dr,lr,fbG,dl);lp.connect(mg,0,0);lr.connect(mg,0,1);
     return{in:{in:inp},wet:mg,set(k,v){if(k==='time'){setP(dl.delayTime,v/1000);setP(dr.delayTime,v/1000);}if(k==='fb'){setP(fbG.gain,Math.min(.95,v/100));setP(fr.gain,Math.min(.95,v/100));}if(k==='tone'){setP(lp.frequency,logF(v,600,18000));setP(lr.frequency,logF(v,600,18000));}}};
   },
-  reverb(c,n){return verbNode(c,n,['room','hall','plate'][Math.round(n.p.type)]||'hall');},
+  reverb(c,n){return verbNode(c,n,['room','hall','plate','room','hall','hall','hall'][Math.round(n.p.type)]||'hall');},
   digiverb(c,n){return verbNode(c,n,'digital');},
   gatedverb(c,n){return verbNode(c,n,'gated');},
   spring(c,n){return verbNode(c,n,'spring');},
@@ -4154,6 +4162,51 @@ $('#snInsList').addEventListener('change',e=>{
   else if(k==='follow'){S.map.follow=t.checked;}
   soundRefresh(true);
 });
+
+/* ---------- how the library plays: mono / legato / glide, pitch-bend range, voice limit (the engine reads project.play) ---------- */
+const PLAY_DEF={mono:false,legato:false,glide:0,bend:2,maxVoices:0,steal:'oldest'};
+S.play=Object.assign({},PLAY_DEF);
+const playOf=()=>Object.assign({},PLAY_DEF,S.play||{});
+(function(){
+  const d=document.createElement('div');d.id='snInsPlay';d.hidden=true;$('#snInsList').after(d);
+  /* saved with the project and the library */
+  const snap0=snapshot;snapshot=function(){const s=snap0();s.play=playOf();return s;};
+  const rest0=restore;restore=function(sn){rest0(sn);S.play=Object.assign({},PLAY_DEF,sn&&sn.play||{});};
+  const reset0=resetMapper;resetMapper=function(){reset0.apply(this,arguments);S.play=Object.assign({},PLAY_DEF);};
+  /* the engine reloads when these change */
+  const sig0=engineSig;engineSig=function(){return sig0()+'|'+JSON.stringify(playOf());};
+})();
+function playSummary(){const p=playOf();return (p.mono?(p.legato?'Mono, legato':'Mono'):'Poly')+(p.mono&&p.glide>0?' · glide '+p.glide+' ms':'')+' · bend ±'+p.bend;}
+/* a row at the top of the Sound tab's left column */
+const mapLeftHTMLPlay=mapLeftHTML;
+mapLeftHTML=function(){
+  const f=S.snd.focus;
+  return '<div class="snh"><span>Playing</span></div><div class="snlist"><button type="button" class="snrow'+(f==='play'?' cur on':'')+'" data-sn="play"><span class="nm">'+esc(playSummary())+'</span></button></div>'+mapLeftHTMLPlay();
+};
+$('#leftM').addEventListener('click',e=>{if(S.view==='sound'&&e.target.closest('[data-sn="play"]'))snFocus('play');});
+function snPlayHTML(){
+  const p=playOf(),ck=(k,l,dis)=>'<label class="f chk"><input type="checkbox" data-pl="'+k+'"'+(p[k]?' checked':'')+(dis?' disabled':'')+'><span>'+l+'</span></label>';
+  return '<div class="snhead"><b>Playing</b><small>whole library</small></div><div class="snins">'
+    +ck('mono','Mono (one note at a time)')
+    +ck('legato','Legato: a new key slides the held note instead of restarting it',!p.mono)
+    +nf('Glide','data-pl="glide"',p.glide,0,5000,1,'ms')
+    +nf('Pitch-bend range','data-pl="bend"',p.bend,0,48,1,'semitones')
+    +nf('Voice limit','data-pl="maxVoices"',p.maxVoices,0,256,1,'0 = 256')
+    +'<label class="f"><span>When full, steal</span><select data-pl="steal">'+mopt([['oldest','The oldest note'],['quietest','The quietest note']],p.steal)+'</select></label>'
+    +'<p class="hint" style="display:block">Glide works in mono. Released notes are always stolen first. In the player a CPU guard also lowers the limit for a moment when the computer cannot keep up.</p></div>';
+}
+$('#snInsPlay').addEventListener('change',e=>{
+  const t=e.target,k=t.dataset.pl;if(!k)return;
+  const p=playOf();
+  if(t.type==='checkbox')p[k]=t.checked;else if(t.type==='number'){const v=parseFloat(t.value);p[k]=isFinite(v)?Math.max(+t.min||0,Math.min(+t.max||1e9,v)):PLAY_DEF[k];}else p[k]=t.value;
+  if(!p.mono)p.legato=false;
+  S.play=p;mapLeftRender();$('#snInsPlay').innerHTML=snPlayHTML();
+});
+const snShowPlay=snShow;
+snShow=function(keepIns){
+  snShowPlay(keepIns);const el=$('#snInsPlay'),on=S.snd.focus==='play';el.hidden=!on;
+  if(on){$('#rightM').hidden=true;if(!keepIns||!el.innerHTML)el.innerHTML=snPlayHTML();}
+};
 
 /* ---------- library info + two-layer banner ---------- */
 const uuid4=()=>(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16);});

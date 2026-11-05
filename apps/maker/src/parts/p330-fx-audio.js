@@ -62,7 +62,12 @@ function shaperCurve(type,drive){
     else if(type===1) y=Math.atan(k*x)/Math.atan(k);                              /* tape: smooth */
     else if(type===2) y=clamp(x*k,-1,1);                                          /* hard clip */
     else if(type===3){let z=x*(1+drive*6);while(Math.abs(z)>1)z=z>0?2-z:-2-z;y=z;} /* foldback */
-    else y=Math.sign(x)*(1-Math.exp(-Math.abs(x)*k*2))*(x<0?.85:1);               /* fuzz: hard and gated-ish */
+    else if(type===4) y=Math.sign(x)*(1-Math.exp(-Math.abs(x)*k*2))*(x<0?.85:1);  /* fuzz: hard and gated-ish */
+    else if(type===5){const z=clamp(x*k*.5,-1.5,1.5);y=z-z*z*z/6.75;}            /* soft clip */
+    else if(type===6){const q=Math.max(2,32-drive*30);y=clamp(Math.round(x*k*.3*q)/q,-1,1);} /* bitcrush */
+    else if(type===7){const z=Math.tanh(x*k*.5);y=.75*Math.abs(z)+.25*z;}        /* rectify */
+    else if(type===8) y=Math.sin(x*(1+drive*8)*Math.PI/2);                        /* sine shaper */
+    else y=x>=0?Math.tanh(x*k):Math.tanh(x*k*.25)*.6;                             /* diode */
     c[i]=y;
   }
   /* level compensation: drive adds grit, not a big volume jump */
@@ -116,7 +121,7 @@ const FXI={
     inp.connect(mono);chain(mono,dl,lp,fr,dr);chain(dr,lr,fbG,dl);lp.connect(mg,0,0);lr.connect(mg,0,1);
     return{in:{in:inp},wet:mg,set(k,v){if(k==='time'){setP(dl.delayTime,v/1000);setP(dr.delayTime,v/1000);}if(k==='fb'){setP(fbG.gain,Math.min(.95,v/100));setP(fr.gain,Math.min(.95,v/100));}if(k==='tone'){setP(lp.frequency,logF(v,600,18000));setP(lr.frequency,logF(v,600,18000));}}};
   },
-  reverb(c,n){return verbNode(c,n,['room','hall','plate'][Math.round(n.p.type)]||'hall');},
+  reverb(c,n){return verbNode(c,n,['room','hall','plate','room','hall','hall','hall'][Math.round(n.p.type)]||'hall');},
   digiverb(c,n){return verbNode(c,n,'digital');},
   gatedverb(c,n){return verbNode(c,n,'gated');},
   spring(c,n){return verbNode(c,n,'spring');},

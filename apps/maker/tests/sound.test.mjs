@@ -26,6 +26,14 @@ const g0=await p.evaluate(()=>window.__vs.S.groups[0]);
 const before=await p.evaluate(g=>{const S=window.__vs.S,l=S.lists[0];return l.groups.includes(g);},g0);
 await p.click('#snInsList [data-sl=grp] >> nth=0');await p.waitForTimeout(150);
 ok(await p.evaluate(([g,b])=>{const l=window.__vs.S.lists[0];return l.name==='My List'&&l.groups.includes(g)!==b;},[g0,before]),'list name and groups edit');
+/* play settings: mono, glide, bend range */
+await p.click('#leftM [data-sn=play]');await p.waitForTimeout(150);
+ok(await vis('#snInsPlay [data-pl=mono]'),'Playing row shows the play settings');
+await p.check('#snInsPlay [data-pl=mono]');await p.waitForTimeout(100);
+await p.fill('#snInsPlay [data-pl=glide]','120');await p.press('#snInsPlay [data-pl=glide]','Tab');
+await p.fill('#snInsPlay [data-pl=bend]','12');await p.press('#snInsPlay [data-pl=bend]','Tab');await p.waitForTimeout(100);
+ok(await p.evaluate(()=>{const s=window.__vs.snapshot().play;return s.mono===true&&s.glide===120&&s.bend===12;}),'mono, glide and bend range are saved with the project');
+ok((await p.textContent('#leftM [data-sn=play]')).includes('glide 120'),'the row sums up the settings');
 /* layouts and fold */
 await p.click('[data-lay=map]');await p.waitForTimeout(150);ok(!(await vis('#smCanvas'))&&await vis('#mapCanvas'),'Map layout hides the waveform');
 await p.click('[data-lay=wave]');await p.waitForTimeout(150);ok(await vis('#smCanvas')&&!(await vis('#mapCanvas')),'Wave layout hides the map');

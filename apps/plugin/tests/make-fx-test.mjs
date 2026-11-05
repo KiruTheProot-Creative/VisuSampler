@@ -38,6 +38,13 @@ for(const t of FX){
 {const g='g_loop';groups.push(g);const i=node('input'),o=node('output'),d=node('delay',{p:Object.assign({},cat.defs.delay.p,{fb:0,mix:100})}),f=node('filter');
  graphs[g]={nodes:[i,o,d,f],cables:[cable(i,'out',d,'in'),cable(d,'wet',f,'in'),cable(f,'mix',d,'in'),cable(d,'mix',o,'in')]};
  zones.push({id:'z_loop',sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:'feedback'});key++;}
+/* every mode of the multi-mode modules (the EmulonX set) */
+for(const [t,k,count] of [['reverb','type',7],['delay','pp',4],['dist','type',10],['comp','mode',3],['chorus','mode',3]])
+  for(let m=0;m<count;m++){
+    const g='g_'+t+m;groups.push(g);const i=node('input'),o=node('output'),n=node(t);n.p[k]=m;if('mix' in n.p)n.p.mix=100;
+    graphs[g]={nodes:[i,o,n],cables:[cable(i,'out',n,'in'),cable(n,'mix',o,'in')]};
+    zones.push({id:'z_'+t+m,sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:t+':'+k+'='+m});key++;
+  }
 {const mi=node('input'),mo=node('output'),r=node('ret',{p:{bus:1,level:0}});graphs.master={nodes:[mi,mo,r],cables:[cable(mi,'out',mo,'in'),cable(r,'out',mo,'in')]};}
 const full=z=>Object.assign({vlo:1,vhi:127,tune:0,vol:0,pan:0,start:0,end:0,vstart:0,rev:false,keytrack:true,oneshot:false,attack:0,release:50,fadeLo:0,fadeHi:0,vfadeLo:0,vfadeHi:0,curve:'power',seq:1,loop:{on:false,s:0,e:0,xf:0,xcurve:'power',pp:false}},z);
 const pack=new Pack(),smeta=[];

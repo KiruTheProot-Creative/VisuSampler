@@ -155,6 +155,7 @@ bool VisuProcessor::isBusesLayoutSupported(const BusesLayout& l) const
 void VisuProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+    const double t0 = juce::Time::getMillisecondCounterHiRes();
     const int n = buffer.getNumSamples();
     buffer.clear();
     engine_.setMasterGain(volume_->get());
@@ -178,6 +179,8 @@ void VisuProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuf
     }
     if (pos < n) engine_.render(L + pos, R + pos, n - pos);
     midi.clear();
+    // CPU guard: tell the engine how much of the block's time this took, so it can drop voices before the audio breaks up
+    if (n > 0 && getSampleRate() > 0) engine_.reportLoad((float) ((juce::Time::getMillisecondCounterHiRes() - t0) / (1000.0 * n / getSampleRate())));
 }
 
 juce::AudioProcessorEditor* VisuProcessor::createEditor() { return new VisuEditor(*this); }

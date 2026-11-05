@@ -116,6 +116,9 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
     auto L = std::make_shared<Library>();
     fillInfo(m["lib"], L->info);
     L->bpm = m["project"]["bpm"].num(120);
+    { const Json& pl = m["project"]["play"]; L->play.mono = pl["mono"].boolean(false); L->play.legato = pl["legato"].boolean(false);
+      L->play.glideMs = (float) std::max(0.0, pl["glide"].num(0)); L->play.bend = (float) std::min(48.0, std::max(0.0, pl["bend"].num(2)));
+      L->play.maxVoices = (int) std::max(0.0, pl["maxVoices"].num(0)); L->play.quietest = pl["steal"].str("oldest") == "quietest"; }
     { bool known; L->projectInterp = parseInterp(m["project"]["interp"].str("linear"), known); }
     L->manifestText = f.manifestText();
     auto blobs = [&](const Json& obj, std::vector<std::pair<std::string, Blob>>& out) {

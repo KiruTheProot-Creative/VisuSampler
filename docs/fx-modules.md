@@ -74,6 +74,7 @@ LFO (more shapes, sync, retrigger per note, step mode = step sequencer), Envelop
 
 ## Status
 All modules marked here run in both places: VisuMaker (Web Audio preview) and the VisuPlayer engine (C++, `apps/plugin/engine/Fx.cpp`): routing, time, modulation, tone, dynamics, retro and pedal modules, the LFO, envelope, random, MIDI-source, macro and follower modulators, knobs (tags) linked to parameters, sends and returns, feedback loops. Not built yet: Varispeed, Tape Keys, Gate, De-esser, Octaver, Pitch Whammy, Reverse Delay, Freeze/Looper.
+Multi-mode modules (ported from EmulonX): Reverb (Room, Hall, Plate, Ambience, Cathedral, Spring, Shimmer), Delay (Stereo, Ping-pong, Tape, Diffuse), Distortion (Tube, Tape, Hard clip, Foldback, Fuzz, Soft clip, Bitcrush, Rectify, Sine shaper, Diode), Compressor (Compressor, Limiter, OTT), Chorus (Chorus, Flanger, Ensemble).
 The reverbs in the engine are algorithmic, so they sound a little different from the Maker's preview until the Maker plays through the engine too.
 
 ## First release (about 15)

@@ -80,7 +80,13 @@ struct Shaper {
             else if (ty == 1) y = std::atan(k * x) / std::atan(k);
             else if (ty == 2) y = clampf(x * k, -1, 1);
             else if (ty == 3) { float z = x * (1 + d * 6); while (std::fabs(z) > 1) z = z > 0 ? 2 - z : -2 - z; y = z; }
-            else y = (x < 0 ? -1.f : 1.f) * (1 - std::exp(-std::fabs(x) * k * 2)) * (x < 0 ? .85f : 1.f);
+            else if (ty == 4) y = (x < 0 ? -1.f : 1.f) * (1 - std::exp(-std::fabs(x) * k * 2)) * (x < 0 ? .85f : 1.f);
+            // the rest come from EmulonX's distortion types
+            else if (ty == 5) { const float z = clampf(x * k * .5f, -1.5f, 1.5f); y = z - z * z * z / 6.75f; }            // soft clip (cubic)
+            else if (ty == 6) { const float q = std::max(2.f, 32 - d * 30); y = std::round(x * k * .3f * q) / q; y = clampf(y, -1, 1); }   // bitcrush
+            else if (ty == 7) { const float z = std::tanh(x * k * .5f); y = .75f * std::fabs(z) + .25f * z; }     // rectify (keeps a little of the original; silent stays silent)
+            else if (ty == 8) y = std::sin(x * (1 + d * 8) * (float) kPi / 2);                                     // sine shaper
+            else y = x >= 0 ? std::tanh(x * k) : std::tanh(x * k * .25f) * .6f;                                 // diode: one side clips hard
             t[i] = y;
         }
         const int m = n >> 1; const float slope = std::fabs((t[m + 1] - t[m - 1]) / (4.f / (n - 1))), comp = 1 / std::sqrt(std::max(1.f, slope));
@@ -135,15 +141,29 @@ struct Node {
 #define BIND(nd, k) k##_ = nd.idx(#k)
 
 /* ---------- time ---------- */
-struct DelayM : Module {
+struct DelayM : Module {   // modes: stereo, ping-pong, tape (wobble + saturation), diffuse (smeared repeats) - from EmulonX
     DelayLine dl, dr; Biquad lp; int time_, fb_, tone_, pp_; float t = -1;
+    Lfo w1, w2; Shaper sat; DelayLine ap[2][4]; static constexpr int AP[4] = { 142, 107, 379, 277 };
     explicit DelayM(Node& nd) { time_ = nd.idx("time"); fb_ = nd.idx("fb"); tone_ = nd.idx("tone"); pp_ = nd.idx("pp"); }
-    void prepare(double sr) override { Module::prepare(sr); dl.init((int) (sr * 5.1)); dr.init((int) (sr * 5.1)); }
+    void prepare(double sr) override { Module::prepare(sr); dl.init((int) (sr * 5.1)); dr.init((int) (sr * 5.1)); for (auto& c : ap) for (int k = 0; k < 4; ++k) c[k].init((int) (AP[k] * sr / 44100) + 8); sat.set(1, .25f); }
+    inline float diffuse(int c, float x) { for (int k = 0; k < 4; ++k) { const float d = (float) (AP[k] * sr_ / 44100) * (c ? 1.07f : 1.f); const float b = ap[c][k].read(d); const float w = x + b * .6f; ap[c][k].push(w); x = b - w * .6f; } return x; }
     void run(Node& nd, int n, Control&) override {
         const float target = clampf(nd.P(time_, 350) / 1000.f * (float) sr_, 1, (float) sr_ * 5);
         if (t < 0) t = target;
-        const float fb = std::min(.95f, nd.P(fb_, 35) / 100.f); lp.set(Biquad::LP, logF(nd.P(tone_, 60), 600, 18000), .5f, 0, sr_);
-        const bool pp = nd.P(pp_, 0) > .5f; Stereo& x = nd.ins[0];
+        const int mode = (int) std::lround(nd.P(pp_, 0));
+        const float fb = std::min(.95f, nd.P(fb_, 35) / 100.f); lp.set(Biquad::LP, logF(nd.P(tone_, 60), 600, 18000) * (mode == 2 ? .55f : 1.f), .5f, 0, sr_);
+        const bool pp = mode == 1; Stereo& x = nd.ins[0];
+        if (mode >= 2) {
+            for (int i = 0; i < n; ++i) {
+                t += (target - t) * .0015f;
+                float tt = t;
+                if (mode == 2) tt = std::max(1.f, t + (float) ((.0025 * w1.sine(.6, sr_) + .0003 * w2.sine(6.1, sr_)) * sr_));
+                float yl = lp.run(0, dl.read(tt)), yr = lp.run(1, dr.read(tt * (mode == 3 ? 1.013f : 1.f)));
+                if (mode == 2) { yl = sat.run(yl); yr = sat.run(yr); } else { yl = diffuse(0, yl); yr = diffuse(1, yr); }
+                dl.push(x.l[i] + yl * fb); dr.push(x.r[i] + yr * fb); nd.wet.l[i] = yl; nd.wet.r[i] = yr;
+            }
+            return;
+        }
         for (int i = 0; i < n; ++i) {
             t += (target - t) * .0015f;
             if (!pp) {
@@ -164,7 +184,7 @@ struct Verb {
     float scale = 1, damp = .4f, decay = 2;
     void prepare(double s) {
         sr = s; const int C[NC] = { 1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617 }, A[NA] = { 556, 441, 341, 225 };
-        for (int c = 0; c < 2; ++c) { for (int i = 0; i < NC; ++i) comb[c][i].init((int) ((C[i] + 23) * s / 44100 * 1.6)); for (int i = 0; i < NA; ++i) ap[c][i].init((int) ((A[i] + 23) * s / 44100) + 4); }
+        for (int c = 0; c < 2; ++c) { for (int i = 0; i < NC; ++i) comb[c][i].init((int) ((C[i] + 23) * s / 44100 * 2.6)); for (int i = 0; i < NA; ++i) ap[c][i].init((int) ((A[i] + 23) * s / 44100) + 4); }
         for (int i = 0; i < NC; ++i) cl[i] = C[i]; for (int i = 0; i < NA; ++i) al[i] = A[i];
     }
     inline void run(float inL, float inR, float& outL, float& outR) {
@@ -197,12 +217,15 @@ struct ReverbM : Module {
     }
     void run(Node& nd, int n, Control&) override {
         std::string f = flav;
-        if (f == "hall") { const int t = (int) std::lround(nd.P(type_, 1)); f = t == 0 ? "room" : t == 2 ? "plate" : "hall"; }
+        if (f == "hall") {   // Room, Hall, Plate, Ambience, Cathedral, Spring, Shimmer (the EmulonX set)
+            static const char* T[7] = { "room", "hall", "plate", "ambience", "cathedral", "spring", "shimmer" };
+            f = T[std::min(6, std::max(0, (int) std::lround(nd.P(type_, 1))))];
+        }
         const float size = nd.P(size_, 60) / 100.f;
-        v.scale = (f == "room" ? .55f : f == "plate" ? .8f : 1.f) * (.6f + size * .8f);
-        v.decay = std::max(.1f, f == "gated" ? 2.5f : nd.P(decay_, f == "spring" ? 2.2f : 2.4f));
-        v.damp = f == "plate" || f == "digital" ? .1f + nd.P(damp_, 30) / 400.f : .05f + nd.P(damp_, 40) / 100.f * .8f;
-        const float preD = std::max(1.f, nd.P(pre_, 0) / 1000.f * (float) sr_);
+        v.scale = (f == "room" ? .55f : f == "plate" ? .8f : f == "ambience" ? .35f : f == "cathedral" ? 1.5f : 1.f) * (.6f + size * .8f);
+        v.decay = std::max(.1f, f == "gated" ? 2.5f : f == "ambience" ? std::min(1.2f, nd.P(decay_, 2.4f) * .4f) : f == "cathedral" ? nd.P(decay_, 2.4f) * 1.8f : nd.P(decay_, f == "spring" ? 2.2f : 2.4f));
+        v.damp = f == "plate" || f == "digital" ? .1f + nd.P(damp_, 30) / 400.f : f == "cathedral" ? .03f + nd.P(damp_, 40) / 100.f * .5f : .05f + nd.P(damp_, 40) / 100.f * .8f;
+        const float preD = std::max(1.f, (nd.P(pre_, 0) + (f == "cathedral" ? 25.f : 0.f)) / 1000.f * (float) sr_);
         Stereo& x = nd.ins[0];
         if (f == "spring") {
             const float drip = nd.P(drip_, 50) / 100.f, g = .55f + drip * .35f; springLp.set(Biquad::LP, 4500, 0, 0, sr_);
@@ -240,6 +263,7 @@ struct ReverbM : Module {
                     shFb[c] = shHp.run(c, up) * shine * .35f;
                 }
             }
+            if (f == "ambience") { l = l * .7f + il * .25f; r = r * .7f + ir * .25f; }   // mostly early energy, little tail
             nd.wet.l[i] = l; nd.wet.r[i] = r;
         }
     }
@@ -325,6 +349,13 @@ struct ModDelayM : Module {   // chorus, flanger, vibrato, BBD
     }
 };
 
+struct ChorusM : Module {   // chorus with modes: chorus, flanger, ensemble (from EmulonX)
+    ModDelayM ch, fl; std::unique_ptr<Module> ens; int mode_;
+    ChorusM(Node& nd, std::unique_ptr<Module> e) : ch(nd, .014f, .007f, 0.f, true, false, false), fl(nd, .0035f, .003f, .5f, true, false, false), ens(std::move(e)) { mode_ = nd.idx("mode"); }
+    void prepare(double sr) override { Module::prepare(sr); ch.prepare(sr); fl.prepare(sr); ens->prepare(sr); }
+    void run(Node& nd, int n, Control& c) override { const int m = (int) std::lround(nd.P(mode_, 0)); if (m == 1) fl.run(nd, n, c); else if (m == 2) ens->run(nd, n, c); else ch.run(nd, n, c); }
+};
+
 struct PhaserM : Module {
     Biquad ap[6]; Lfo lfo; float fbS[2] = {}; int rate_, depth_, fb_;
     explicit PhaserM(Node& nd) { rate_ = nd.idx("rate"); depth_ = nd.idx("depth"); fb_ = nd.idx("fb"); }
@@ -405,14 +436,17 @@ struct EqM : Module {
 };
 
 struct DistM : Module {   // distortion, overdrive pedal, fuzz pedal
-    Shaper sh; Biquad tone, hump; int type_, drive_, tone_, level_; int fixedType; bool odHump;
+    Shaper sh; Biquad tone, hump; int type_, drive_, tone_, level_; int fixedType; bool odHump; float dcx[2] = {}, dcy[2] = {};
     DistM(Node& nd, int ft, const char* driveKey, bool hump_) : fixedType(ft), odHump(hump_) { type_ = nd.idx("type"); drive_ = nd.idx(driveKey); tone_ = nd.idx("tone"); level_ = nd.idx("level"); }
     void run(Node& nd, int n, Control&) override {
         const int t = fixedType >= 0 ? fixedType : (int) std::lround(nd.P(type_, 0)); sh.set(t, nd.P(drive_, 30) / 100.f);
         tone.set(Biquad::LP, logF(nd.P(tone_, 50), 800, 16000), .6f, 0, sr_); if (odHump) hump.set(Biquad::Peak, 720, 1.2f, 7, sr_);
         const float lv = dbg(nd.P(level_, 0)); Stereo& x = nd.ins[0];
         for (int i = 0; i < n; ++i) { float l = x.l[i], r = x.r[i]; if (odHump) { l = hump.run(0, l); r = hump.run(1, r); }
-            nd.wet.l[i] = tone.run(0, sh.run(l)) * lv; nd.wet.r[i] = tone.run(1, sh.run(r)) * lv; }
+            l = tone.run(0, sh.run(l)); r = tone.run(1, sh.run(r));
+            // DC blocker: rectify and diode shift the signal off centre
+            const float yl = l - dcx[0] + .9995f * dcy[0], yr = r - dcx[1] + .9995f * dcy[1]; dcx[0] = l; dcx[1] = r; dcy[0] = yl; dcy[1] = yr;
+            nd.wet.l[i] = yl * lv; nd.wet.r[i] = yr * lv; }
     }
 };
 
@@ -489,17 +523,49 @@ struct VibeM : Module {
 };
 
 /* ---------- dynamics ---------- */
-struct CompM : Module {   // feed-forward compressor; limiter and comp pedal are presets of it
-    float env = 0; int kind; int thresh_, ratio_, attack_, release_, makeup_, ceiling_, sustain_, level_;
-    CompM(Node& nd, int k) : kind(k) { thresh_ = nd.idx("thresh"); ratio_ = nd.idx("ratio"); attack_ = nd.idx("attack"); release_ = nd.idx("release"); makeup_ = nd.idx("makeup");
+struct CompM : Module {   // feed-forward compressor; limiter and comp pedal are presets of it. Mode: compressor, limiter, OTT (from EmulonX)
+    float env = 0; int kind; int thresh_, ratio_, attack_, release_, makeup_, ceiling_, sustain_, level_, mode_;
+    double be[3] = {}, sv[2][4][2] = {};
+    struct Svf { double a1 = 0, a2 = 0, a3 = 0; };
+    static Svf svc(double f, double k, double sr) { const double g = std::tan(kPi * std::min(f, sr * .45) / sr), a1 = 1 / (1 + g * (g + k)); return { a1, g * a1, g * g * a1 }; }
+    void ott(Node& nd, int n) {
+        // three bands, each pushed down above and pulled up below its target. Threshold moves the targets, ratio is the depth.
+        const double t = clampf(nd.P(attack_, 10) / 100.f, 0, 1), amt = clampf((nd.P(ratio_, 3) - 1) / 19.f * 1.5f, 0, 1), off = nd.P(thresh_, -18) + 18, K = std::sqrt(2.0), og = dbg(nd.P(makeup_, 0));
+        const Svf c1 = svc(88.3, K, sr_), c2 = svc(2500.0, K, sr_);
+        const double ac = std::exp(-1.0 / ((1 + 20 * t) * .001 * sr_)), rc = std::exp(-1.0 / ((20 + 400 * t) * .001 * sr_));
+        static const double TD[3] = { -17, -16, -18 }, TU[3] = { -33, -34, -33 };
+        auto lp = [](double* S, double x, const Svf& c) { const double v3 = x - S[1], v1 = c.a1 * S[0] + c.a2 * v3, v2 = S[1] + c.a2 * S[0] + c.a3 * v3; S[0] = 2 * v1 - S[0]; S[1] = 2 * v2 - S[1]; return v2; };
+        auto hp = [K](double* S, double x, const Svf& c) { const double v3 = x - S[1], v1 = c.a1 * S[0] + c.a2 * v3, v2 = S[1] + c.a2 * S[0] + c.a3 * v3; S[0] = 2 * v1 - S[0]; S[1] = 2 * v2 - S[1]; return x - K * v1 - v2; };
+        Stereo& x = nd.ins[0];
+        for (int i = 0; i < n; ++i) {
+            double B[2][3];
+            for (int ch = 0; ch < 2; ++ch) { auto& S = sv[ch]; const double xi = (ch ? x.r : x.l)[i];
+                const double lo = lp(S[1], lp(S[0], xi, c1), c1), rest = xi - lo, hi = hp(S[3], hp(S[2], rest, c2), c2); B[ch][0] = lo; B[ch][1] = rest - hi; B[ch][2] = hi; }
+            double wl = 0, wr = 0;
+            for (int k = 0; k < 3; ++k) {
+                const double lv = std::max(std::fabs(B[0][k]), std::fabs(B[1][k]));
+                be[k] = lv > be[k] ? ac * be[k] + (1 - ac) * lv : rc * be[k] + (1 - rc) * lv;
+                const double db = 20 * std::log10(be[k] + 1e-9); double r = 0;
+                if (db > TD[k] + off) r -= (db - TD[k] - off) * (1 - 1 / 66.0) * amt;
+                if (db < TU[k] + off) r += std::min(18.0, (TU[k] + off - db) * .76) * amt * clampf((float) ((db + 75) / 15), 0, 1);
+                const double g = std::pow(10.0, r / 20); wl += B[0][k] * g; wr += B[1][k] * g;
+            }
+            const double sl = wl * og * 2, sr2 = wr * og * 2;
+            nd.wet.l[i] = std::isfinite(sl) ? (float) sl : 0.f; nd.wet.r[i] = std::isfinite(sr2) ? (float) sr2 : 0.f;
+        }
+    }
+    CompM(Node& nd, int k) : kind(k) { mode_ = nd.idx("mode"); thresh_ = nd.idx("thresh"); ratio_ = nd.idx("ratio"); attack_ = nd.idx("attack"); release_ = nd.idx("release"); makeup_ = nd.idx("makeup");
         ceiling_ = nd.idx("ceiling"); sustain_ = nd.idx("sustain"); level_ = nd.idx("level"); }
     void run(Node& nd, int n, Control&) override {
         float th, ratio, att, rel, knee, mk;
-        if (kind == 0) { th = nd.P(thresh_, -18); ratio = nd.P(ratio_, 3); att = nd.P(attack_, 10) / 1000; rel = nd.P(release_, 150) / 1000; knee = 30; mk = dbg(nd.P(makeup_, 0)); }
+        const int mode = kind == 0 ? (int) std::lround(nd.P(mode_, 0)) : 0;
+        if (mode == 2) { ott(nd, n); return; }
+        if (mode == 1) { th = nd.P(thresh_, -18) - 1; ratio = 20; att = .001f; rel = nd.P(release_, 60) / 1000; knee = 0; mk = dbg(nd.P(makeup_, 0)); }
+        else if (kind == 0) { th = nd.P(thresh_, -18); ratio = nd.P(ratio_, 3); att = nd.P(attack_, 10) / 1000; rel = nd.P(release_, 150) / 1000; knee = 30; mk = dbg(nd.P(makeup_, 0)); }
         else if (kind == 1) { th = nd.P(ceiling_, -.3f) - 1; ratio = 20; att = .001f; rel = nd.P(release_, 60) / 1000; knee = 0; mk = 1; }
         else { const float s = nd.P(sustain_, 60); th = -10 - s * .4f; ratio = 2 + s / 10; att = .003f; rel = .25f; knee = 6; mk = dbg(nd.P(level_, 0)) * (1 + s / 120); }
         auto curve = [&](float db) { if (db < th - knee / 2) return db; if (knee > 0 && db < th + knee / 2) { const float x = db - th + knee / 2; return db + (1 / ratio - 1) * x * x / (2 * knee); } return th + (db - th) / ratio; };
-        const float auto_ = kind == 0 ? std::pow(1 / dbg(curve(0)), .6f) : 1;
+        const float auto_ = kind == 0 && mode == 0 ? std::pow(1 / dbg(curve(0)), .6f) : 1;
         const float ka = 1 - std::exp(-1 / (std::max(1e-4f, att) * (float) sr_)), kr = 1 - std::exp(-1 / (std::max(1e-3f, rel) * (float) sr_));
         Stereo& x = nd.ins[0];
         for (int i = 0; i < n; ++i) {
@@ -651,7 +717,7 @@ static std::unique_ptr<Module> makeModule(Node& nd, const Library& lib) {
     if (t == "spring") return std::make_unique<ReverbM>(nd, "spring");
     if (t == "shimmer") return std::make_unique<ReverbM>(nd, "shimmer");
     if (t == "conv") { auto m = std::make_unique<ConvM>(nd, lib); const int li = nd.idx("len"); if (li >= 0) m->lenFromFile = nd.params[(size_t) li].raw; return m; }
-    if (t == "chorus") return std::make_unique<ModDelayM>(nd, .014f, .007f, 0.f, true, false, false);
+    if (t == "chorus") return std::make_unique<ChorusM>(nd, std::make_unique<EnsembleM>(nd));
     if (t == "flanger") return std::make_unique<ModDelayM>(nd, .0035f, .003f, .5f, true, false, false);
     if (t == "vibrato") return std::make_unique<ModDelayM>(nd, .006f, .005f, 0.f, false, false, false);
     if (t == "bbd") return std::make_unique<ModDelayM>(nd, .009f, .004f, 0.f, true, true, true);
