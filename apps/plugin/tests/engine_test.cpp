@@ -159,6 +159,32 @@ static void testGroupEnv() {
     lib->setTag("wtpos", 0.f);
 }
 
+// knobs on a group's volume, pan and tuning
+static void testGroupLinks() {
+    std::string err; auto lib = Library::load(std::string(TEST_DATA_DIR) + "/golden.vsamp", err, 44100);
+    if (!lib) { CHECK(false, "golden loads"); return; }
+    auto play = [&](float tagv, double& rmsL, double& rmsR, double& hz) {
+        lib->setTag("wtpos", tagv);
+        auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(44100); e.setMasterGain(1); e.setLibrary(lib); e.noteOn(72, 127);
+        const int n = 8820; std::vector<float> L(n, 0.f), R(n, 0.f); for (int o = 0; o < n; o += 441) e.render(L.data() + o, R.data() + o, 441);
+        double sl = 0, sr = 0; int c = 0; for (int i = 4410; i < n; ++i) { sl += L[i] * L[i]; sr += R[i] * R[i]; if (L[i - 1] < 0 && L[i] >= 0) ++c; }
+        rmsL = std::sqrt(sl / 4410); rmsR = std::sqrt(sr / 4410); hz = c / .1;
+    };
+    double l0, r0, h0, l1, r1, h1, lh, rh, hh;
+    play(0, l0, r0, h0);   // reference: nothing linked
+    for (auto& g : lib->groups) { g.lVol.tag = 0; g.lVol.from = 0; g.lVol.to = -60; }
+    play(0, l1, r1, h1); play(.5f, lh, rh, hh); double ls, rs, hs; play(1, ls, rs, hs);
+    CHECK(std::fabs(l1 / l0 - 1) < .02 && std::fabs(lh / l0 - .707) < .03 && ls < l0 * .01, "a knob fades a group out with equal power (%.2f, %.2f, %.3f)", l1 / l0, lh / l0, ls / l0);
+    for (auto& g : lib->groups) { g.lVol.tag = -1; g.lPan.tag = 0; g.lPan.from = -100; g.lPan.to = 100; }
+    play(0, l1, r1, h1); play(1, ls, rs, hs);
+    CHECK(r1 < l1 * .05 && ls < rs * .05, "a knob pans a group from left to right (%.3f, %.3f)", r1 / l1, ls / rs);
+    for (auto& g : lib->groups) { g.lPan.tag = -1; g.lTune.tag = 0; g.lTune.from = -12; g.lTune.to = 12; }
+    play(.5f, l1, r1, h1); play(1, ls, rs, hs);
+    CHECK(std::fabs(h1 / h0 - 1) < .03 && std::fabs(hs / h0 - 2) < .06, "a knob retunes a group in semitones (x%.2f in the middle, x%.2f at the top)", h1 / h0, hs / h0);
+    for (auto& g : lib->groups) { g.lTune.tag = -1; }
+    lib->setTag("wtpos", 0);
+}
+
 static void testDemo() {
     std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
     CHECK(lib != nullptr, "demo library loads %s", err.c_str());
@@ -256,7 +282,7 @@ static void testFx() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

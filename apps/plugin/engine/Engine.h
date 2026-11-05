@@ -44,7 +44,7 @@ private:
         int note = 0, group = -1, choke = 0; unsigned long age = 0; long maxLife = -1;
         // speed-keeping: two overlapping grains read at the pitch while the position moves at the speed (from EmulonX)
         bool stolen = false; float glide = 0, glideStep = 0; int vel = 100;   // glide: semitones still to slide (from EmulonX)
-        bool adsr = false; int stage = 0;   // group envelope: 0 attack, 1 decay, 2 sustain
+        bool adsr = false; int stage = 0; float gmul = -1;   // group envelope: 0 attack, 1 decay, 2 sustain
         int kind = 0;   // 0 sample, 2 granular, 3 wavetable
         struct Grain { double o, p0, rate; };
         static constexpr int kMaxGrains = 64;
@@ -63,7 +63,8 @@ private:
     int limit() const;
     int sounding() const;
     float glideStepFor(float semis) const;
-    void groupEnv(int group, float& a, float& d, float& s, float& r) const;   // live values (knobs included), A/D/R in ms
+    void groupEnv(int group, float& a, float& d, float& s, float& r) const;
+    void groupLive(int group, float& gain, float& pan, float& semis) const;   // knob-driven group volume, pan and tuning   // live values (knobs included), A/D/R in ms
     int stack_[128] = {}; int stackSize_ = 0, monoNote_ = -1, lastNote_ = -1, monoVel_ = 100;
     std::atomic<int> guard_{kMaxVoices};
     Interp interpFor(const Zone& z) const;

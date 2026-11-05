@@ -4536,7 +4536,7 @@ function snGroupHTML(){
     +'<label class="f"><span>Name</span><input type="text" data-sg="name" value="'+esc(g)+'"></label>'
     +'<label class="f"><span>Plays</span><select data-sg="mode">'+mopt(MODES,c.mode)+'</select></label>'
     +nf('Volume','data-sg="vol"',c.vol,-48,24,.5,'dB')+nf('Pan','data-sg="pan"',c.pan,-100,100,1,'L–R')+nf('Tune','data-sg="tune"',c.tune,-2400,2400,1,'cents')
-    +snEnvHTML(c)
+    +snLinksHTML(c)+snEnvHTML(c)
     +'<div class="snmores"><details class="snmore"><summary>More</summary><div>'
     +nf('Choke group','data-sg="choke"',c.choke,0,999,1)+'<p class="hint">Groups with the same choke number cut each other off, like open and closed hi-hats.</p>'
     +nf('Voice limit','data-sg="voices"',c.voices,0,9999,1)+'<p class="hint">0 means unlimited.</p>'
@@ -4553,6 +4553,23 @@ function envSvg(e){
   const pts=[[0,0],[a,1],[a+d,s],[a+d+hold,s],[tot,0]].map(p=>X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)).join(' ');
   return '<svg class="envsvg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Envelope shape"><polyline points="'+pts+'"/></svg>';
 }
+/* ---- knobs on the group: volume, pan, tune and fine tune follow a tag live ---- */
+const GLINKS=[['vol','Volume','dB',0,-60],['pan','Pan','L–R',-100,100],['tune','Semitones','st',-12,12],['fine','Fine tune','cents',-100,100]];
+function snLinksHTML(c){
+  const L=c.links||{},knobs=[['','no knob']].concat(S.tags.filter(t=>!t.sys&&t.kind==='number').map(t=>[t.id,t.name]));
+  return '<details class="snlinks"'+(Object.keys(L).length?' open':'')+'><summary>Knobs on this group</summary>'+GLINKS.map(([k,l,u])=>{
+    const x=L[k];
+    return '<div class="envrow"><span class="lk">'+l+'</span><select data-gl="'+k+'" aria-label="Knob for '+l+'">'+mopt(knobs,x?x.tag:'')+'</select></div>'
+      +(x?'<div class="glrange"><label>from <input type="number" data-glf="'+k+'" value="'+x.from+'" step="1"></label><label>to <input type="number" data-glt="'+k+'" value="'+x.to+'" step="1"></label><em class="sfx">'+u+'</em></div>':'');
+  }).join('')+'<p class="hint">The knob moves the value from one end to the other, live while notes play, and replaces the fixed value above. Volume fades with equal power; −60 dB is silent. For a two-layer mix, give layer A 0 → −60 and layer B −60 → 0 on the same knob.</p></details>';
+}
+$('#snInsGroup').addEventListener('change',e=>{
+  const t=e.target,g=S.map.group,k=t.dataset.gl||t.dataset.glf||t.dataset.glt;if(!g||!k)return;
+  const c=gcfg(g),L=Object.assign({},c.links||{}),d=GLINKS.find(x=>x[0]===k);
+  if(t.dataset.gl){if(t.value)L[k]=Object.assign({from:d[3],to:d[4]},L[k]||{},{tag:t.value});else delete L[k];}
+  else if(L[k]){const v=parseFloat(t.value);if(isFinite(v))L[k][t.dataset.glf?'from':'to']=v;}
+  c.links=L;touchMap();$('#snInsGroup').innerHTML=snGroupHTML();
+});
 function snEnvHTML(c){
   const e=envOf(c),knobs=[['','no knob']].concat(S.tags.filter(t=>!t.sys&&t.kind==='number').map(t=>[t.id,t.name]));
   const row=(k,l,mx,u)=>'<div class="envrow"><label class="f"><span>'+l+'</span><input type="number" data-se="'+k+'" min="0" max="'+mx+'" step="1" value="'+e[k]+'"'+(e.tags[k]?' disabled':'')+'><em class="sfx">'+u+'</em></label>'
@@ -4818,7 +4835,7 @@ function libraryFeatures(set){
   S.samples.forEach(s=>{const sm=smOf(s);if(S.zones.some(z=>z.sample===s.id)){add(sm.mode);if(sm.uni.on)add('unison');}});
   set.zones.forEach(z=>{const g=gcfg(z.group);if(z.loop&&z.loop.on){add('loop');if(z.loop.pp)add('pingpong');}if(z.rev)add('reverse');if(z.vstart)add('velstart');
     if(z.fadeLo||z.fadeHi||z.vfadeLo||z.vfadeHi)add('crossfade');if(z.hum&&(z.hum.tune||z.hum.vol||z.hum.start))add('humanize');
-    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.voices)add('voicelimit');});
+    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.links&&Object.keys(g.links).length)add('grouplinks');if(g.voices)add('voicelimit');});
   if(S.lists.length)add('lists');if(S.els.length)add('ui');
   Object.values(S.fx.graphs).forEach(g=>g.nodes.forEach(n=>{if(FXT[n.type]&&FXT[n.type].kind!=='io')add('fx:'+n.type);}));
   return [...f].sort();

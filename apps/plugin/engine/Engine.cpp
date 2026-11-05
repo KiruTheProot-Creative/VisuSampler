@@ -48,6 +48,19 @@ float Engine::zoneGain(const Zone& z, int note, int vel) const {
     return (float) g;
 }
 
+void Engine::groupLive(int group, float& gain, float& pan, float& semis) const {
+    const GroupCfg& g = lib_->groups[(size_t) group];
+    auto val = [&](const GroupCfg::Link& l, float& out) { if (l.tag < 0 || !lib_->tagValues) return false; const float t = lib_->tagValues[(size_t) l.tag].load(); out = l.from + (l.to - l.from) * t; return true; };
+    if (g.lVol.tag >= 0 && lib_->tagValues) {   // equal-power fade between the two levels
+        const float t = lib_->tagValues[(size_t) g.lVol.tag].load();
+        auto amp = [](float db) { return db <= -59.9f ? 0.f : std::pow(10.f, db / 20.f); };
+        const float a = amp(g.lVol.from), b = amp(g.lVol.to); gain = std::sqrt(std::max(0.f, a * a * (1 - t) + b * b * t));
+    }
+    float p; if (val(g.lPan, p)) pan = p / 100.f;
+    float st = 0, fc = 0; const bool hasT = val(g.lTune, st), hasF = val(g.lFine, fc);
+    if (hasT || hasF) semis = (hasT ? std::round(st) : g.tune / 100.f) + (hasF ? fc / 100.f : 0.f);   // tune in whole semitones, fine in cents
+}
+
 void Engine::groupEnv(int group, float& a, float& d, float& s, float& r) const {
     const GroupCfg& g = lib_->groups[(size_t) group]; float* out[4] = { &a, &d, &s, &r }; const float base[4] = { g.envA, g.envD, g.envS, g.envR };
     for (int k = 0; k < 4; ++k) {
@@ -71,13 +84,15 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
     const Sample& s = lib_->samples[(size_t) z.sample]; const GroupCfg& g = lib_->groups[(size_t) z.group];
     const float jt = (rnd() * 2 - 1) * z.humTune, jv = (rnd() * 2 - 1) * z.humVol, js = rnd() * z.humStart;
     const double startMsBase = z.start + z.vstart * (vel / 127.0) + js;
-    float amp = dbToGain(z.vol + g.vol + jv) * (float) std::pow(vel / 127.0, g.velcurve) * zoneGain(z, note, vel);
+    // a group value driven by a knob is applied live while rendering, so it replaces the fixed one here
+    const float gVol = g.lVol.tag >= 0 ? 0.f : g.vol, gPan = g.lPan.tag >= 0 ? 0.f : g.pan, gTune = (g.lTune.tag >= 0 || g.lFine.tag >= 0) ? 0.f : g.tune;
+    float amp = dbToGain(z.vol + gVol + jv) * (float) std::pow(vel / 127.0, g.velcurve) * zoneGain(z, note, vel);
     for (const UnisonVoice& u : s.unison) {
         while (sounding() >= limit() && stealOne()) {}   // over the limit: fade one out (released notes first)
         Voice* v = nullptr; unsigned long oldest = ~0ul; Voice* ov = nullptr;
         for (auto& c : voices_) { if (!c.on) { v = &c; break; } if (c.age < oldest) { oldest = c.age; ov = &c; } }
         if (!v) v = ov;                                  // every slot busy (fading voices): reuse the oldest
-        const double semis = (z.keytrack ? note - z.root : 0) + (z.tune + g.tune + u.tuneCents + jt) / 100.0;
+        const double semis = (z.keytrack ? note - z.root : 0) + (z.tune + gTune + u.tuneCents + jt) / 100.0;
         v->zone = &z; v->sample = &s; v->audio = &z.audio; v->interp = interpFor(z);
         v->ratio = std::pow(2.0, semis / 12.0) * s.sr / sr_;
         double st = z.rev ? 0.0 : std::min((double) (s.frames - 2), std::max(0.0, std::round((startMsBase + u.startMs) / 1000.0 * s.sr)));
@@ -90,7 +105,7 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
             v->grain = std::max(256, (int) std::lround(s.skGrainMs / 1000.0 * s.sr)) & ~1; v->grainCounter = 0; v->read0 = v->read1 = st;
         }
         v->gain = amp * u.gain;
-        v->pan = std::min(1.f, std::max(-1.f, z.pan / 100.f + g.pan / 100.f + u.pan));
+        v->pan = std::min(1.f, std::max(-1.f, z.pan / 100.f + gPan / 100.f + u.pan));
         if (!g.envOn) { v->attackInc = z.attack > 0 ? 1.f / (float) (z.attack / 1000.0 * sr_) : 0; v->env = z.attack > 0 ? 0.f : 1.f; }
         v->releasing = false; v->relInc = 0; v->on = true; v->note = note; v->group = z.group; v->choke = g.choke;
         v->oneshot = z.oneshot && !z.audio.loop; v->fromRelease = fromRelease; v->held = false; v->age = ++clock_;
@@ -104,7 +119,7 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
             if (v->kind == 2) { const double gl = std::max(64.0, std::round(s.grSize / 1000.0 * s.sr)); v->ngr = 0; v->gk = 0; v->gt = 0; v->nextSpawn = -gl; v->seed = (z.root * 31 + note) | 0; }
             else { v->wph = 0; v->wms = 0; v->wfade = 0; v->wf = 440.0 * std::pow(2.0, (z.root - 69) / 12.0) * v->pitch; }
         }
-        v->stolen = false; v->vel = vel; v->glide = z.keytrack ? glideFrom : 0.f; v->glideStep = glideStepFor(v->glide);
+        v->gmul = -1; v->stolen = false; v->vel = vel; v->glide = z.keytrack ? glideFrom : 0.f; v->glideStep = glideStepFor(v->glide);
     }
 }
 
@@ -287,12 +302,15 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
         const ZoneAudio& a = *v.audio;
         Reader r0{ a.ch[0], a.len, a.loop, a.loopS, a.loopE }, r1{ a.ch[1] ? a.ch[1] : a.ch[0], a.len, a.loop, a.loopS, a.loopE };
         // pitch on top of the note: glide still to go plus the pitch wheel
-        const double pm = (v.glide != 0.f || bendSemis != 0.0) && v.zone->keytrack ? std::pow(2.0, (v.glide + bendSemis) / 12.0) : 1.0;
+        float lgGain = 1, lgPan = 0, lgSemis = 0; groupLive(v.group, lgGain, lgPan, lgSemis);
+        const double pm = (v.glide != 0.f || bendSemis != 0.0 || lgSemis != 0.f) ? std::pow(2.0, ((v.zone->keytrack ? v.glide + bendSemis : 0.0) + lgSemis) / 12.0) : 1.0;
+        const float vpan = std::min(1.f, std::max(-1.f, v.pan + lgPan));
+        const float gm0 = v.gmul < 0 ? lgGain : v.gmul, gmStep = (lgGain - gm0) / (float) std::max(1, n); float gm = gm0; v.gmul = lgGain;
         if (v.glide != 0.f) { const float mv = v.glideStep * (float) n; v.glide = std::fabs(v.glide) <= mv ? 0.f : v.glide - (v.glide > 0 ? mv : -mv); }
         const double ratio = v.ratio * pm;
         float eAi = 0, eDi = 0, eS = 1;
         if (v.adsr) { float a, d, s, r; groupEnv(v.group, a, d, s, r); (void) r; eS = s; eAi = a < .5f ? 2.f : 1.f / (float) (a / 1000.0 * sr_); eDi = d < .5f ? 2.f : (1.f - s) / (float) (d / 1000.0 * sr_); }
-        const float x = v.pan <= 0 ? v.pan + 1 : v.pan, gL = std::cos(x * (float) kPi / 2), gR = std::sin(x * (float) kPi / 2), g = v.gain * gainScale;
+        const float x = vpan <= 0 ? vpan + 1 : vpan, gL = std::cos(x * (float) kPi / 2), gR = std::sin(x * (float) kPi / 2), g = v.gain * gainScale;
         for (int i = 0; i < n; ++i) {
             if (!a.loop && v.pos >= (double) a.len) { v.on = false; break; }
             if (v.maxLife >= 0 && --v.maxLife < 0) kill(v, false);
@@ -365,9 +383,9 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
                 rr = v.stereoIn ? w0 * r1.read(v.read0, v.interp, step) + w1 * r1.read(v.read1, v.interp, step) : l;
                 v.read0 += step; v.read1 += step; if (++v.grainCounter >= G) v.grainCounter = 0;
             }
-            if (!v.stereoIn) { const float m = std::cos((v.pan + 1) * (float) kPi / 4), m2 = std::sin((v.pan + 1) * (float) kPi / 4); oL = l * m; oR = l * m2; }
-            else if (v.pan <= 0) { oL = l + rr * gL; oR = rr * gR; } else { oL = l * gL; oR = rr + l * gR; }
-            const float e = g * v.env; dL[i] += oL * e; dR[i] += oR * e;
+            if (!v.stereoIn) { const float m = std::cos((vpan + 1) * (float) kPi / 4), m2 = std::sin((vpan + 1) * (float) kPi / 4); oL = l * m; oR = l * m2; }
+            else if (vpan <= 0) { oL = l + rr * gL; oR = rr * gR; } else { oL = l * gL; oR = rr + l * gR; }
+            gm += gmStep; const float e = g * v.env * gm; dL[i] += oL * e; dR[i] += oR * e;
             v.pos += v.keepSpeed ? v.k : ratio;
             if (a.loop && v.pos >= (double) a.loopE) v.pos -= (double) (a.loopE - a.loopS);
         }

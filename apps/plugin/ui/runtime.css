@@ -632,3 +632,9 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 .loopbar .muted{margin-right:3px;font-size:12px}
 .loopbar .btn{padding:2px 8px;min-height:24px;font-size:12px}
 .loopbar .btn[aria-pressed="true"]{background:var(--sel);color:#fff;border-color:#5aa0ff}
+
+.snlinks{margin:8px 0 2px;border-top:1px solid #353535;padding-top:6px}
+.snlinks summary{cursor:pointer;color:#ccc;font-size:12px;margin-bottom:4px}
+.snlinks .lk{font-size:12px;color:#bbb}
+.glrange{display:flex;gap:6px;align-items:center;margin:0 0 6px;font-size:11px;color:#aaa}
+.glrange input{width:56px}

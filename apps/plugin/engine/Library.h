@@ -35,6 +35,10 @@ struct GroupCfg {
     // per-note ADSR for the whole group (replaces the zones' own attack and release when on).
     // A, D, R in ms, S 0..1. A knob (tag) can drive each one: 0..1 maps to 0..10 s (squared) and 0..100 %.
     bool envOn = false; float envA = 5, envD = 300, envS = 1, envR = 300; int envTag[4] = { -1, -1, -1, -1 }; std::string envTagId[4];
+    // knobs on the group: volume (dB), pan (-100..100), tune (semitones), fine (cents). The knob moves from `from` to `to`;
+    // a linked value replaces the fixed one. Volume fades with equal power, and -60 dB or lower is silent.
+    struct Link { int tag = -1; std::string tagId; float from = 0, to = 0; };
+    Link lVol, lPan, lTune, lFine;
 };
 
 // audio a zone plays: either the sample itself, or a prepared copy (loop crossfade baked in, or reversed)

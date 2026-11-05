@@ -19,6 +19,13 @@ const knobId=await p.evaluate(()=>{const t=window.__vs.S.tags.find(x=>!x.sys&&x.
 if(knobId){await p.selectOption('#snInsGroup [data-setag=s]',knobId);await p.waitForTimeout(100);}
 ok(await p.evaluate(k=>{const S=window.__vs.S,e=S.gset[S.map.group].env;return e&&e.on&&e.a===450&&(!k||e.tags.s===k);},knobId),'envelope settings and the knob link are stored on the group');
 ok(knobId===''||await p.evaluate(()=>document.querySelector('#snInsGroup [data-se=s]').disabled),'a linked value is driven by its knob');
+/* knobs on the group */
+if(knobId){
+  await p.evaluate(()=>{const d=document.querySelector('#snInsGroup .snlinks');if(d)d.open=true;});
+  await p.selectOption('#snInsGroup [data-gl=vol]',knobId);await p.waitForTimeout(100);
+  await p.fill('#snInsGroup [data-glt=vol]','-24');await p.press('#snInsGroup [data-glt=vol]','Tab');await p.waitForTimeout(100);
+  ok(await p.evaluate(k=>{const S=window.__vs.S,l=S.gset[S.map.group].links.vol;return l.tag===k&&l.from===0&&l.to===-24;},knobId),'a knob can drive the group volume, with its range');
+}
 /* sample focus */
 await p.click('#leftM .prow >> nth=3');await p.waitForTimeout(150);
 ok(await vis('#rightS [data-sk="sm.mode"]'),'clicking a sample shows the sample inspector');
