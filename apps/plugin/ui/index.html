@@ -8,6 +8,12 @@
   <div class="logo">Visu<em>Player</em></div>
   <div class="title" id="curTitle"></div>
   <div class="grow"></div>
+  <div class="presets" id="presetBox" hidden>
+    <button class="btn pnav" id="prePrev" type="button" aria-label="Previous preset">&#9664;</button>
+    <button class="btn" id="preBtn" type="button" aria-haspopup="true" aria-expanded="false"><span id="preName">Library default</span> &#9662;</button>
+    <button class="btn pnav" id="preNext" type="button" aria-label="Next preset">&#9654;</button>
+    <div class="pmenu" id="preMenu" role="menu" hidden></div>
+  </div>
   <span class="muted" id="voices" hidden>0 voices</span>
   <button class="btn" id="btnAbout" type="button" aria-pressed="false" hidden>About</button>
   <button class="btn" id="btnFolder" type="button" title="Open the folder VisuPlayer reads libraries from">Library folder</button>

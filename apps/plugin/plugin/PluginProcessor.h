@@ -54,6 +54,12 @@ public:
     juce::var takeUiChanges();                  // knob values moved by the DAW or MIDI, for the interface
     void endIdleGestures();
     const juce::String& learning() const { return learnTag_; }
+    // user presets: the knob values and the list, saved per library in Documents/VisuSampler/Presets/<library>
+    juce::File presetFolder() const;
+    juce::var presetsVar() const;                         // { names: [...], current }
+    bool savePreset(const juce::String& name);
+    juce::var loadPreset(const juce::String& name);       // "" = the library's own values; returns { values, list }
+    bool deletePreset(const juce::String& name);
     int currentList() const { return list_ == -2 && current_ ? current_->defaultList : list_; }
 
     juce::MidiKeyboardState keyboardState;
@@ -92,6 +98,8 @@ private:
     bool gesture_[kMacros] = {}; double gestureTime_[kMacros] = {};
     std::atomic<int> ccSlot_[128];
     std::map<juce::String, int> ccOfTag_;   // saved with the project
+    juce::String currentPreset_;
+    void applyValue(const juce::String& tag, float v);
     juce::String learnTag_; std::atomic<bool> learning_{ false }; std::atomic<int> learnedCc_{ -1 };
     visu::Engine engine_;
     juce::AudioParameterFloat* volume_ = nullptr;

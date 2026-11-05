@@ -154,7 +154,7 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&ctxOpen){e.preventDefault();
 /* ---------- the library's own interface (drawn by runtime.html with the Designer's code) ---------- */
 let uiFor=null,uiReady=false,uiMsg=null;
 const frame=$('#uiFrame');
-function hideUI(){uiFor=null;uiReady=false;uiMsg=null;frame.hidden=true;frame.removeAttribute('src');$('#stage').classList.remove('hasui','about');$('#btnAbout').hidden=true;}
+function hideUI(){$('#presetBox').hidden=true;preMenuClose();uiFor=null;uiReady=false;uiMsg=null;frame.hidden=true;frame.removeAttribute('src');$('#stage').classList.remove('hasui','about');$('#btnAbout').hidden=true;}
 async function showUI(){
   const r=await call('getInterface');if(!r||!r.manifest)return;
   let m;try{m=JSON.parse(r.manifest);}catch(e){return;}
@@ -164,7 +164,7 @@ async function showUI(){
   Object.keys(m.assets||{}).forEach(id=>{const a=m.assets[id];assets[id]={name:a.name,w:a.w,h:a.h,mime:a.mime,url:url('asset',id)};});
   Object.keys(m.fonts||{}).forEach(f=>{fonts[f]=url('font',f);});
   uiFor=r.id;uiMsg={t:'load',project:p,assets,fonts,list:r.list,tags:r.tags||{}};
-  $('#stage').classList.add('hasui');$('#btnAbout').hidden=false;frame.hidden=false;
+  $('#stage').classList.add('hasui');$('#btnAbout').hidden=false;frame.hidden=false;$('#presetBox').hidden=false;presetsRefresh();
   uiReady=false;frame.src='runtime.html?'+Date.now();
 }
 addEventListener('message',e=>{
@@ -181,3 +181,36 @@ buildPiano();
   const s=await call('getState');if(s){$('#vol').value=s.volume;$('#vol2').value=s.volume;st=s.status||{};if(s.status&&s.status.currentId){const L=libs.find(x=>x.id===s.status.currentId);if(L){cur=L;renderDetail();setMode('play');if(!st.loading)showUI();}}}
 })().catch(e=>{console.warn(e);renderBrowse();});
 window.__ui={get libs(){return libs;},open,leave};
+
+/* ---- user presets: your own knob settings for this library ---- */
+let pre={names:[],current:''};
+async function presetsRefresh(){pre=await call('getPresets')||{names:[],current:''};$('#preName').textContent=pre.current||'Library default';}
+function preMenuClose(){$('#preMenu').hidden=true;$('#preBtn').setAttribute('aria-expanded','false');}
+function preMenuRender(saving){
+  const m=$('#preMenu');
+  m.innerHTML='<button type="button" class="pmi'+(pre.current?'':' on')+'" data-p="">Library default</button>'
+    +pre.names.map(n=>'<div class="pmrow"><button type="button" class="pmi'+(n===pre.current?' on':'')+'" data-p="'+esc(n)+'">'+esc(n)+'</button><button type="button" class="pmx" data-del="'+esc(n)+'" aria-label="Delete '+esc(n)+'" title="Delete">&#10005;</button></div>').join('')
+    +'<div class="pmsep"></div>'
+    +(saving?'<form class="pmsave" id="preForm"><input id="preNew" type="text" maxlength="80" placeholder="Preset name" aria-label="Preset name" value="'+esc(pre.current||'')+'"><button type="submit" class="btn">Save</button></form>'
+      :'<button type="button" class="pmi" data-save="1">Save as…</button>'+(pre.current?'<button type="button" class="pmi" data-over="1">Save “'+esc(pre.current)+'”</button>':''));
+  if(saving){const i=$('#preNew');i.focus();i.select();}
+}
+async function presetApply(name){
+  const r=await call('loadPreset',name);if(!r)return;pre.current=r.name||'';$('#preName').textContent=pre.current||'Library default';
+  if(uiReady){frame.contentWindow.postMessage({t:'tags',values:r.values||{}},'*');if(r.list!=null&&r.list>=0)frame.contentWindow.postMessage({t:'list',index:r.list},'*');}
+  if(r.list!=null&&r.list>=0)st.list=r.list;
+}
+$('#preBtn').addEventListener('click',async()=>{const m=$('#preMenu');if(!m.hidden){preMenuClose();return;}await presetsRefresh();preMenuRender(false);m.hidden=false;$('#preBtn').setAttribute('aria-expanded','true');});
+$('#preMenu').addEventListener('click',async e=>{
+  const d=e.target.closest('[data-del]');if(d){pre=await call('deletePreset',d.dataset.del)||pre;$('#preName').textContent=pre.current||'Library default';preMenuRender(false);return;}
+  if(e.target.closest('[data-save]')){preMenuRender(true);return;}
+  const o=e.target.closest('[data-over]');if(o){pre=await call('savePreset',pre.current)||pre;toast('Saved “'+pre.current+'”');preMenuClose();return;}
+  const b=e.target.closest('[data-p]');if(b){await presetApply(b.dataset.p);preMenuClose();}
+});
+$('#preMenu').addEventListener('submit',async e=>{
+  e.preventDefault();const n=$('#preNew').value.trim();if(!n)return;
+  pre=await call('savePreset',n)||pre;$('#preName').textContent=pre.current||'Library default';toast(pre.ok===false?'Could not save the preset':'Saved “'+pre.current+'”');preMenuClose();
+});
+const preStep=async d=>{await presetsRefresh();const all=[''].concat(pre.names),i=Math.max(0,all.indexOf(pre.current||''));await presetApply(all[(i+d+all.length)%all.length]);};
+$('#prePrev').addEventListener('click',()=>preStep(-1));$('#preNext').addEventListener('click',()=>preStep(1));
+addEventListener('pointerdown',e=>{if(!$('#preMenu').hidden&&!e.target.closest('#presetBox'))preMenuClose();},true);

@@ -86,3 +86,18 @@ pre.lic{white-space:pre-wrap;margin:0;font:11px/1.5 var(--f);color:var(--muted)}
 .ctxmenu button.ctxi{cursor:pointer}
 .ctxmenu button.ctxi:hover{background:#34343c}
 .ctxmenu button.ctxi.on{color:#ffb35c}
+
+/* presets in the top bar */
+.presets{position:relative;display:flex;align-items:center;gap:2px;margin-right:8px}
+.presets .pnav{padding:4px 8px}
+.presets #preBtn{min-width:160px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.pmenu{position:absolute;top:calc(100% + 4px);left:0;z-index:40;min-width:260px;max-height:360px;overflow:auto;background:#26262b;border:1px solid #3a3a42;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.55);padding:4px}
+.pmenu .pmrow{display:flex}
+.pmenu .pmi{display:block;flex:1;text-align:left;background:none;border:0;color:#e8e8ee;font:inherit;padding:6px 10px;border-radius:5px;cursor:pointer}
+.pmenu .pmi:hover{background:#34343c}
+.pmenu .pmi.on{color:#ffb35c;font-weight:600}
+.pmenu .pmx{background:none;border:0;color:#999;cursor:pointer;padding:0 8px;border-radius:5px}
+.pmenu .pmx:hover{background:#4a2a2a;color:#fff}
+.pmenu .pmsep{height:1px;background:#3a3a42;margin:4px 2px}
+.pmenu .pmsave{display:flex;gap:6px;padding:4px}
+.pmenu .pmsave input{flex:1;min-width:0;background:#1c1c20;border:1px solid #444;color:#eee;border-radius:5px;padding:5px 8px;font:inherit}

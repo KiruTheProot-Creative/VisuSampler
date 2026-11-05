@@ -52,6 +52,24 @@ const after=await fr.locator('.el.knob:visible').first().evaluate(n=>n.querySele
 ok(before!==after,'DAW automation turns the knob in the interface ('+before+' -> '+after+')');
 const echoed=await p.evaluate(n=>window.__mock.calls.filter(c=>c[0]==='setTag'&&c[1]===n&&Math.abs(c[2]-.25)<1e-6).length,ctxName);
 ok(echoed===0,'and it is not sent back to the plugin');
+/* presets: save your knob settings, change a knob, load the preset back */
+ok(await p.locator('#presetBox:not([hidden])').count()===1&&(await p.textContent('#preName'))==='Library default','the preset menu shows in play mode, starting at the library default');
+const capOf=()=>fr.locator('.el.knob:visible').first().evaluate(n=>n.querySelector('.cap').style.transform);
+await p.evaluate(n=>window.__mock.emit('tags',{[n]:.8}),ctxName);await p.waitForTimeout(150);
+await p.evaluate(n=>{window.__mock.state.tags=Object.assign({},window.__mock.state.tags,{[n]:.8});},ctxName);
+const cap1=await capOf();
+await p.click('#preBtn');await p.click('#preMenu [data-save]');await p.fill('#preNew','Bright');await p.press('#preNew','Enter');await p.waitForTimeout(150);
+ok((await p.textContent('#preName'))==='Bright'&&await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='savePreset'&&c[1]==='Bright')),'Save as… stores a preset under its name');
+await p.evaluate(n=>window.__mock.emit('tags',{[n]:.1}),ctxName);await p.waitForTimeout(150);
+await p.click('#preBtn');await p.click('#preMenu [data-p="Bright"]');await p.waitForTimeout(200);
+ok(await capOf()===cap1,'loading the preset puts the knob back ('+cap1+')');
+await p.click('#preBtn');await p.click('#preMenu [data-p=""]');await p.waitForTimeout(200);
+ok((await p.textContent('#preName'))==='Library default'&&await capOf()!==cap1,'Library default brings back the library\'s own values');
+await p.click('#preNext');await p.waitForTimeout(200);
+ok((await p.textContent('#preName'))==='Bright','the arrows step through the presets');
+await p.click('#preBtn');await p.click('#preMenu [data-del="Bright"]');await p.waitForTimeout(150);
+ok(await p.locator('#preMenu [data-p="Bright"]').count()===0,'a preset can be deleted');
+await p.evaluate(()=>document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})));
 await p.click('#btnAbout');await p.waitForTimeout(100);
 const nl=await p.locator('[data-list]').count();ok(nl>1,'About shows the info page with the lists ('+nl+')');
 await p.click('[data-list="2"]');ok(await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='setList'&&c[1]===2)),'choosing a list tells the plugin');
