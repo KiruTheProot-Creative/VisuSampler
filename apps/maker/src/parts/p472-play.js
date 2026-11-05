@@ -28,13 +28,15 @@ function snPlayHTML(){
     +nf('Pitch-bend range','data-pl="bend"',p.bend,0,48,1,'semitones')
     +nf('Voice limit','data-pl="maxVoices"',p.maxVoices,0,256,1,'0 = 256')
     +'<label class="f"><span>When full, steal</span><select data-pl="steal">'+mopt([['oldest','The oldest note'],['quietest','The quietest note']],p.steal)+'</select></label>'
-    +'<p class="hint" style="display:block">Glide works in mono. Released notes are always stolen first. In the player a CPU guard also lowers the limit for a moment when the computer cannot keep up.</p></div>';
+    +'<p class="hint" style="display:block">Glide works in mono. Released notes are always stolen first. In the player a CPU guard also lowers the limit for a moment when the computer cannot keep up.</p>'
+    +layersHTML()+'</div>';
 }
 $('#snInsPlay').addEventListener('change',e=>{
   const t=e.target,k=t.dataset.pl;if(!k)return;
   const p=playOf();
   if(t.type==='checkbox')p[k]=t.checked;else if(t.type==='number'){const v=parseFloat(t.value);p[k]=isFinite(v)?Math.max(+t.min||0,Math.min(+t.max||1e9,v)):PLAY_DEF[k];}else p[k]=t.value;
   if(!p.mono)p.legato=false;
+  if(k==='layerB')setLayerB(p,t.checked);
   S.play=p;mapLeftRender();$('#snInsPlay').innerHTML=snPlayHTML();
 });
 const snShowPlay=snShow;

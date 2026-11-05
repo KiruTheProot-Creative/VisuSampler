@@ -3,11 +3,15 @@ const tagById=id=>S.tags.find(t=>t.id===id)||null;
 const tagByName=n=>S.tags.find(t=>t.name===n)||null;
 const bankTag=()=>tagByName('bank');
 const listTag=()=>tagByName('list');
+/* layer B: a second patch picked from the same banks and lists, playing at the same time (tags bankB and listB) */
+const layerBOn=()=>!!tagByName('listB');   /* the tags exist while layer B is switched on */
+const bankTagB=()=>layerBOn()?tagByName('bankB'):null;
+const listTagB=()=>layerBOn()?tagByName('listB'):null;
 const syncList=t=>t.basis==='bar'?SYNC_BAR:SYNC;
 function listsInBank(b){if(b===undefined)b=bankIdx();return S.lists.filter(l=>l.bank===b);}
 function stepsOf(t){
   if(t.kind==='sync') return syncList(t).map(s=>s.l);
-  if(t.kind==='list'){const a=listsInBank().map(l=>l.name);return a.length?a:['-'];}
+  if(t.kind==='list'){const a=listsInBank(t.layer?bankIdxB():undefined).map(l=>l.name);return a.length?a:['-'];}
   if(t.kind==='bank') return S.banks.map(b=>b.letter);
   return t.steps;
 }
@@ -16,6 +20,9 @@ function stepIdx(t){const n=stepsOf(t).length;return n<2?0:clamp(Math.round(t.va
 const bankIdx=()=>{const t=bankTag();return t?stepIdx(t):0;};
 const listIdx=()=>{const t=listTag();return t?stepIdx(t):0;};
 const curList=()=>listsInBank()[listIdx()]||null;
+const bankIdxB=()=>{const t=bankTagB();return t?stepIdx(t):0;};
+const listIdxB=()=>{const t=listTagB();return t?stepIdx(t):0;};
+const curListB=()=>layerBOn()&&listTagB()?listsInBank(bankIdxB())[listIdxB()]||null:null;
 const barBeats=sg=>sg.n*4/sg.d;
 function syncBeats(t,sg){const s=syncList(t)[stepIdx(t)];return t.basis==='bar'?s.b*barBeats(sg):s.b;}
 const msOfBeats=b=>b*60000/S.bpm;
@@ -49,8 +56,8 @@ function fmtTag(t,fmt){
   }
 }
 function loadStr(){return RT.load>=1?'READY':'LOADING '+Math.round(RT.load*100)+'%';}
-function listToken(p){
-  const bl=listsInBank(),idx=listIdx(),n=bl.length,letter=(S.banks[bankIdx()]||{letter:'?'}).letter;
+function listToken(p,B){
+  const bi=B?bankIdxB():bankIdx(),bl=listsInBank(bi),idx=B?listIdxB():listIdx(),n=bl.length,letter=(S.banks[bi]||{letter:'?'}).letter;
   let i=idx; if(p.mid.indexOf('next')>=0&&n) i=(idx+1)%n; else if(p.mid.indexOf('prev')>=0&&n) i=(idx-1+n)%n;
   const l=bl[i],f=p.n===1?'name':p.fmt.toLowerCase();
   switch(f){
@@ -64,12 +71,12 @@ function listToken(p){
     default: return '?'+p.fmt;
   }
 }
-function bankToken(p){
-  const b=S.banks[bankIdx()]||{letter:'?',name:''},f=p.n===1?'letter':p.fmt.toLowerCase();
+function bankToken(p,B){
+  const bi=B?bankIdxB():bankIdx(),b=S.banks[bi]||{letter:'?',name:''},f=p.n===1?'letter':p.fmt.toLowerCase();
   switch(f){
     case 'letter': return b.letter;
     case 'name': return b.name||b.letter;
-    case 'count': return String(listsInBank().length);
+    case 'count': return String(listsInBank(bi).length);
     default: return '?'+p.fmt;
   }
 }
@@ -88,6 +95,8 @@ function expand(text){
       case 'timesig': return esc(p.fmt==='bar'||p.fmt==='ms'?msStr(msOfBeats(barBeats(S.sig))):p.fmt==='num'?String(S.sig.n):p.fmt==='den'?String(S.sig.d):S.sig.n+'/'+S.sig.d);
       case 'list': return esc(listToken(p));
       case 'bank': return esc(bankToken(p));
+      case 'listB': return layerBOn()?esc(listToken(p,1)):'-';
+      case 'bankB': return layerBOn()?esc(bankToken(p,1)):'-';
     }
     const t=tagByName(p.name);
     if(!t) return '<span class="bad">{'+p.name+'?}</span>';

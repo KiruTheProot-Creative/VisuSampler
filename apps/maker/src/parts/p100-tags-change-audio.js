@@ -4,9 +4,10 @@ function setTag(t,v){
   if(n>1) v=Math.round(v*(n-1))/(n-1); else if(t.kind!=='number') v=0;
   if(v===t.value) return;
   t.value=v;
-  if(t.kind==='bank'){const lt=listTag();if(lt)lt.value=0;}
+  if(t.kind==='bank'){const lt=t.layer?tagByName('listB'):listTag();if(lt)lt.value=0;}
   onTag(t);
-  if(t.kind==='bank'||t.kind==='list') listChanged();
+  if((t.kind==='bank'||t.kind==='list')&&t.layer){listChangedB();}
+  else if(t.kind==='bank'||t.kind==='list') listChanged();
   fireChange(t);
 }
 function onTag(t){
@@ -42,6 +43,11 @@ function listChanged(){
   if(l&&l.vals) Object.keys(l.vals).forEach(k=>{const t=tagByName(k);if(t&&!t.sys)setTag(t,l.vals[k]);});
   scheduleLoad();
   S.els.forEach(el=>{if(el.type==='list'&&el.rules&&el.rules.length)fireEvent(el,'change');});
+}
+/* layer B changed: displays update and the engine hears about it; the list's stored knob values belong to layer A */
+function listChangedB(){
+  refreshDisplays();if(typeof engineSendState==='function')engineSendState();if(typeof reportListB==='function')reportListB();
+  S.els.forEach(el=>{if(el.type==='list'&&el.layer&&el.rules&&el.rules.length)fireEvent(el,'change');});
 }
 function updateTagUI(t){
   if(S.tab!=='tags') return;

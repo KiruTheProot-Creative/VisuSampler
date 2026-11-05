@@ -80,7 +80,7 @@ void VisuProcessor::loadLibrary(const juce::String& id, bool keepTags)
             { const juce::ScopedLock l(tagLock_); for (auto& t : tagState_) lib->setTag(t.first.toStdString(), t.second); }
             current_ = lib; currentFile_ = file; currentId_ = id;
             assignSlots();
-            engine_.setList(list_); engine_.setLibrary(lib);
+            engine_.setList(list_); engine_.setListB(listB_); engine_.setLibrary(lib);
             status_ = juce::String((int) lib->zones.size()) + " zones ready · " + juce::String(lib->memoryBytes() / 1048576.0, 1) + " MB in memory";
             if (lib->streamedSamples() > 0) status_ << " · " << lib->streamedSamples() << " samples stream from disk";
             if (lib->unsupportedZones) status_ << " · " << lib->unsupportedZones << " zones use sample modes this version does not play yet";
@@ -94,12 +94,16 @@ void VisuProcessor::unloadLibrary()
     { const juce::ScopedLock l(tagLock_); tagState_.clear(); }
     ccOfTag_.clear();
     ++loadTicket_; loading_ = false; engine_.setLibrary(nullptr); current_.reset(); currentId_.clear(); currentFile_ = juce::File();
-    list_ = -2; status_ = "No library loaded"; sendChangeMessage();
+    list_ = -2; listB_ = -2; status_ = "No library loaded"; sendChangeMessage();
 }
 
 void VisuProcessor::setList(int index)
 {
     list_ = index; engine_.setList(index); sendChangeMessage();
+}
+void VisuProcessor::setListB(int index)
+{
+    listB_ = index; engine_.setListB(index); sendChangeMessage();
 }
 
 int VisuProcessor::addLibraryFiles(const juce::Array<juce::File>& files)
@@ -267,7 +271,7 @@ bool VisuProcessor::savePreset(const juce::String& rawName)
     }
     auto* o = new juce::DynamicObject();
     o->setProperty("format", "visuplayer-preset"); o->setProperty("library", juce::String(current_->info.id)); o->setProperty("name", name);
-    o->setProperty("list", currentList()); o->setProperty("values", juce::var(vals));
+    o->setProperty("list", currentList()); o->setProperty("listB", currentListB()); o->setProperty("values", juce::var(vals));
     auto dir = presetFolder(); dir.createDirectory();
     const bool ok = dir.getChildFile(name + ".vpreset").replaceWithText(juce::JSON::toString(juce::var(o)));
     if (ok) currentPreset_ = name;
@@ -283,23 +287,24 @@ void VisuProcessor::applyValue(const juce::String& tag, float v)
 juce::var VisuProcessor::loadPreset(const juce::String& name)
 {
     if (!current_) return {};
-    auto* vals = new juce::DynamicObject(); int list = -2;
+    auto* vals = new juce::DynamicObject(); int list = -2, listB = -2;
     if (name.isEmpty())   // the library's own values
     {
         for (auto& td : current_->tags) if (!(td.kind == "bank" || td.kind == "list" || td.name == "page" || td.name.empty())) vals->setProperty(juce::Identifier(juce::String(td.name)), (double) td.def);
-        list = current_->defaultList;
+        list = current_->defaultList; listB = current_->layerB ? current_->defaultListB : -2;
     }
     else
     {
         const auto j = juce::JSON::parse(presetFolder().getChildFile(safeName(name) + ".vpreset"));
         if (!j.isObject()) return {};
         if (auto* v = j["values"].getDynamicObject()) for (auto& p : v->getProperties()) vals->setProperty(p.name, p.value);
-        list = j.hasProperty("list") ? (int) j["list"] : -2;
+        list = j.hasProperty("list") ? (int) j["list"] : -2; listB = j.hasProperty("listB") ? (int) j["listB"] : -2;
     }
     for (auto& p : vals->getProperties()) applyValue(p.name.toString(), (float) (double) p.value);
     if (list >= -1) setList(list);
+    if (listB >= 0) setListB(listB);
     currentPreset_ = name;
-    auto* o = new juce::DynamicObject(); o->setProperty("values", juce::var(vals)); o->setProperty("list", list); o->setProperty("name", name);
+    auto* o = new juce::DynamicObject(); o->setProperty("values", juce::var(vals)); o->setProperty("list", list); o->setProperty("listB", listB); o->setProperty("name", name);
     return juce::var(o);
 }
 bool VisuProcessor::deletePreset(const juce::String& name)
@@ -380,7 +385,7 @@ void VisuProcessor::getStateInformation(juce::MemoryBlock& dest)
     juce::XmlElement xml("VisuPlayerState");
     xml.setAttribute("libraryId", currentId_);
     xml.setAttribute("libraryPath", currentFile_.getFullPathName());
-    xml.setAttribute("list", list_);
+    xml.setAttribute("list", list_); xml.setAttribute("listB", listB_);
     xml.setAttribute("volume", (double) volume_->get());
     xml.setAttribute("preset", currentPreset_);
     {   // knob and page positions
@@ -400,7 +405,7 @@ void VisuProcessor::setStateInformation(const void* data, int size)
     {
         if (!xml->hasTagName("VisuPlayerState")) return;
         volume_->setValueNotifyingHost(volume_->convertTo0to1((float) xml->getDoubleAttribute("volume", 0.8)));
-        list_ = xml->getIntAttribute("list", -2);
+        list_ = xml->getIntAttribute("list", -2); listB_ = xml->getIntAttribute("listB", -2);
         currentPreset_ = xml->getStringAttribute("preset");
         {
             const juce::ScopedLock l(tagLock_); tagState_.clear();

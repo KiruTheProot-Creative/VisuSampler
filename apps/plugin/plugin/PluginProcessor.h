@@ -35,6 +35,7 @@ public:
     void unloadLibrary();
     int addLibraryFiles(const juce::Array<juce::File>& files);
     void setList(int index);
+    void setListB(int index);   // layer B (-3 = off)
     bool pollKeyswitch() { if (!engine_.takeKeyswitchChange()) return false; list_ = engine_.list(); sendChangeMessage(); return true; }
     void panic() { panicRequest_ = true; }
     void setTag(const juce::String& name, float value);   // a knob in the library's interface moved
@@ -62,6 +63,7 @@ public:
     juce::var loadPreset(const juce::String& name);       // "" = the library's own values; returns { values, list }
     bool deletePreset(const juce::String& name);
     int currentList() const { return list_ == -2 && current_ ? current_->defaultList : list_; }
+    int currentListB() const { return listB_ == -2 && current_ ? (current_->layerB ? current_->defaultListB : -3) : listB_; }
 
     juce::MidiKeyboardState keyboardState;
     int activeVoices() const { return engine_.activeVoices(); }
@@ -109,7 +111,7 @@ private:
     juce::String currentId_, status_ = "No library loaded", pendingId_; bool pendingKeep_ = false;
     std::map<juce::String, float> tagState_; juce::CriticalSection tagLock_;   // saved with the DAW project
     juce::File currentFile_;
-    int list_ = -2; double sampleRate_ = 0;
+    int list_ = -2, listB_ = -2; double sampleRate_ = 0;
     std::atomic<bool> loading_{ false }, panicRequest_{ false };
     std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
     std::atomic<int> loadTicket_{ 0 };

@@ -94,6 +94,10 @@ public:
     std::array<std::vector<int>, 128> byNote;   // zone indexes that cover each key
     std::vector<ListDef> lists;           // empty: every group plays
     int defaultList = -1;                 // the list the library was saved with
+    // layers: A is the list chosen above; B (when the library has it) is a second list that plays at the same time.
+    // Each layer has its own envelope and knob links (same fields as a group: env*, lVol/lPan/lTune/lFine), applied on top of the groups.
+    bool layerB = false; int defaultListB = -1;
+    GroupCfg layers[2];
     Interp projectInterp = Interp::Linear;
     // how the library plays (project.play): mono / legato / glide, pitch-bend range, voice limit and stealing
     struct Play { bool mono = false, legato = false, quietest = false; float glideMs = 0, bend = 2; int maxVoices = 0; } play;

@@ -24,6 +24,9 @@ public:
     // true once after a keyswitch note changed the list (the player then updates its interface)
     bool takeKeyswitchChange() { return ksChanged_.exchange(false); }
     int list() const { return list_.load(); }
+    // layer B: a second list that plays at the same time (-2 = the one the library was saved with, -3 = off)
+    void setListB(int index) { listB_.store(index); }
+    int listB() const { return listB_.load(); }
 
     // audio thread
     void noteOn(int note, int velocity);
@@ -56,6 +59,7 @@ private:
         bool adsr = false; int stage = 0; float gmul = -1;
         // per-note filter and LFO
         float fenv = 0, fRel = 0; int fstage = 0; float fz[2][2][2] = {}; float fa1 = 0, fa2 = 0, fa3 = 0, fk = 1; double lfoPh = 0; long lfoAge = 0;
+        int layer = 0;   // 0 = A, 1 = B
         int slot = -1;   // disk stream for a long sample (player)   // group envelope: 0 attack, 1 decay, 2 sustain
         int kind = 0;   // 0 sample, 2 granular, 3 wavetable
         struct Grain { double o, p0, rate; };
@@ -69,15 +73,19 @@ private:
     fx::Control ctl_;
     void kill(Voice& v, bool fast);
     void endVoice(Voice& v);
-    void startZone(const Zone& z, int note, int vel, bool fromRelease, float glideFrom = 0);
+    void startZone(const Zone& z, int note, int vel, bool fromRelease, float glideFrom = 0, int layer = 0);
     void startNote(int note, int vel, float glideFrom, const Zone* const* skip, int nskip);
+    void startNoteLayer(int note, int vel, float glideFrom, const Zone* const* skip, int nskip, int layer);
+    int layerCount() const;   // 1, or 2 when layer B plays
+    void voiceEnv(const Voice& v, float& a, float& d, float& s, float& r) const;   // the layer's envelope when it has one, else the group's
     void monoNoteOn(int note, int vel, int previous);
     bool stealOne();
     int limit() const;
     int sounding() const;
     float glideStepFor(float semis) const;
     void groupEnv(int group, float& a, float& d, float& s, float& r) const;
-    void groupLive(int group, float& gain, float& pan, float& semis) const;   // knob-driven group volume, pan and tuning   // live values (knobs included), A/D/R in ms
+    void groupLive(int group, float& gain, float& pan, float& semis) const;
+    void layerLive(int layer, float& gain, float& pan, float& semis) const;   // the layer's knobs, added on top   // knob-driven group volume, pan and tuning   // live values (knobs included), A/D/R in ms
     int stack_[128] = {}; int stackSize_ = 0, monoNote_ = -1, lastNote_ = -1, monoVel_ = 100;
     std::atomic<int> guard_{kMaxVoices};
     Interp interpFor(const Zone& z) const;
@@ -89,8 +97,8 @@ private:
     std::atomic<const Library*> inUse_{nullptr};        // audio thread -> message thread (hazard pointer)
     std::vector<std::shared_ptr<const Library>> owners_; std::mutex ownersMutex_;
     std::atomic<float> master_{0.8f};
-    std::atomic<int> list_{-2};
-    bool groupAllowed(int g) const;
+    std::atomic<int> list_{-2}, listB_{-2};
+    bool groupAllowed(int g, int layer = 0) const;
     int keyswitchList(int note) const;
     std::atomic<bool> ksChanged_{ false };
     float rnd() { rng_ = rng_ * 1664525u + 1013904223u; return (float) ((rng_ >> 8) & 0xFFFF) / 65535.f; }

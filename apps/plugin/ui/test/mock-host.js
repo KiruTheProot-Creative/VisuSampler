@@ -19,7 +19,7 @@ const fns={
       lists:(m.project.lists||[]).map(l=>({name:l.name,bank:l.bank})),list:0,unsupported:id.endsWith('~1')?['granular']:[]};emit('status',state.status);},50);return true;},
   getInterface:()=>{const L=libs.find(l=>l.id===state.status.currentId);return L?{manifest:JSON.stringify(L._m),id:L.id,list:0,tags:state.tags||{}}:null;},
   unload:()=>{state.status={text:'No library loaded'};return true;},
-  setList:i=>{state.status.list=i;return true;},setVolume:v=>{state.volume=v;return true;},
+  setList:i=>{state.status.list=i;return true;},setListB:i=>{state.status.listB=i;return true;},setVolume:v=>{state.volume=v;return true;},
   getPresets:()=>({names:Object.keys(state.presets||{}).sort(),current:state.preset||''}),
   savePreset:n=>{(state.presets=state.presets||{})[n]={values:Object.assign({},state.tags||{}),list:state.status.list||0};state.preset=n;return{names:Object.keys(state.presets).sort(),current:n,ok:true};},
   loadPreset:n=>{const p=n?(state.presets||{})[n]:{values:{cutoff:.5},list:0};if(!p)return null;state.preset=n;state.tags=Object.assign({},p.values);return{values:p.values,list:p.list,name:n};},

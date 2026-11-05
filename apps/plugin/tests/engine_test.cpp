@@ -265,6 +265,39 @@ static void testKeyswitch() {
     CHECK(e.list() == 0 && v2 > 0 && e.activeVoices() > 0, "another keyswitch switches again, and notes play the chosen list (%d then %d voices)", v2, e.activeVoices());
 }
 
+// layer B: a second patch from the same lists plays at the same time, with its own knobs
+static void testLayers() {
+    std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
+    if (!lib || lib->lists.size() < 3 || lib->tags.empty()) { CHECK(false, "demo with lists and tags"); return; }
+    // a fresh copy each time: the library's effects keep their tails between runs
+    auto fresh = [&]() { std::string e2; auto c = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", e2); c->layerB = lib->layerB; c->layers[0] = lib->layers[0]; c->layers[1] = lib->layers[1];
+        for (size_t i = 0; i < c->tags.size(); ++i) c->tagValues[i].store(lib->tagValues[i].load()); return c; };
+    auto run = [&](int la, int lb, double& rms, int& voices) {
+        auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setMasterGain(1); e.setLibrary(fresh()); e.setList(la); e.setListB(lb);
+        e.noteOn(60, 100); std::vector<float> L(480), R(480); double sq = 0; int n = 0;
+        for (int b = 0; b < 40; ++b) { std::fill(L.begin(), L.end(), 0.f); std::fill(R.begin(), R.end(), 0.f); e.render(L.data(), R.data(), 480); if (b == 0) voices = e.activeVoices(); if (b >= 10) for (float x : L) { sq += (double) x * x; ++n; } }
+        rms = std::sqrt(sq / n);
+    };
+    double a, b, ab, aa; int va, vb, vab, vaa;
+    lib->layerB = false; run(0, 2, a, va);
+    CHECK(va > 0, "without layer B only patch A plays (%d voices)", va);
+    lib->layerB = true; run(2, -3, b, vb); run(0, 2, ab, vab); run(0, 0, aa, vaa);
+    CHECK(vab == va + vb && vaa == 2 * va, "layer B plays a second patch from the same lists at once (%d + %d = %d voices; the same patch twice: %d)", va, vb, vab, vaa);
+    CHECK(aa / a > 1.3 && aa / a < 2.05, "the same patch on both layers is louder (x%.2f; humanize makes the copies differ)", aa / a);
+    lib->layers[1].lVol.tag = 0; lib->layers[1].lVol.from = 0; lib->layers[1].lVol.to = -60; lib->tagValues[0].store(1.f);
+    double m, a1; int vm; run(0, 0, m, vm); run(0, -3, a1, vm);
+    CHECK(std::fabs(m / a1 - 1) < .03, "a knob on layer B's volume fades it out and leaves A alone (x%.2f of A)", m / a1);
+    lib->tagValues[0].store(0.f); lib->layers[1].lTune.tag = 0; lib->layers[1].lTune.from = 0; lib->layers[1].lTune.to = 12; lib->tagValues[0].store(1.f);
+    lib->layers[1].lVol.tag = -1;
+    lib->layers[1].lTune.tag = -1; lib->tagValues[0].store(0.f);
+    lib->layers[1].envOn = true; lib->layers[1].envA = 300; lib->layers[1].envD = 0; lib->layers[1].envS = 1; lib->layers[1].envR = 100;
+    auto early = [&](int la, int lb) { auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setMasterGain(1); e.setLibrary(fresh()); e.setList(la); e.setListB(lb);
+        e.noteOn(60, 100); std::vector<float> L(2400, 0.f), R(2400, 0.f); e.render(L.data(), R.data(), 2400); double sq = 0; for (float x : L) sq += (double) x * x; return std::sqrt(sq / 2400); };
+    const double eA = early(0, -3), eAB = early(0, 0);
+    CHECK(eAB < eA * 1.4, "layer B's own envelope fades it in slowly while A starts at once (x%.2f in the first 50 ms)", eAB / eA);
+    lib->layers[1] = GroupCfg(); lib->layerB = false;
+}
+
 static void testDemo() {
     std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
     CHECK(lib != nullptr, "demo library loads %s", err.c_str());
@@ -362,7 +395,7 @@ static void testFx() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testStreaming(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testStreaming(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

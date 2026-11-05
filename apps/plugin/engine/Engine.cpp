@@ -65,6 +65,24 @@ void Engine::groupLive(int group, float& gain, float& pan, float& semis) const {
     if (hasT || hasF) semis = (hasT ? std::round(st) : g.tune / 100.f) + (hasF ? fc / 100.f : 0.f);   // tune in whole semitones, fine in cents
 }
 
+void Engine::voiceEnv(const Voice& v, float& a, float& d, float& s, float& r) const {
+    const GroupCfg& L = lib_->layers[v.layer & 1];
+    if (!L.envOn) { groupEnv(v.group, a, d, s, r); return; }
+    float* out[4] = { &a, &d, &s, &r }; const float base[4] = { L.envA, L.envD, L.envS, L.envR };
+    for (int k = 0; k < 4; ++k) { float x = base[k]; if (L.envTag[k] >= 0 && lib_->tagValues) { const float t = lib_->tagValues[(size_t) L.envTag[k]].load(); x = k == 2 ? t : t * t * 10000.f; } *out[k] = x; }
+}
+void Engine::layerLive(int layer, float& gain, float& pan, float& semis) const {
+    const GroupCfg& g = lib_->layers[layer & 1];
+    auto val = [&](const GroupCfg::Link& l, float& out) { if (l.tag < 0 || !lib_->tagValues) return false; const float t = lib_->tagValues[(size_t) l.tag].load(); out = l.from + (l.to - l.from) * t; return true; };
+    if (g.lVol.tag >= 0 && lib_->tagValues) {
+        const float t = lib_->tagValues[(size_t) g.lVol.tag].load();
+        auto amp = [](float db) { return db <= -59.9f ? 0.f : std::pow(10.f, db / 20.f); };
+        const float a = amp(g.lVol.from), b = amp(g.lVol.to); gain = std::sqrt(std::max(0.f, a * a * (1 - t) + b * b * t));
+    }
+    float p; if (val(g.lPan, p)) pan = p / 100.f;
+    float st = 0, fc = 0; const bool hasT = val(g.lTune, st), hasF = val(g.lFine, fc);
+    semis = (hasT ? std::round(st) : 0.f) + (hasF ? fc / 100.f : 0.f);
+}
 void Engine::groupEnv(int group, float& a, float& d, float& s, float& r) const {
     const GroupCfg& g = lib_->groups[(size_t) group]; float* out[4] = { &a, &d, &s, &r }; const float base[4] = { g.envA, g.envD, g.envS, g.envR };
     for (int k = 0; k < 4; ++k) {
@@ -98,14 +116,15 @@ long Engine::streamMisses() const {
 void Engine::kill(Voice& v, bool fast) {
     if (!v.on) return;
     if (!fast && v.adsr) {   // group envelope: fall from wherever it is to silence in R
-        float a, d, s, r; groupEnv(v.group, a, d, s, r);
+        float a, d, s, r; voiceEnv(v, a, d, s, r);
         v.releasing = true; v.relInc = std::max(v.env, 1e-4f) / (float) (std::max(1.f, r) / 1000.0 * sr_); return;
     }
     if (fast) { v.releasing = true; v.stolen = true; v.relInc = 1.f / (float) (0.03 * sr_); return; }   // short fade instead of a click
     v.releasing = true; float rel = std::max(.01f, v.zone->release / 1000.f); v.relInc = 1.f / (float) (rel * sr_);
 }
 
-void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float glideFrom) {
+void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float glideFrom, int layer) {
+    const bool layerEnv = lib_->layers[layer & 1].envOn;
     const Sample& s = lib_->samples[(size_t) z.sample]; const GroupCfg& g = lib_->groups[(size_t) z.group];
     const float jt = (rnd() * 2 - 1) * z.humTune, jv = (rnd() * 2 - 1) * z.humVol, js = rnd() * z.humStart;
     const double startMsBase = z.start + z.vstart * (vel / 127.0) + js;
@@ -131,11 +150,12 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
         }
         v->gain = amp * u.gain;
         v->pan = std::min(1.f, std::max(-1.f, z.pan / 100.f + gPan / 100.f + u.pan));
-        if (!g.envOn) { v->attackInc = z.attack > 0 ? 1.f / (float) (z.attack / 1000.0 * sr_) : 0; v->env = z.attack > 0 ? 0.f : 1.f; }
+        v->layer = layer;
+        if (!g.envOn && !layerEnv) { v->attackInc = z.attack > 0 ? 1.f / (float) (z.attack / 1000.0 * sr_) : 0; v->env = z.attack > 0 ? 0.f : 1.f; }
         v->releasing = false; v->relInc = 0; v->on = true; v->note = note; v->group = z.group; v->choke = g.choke;
         v->oneshot = z.oneshot && !z.audio.loop; v->fromRelease = fromRelease; v->held = false; v->age = ++clock_;
         v->maxLife = fromRelease ? (long) (4 * sr_) : -1;
-        v->adsr = g.envOn; v->stage = 0;
+        v->adsr = g.envOn || layerEnv; v->stage = 0;
         if (v->adsr) { v->attackInc = 0; v->env = 0; }
         v->kind = s.mode == "granular" ? 2 : s.mode == "wavetable" ? 3 : 0;
         if (v->kind == 3) v->stereoIn = false;   // wavetables read the first channel, like the JS core
@@ -152,9 +172,14 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
     }
 }
 
-bool Engine::groupAllowed(int g) const {
+int Engine::layerCount() const {
+    if (!lib_ || !lib_->layerB) return 1;
+    const int b = listB_.load(); return b == -3 ? 1 : 2;
+}
+bool Engine::groupAllowed(int g, int layer) const {
     if (lib_->lists.empty()) return true;
-    int l = list_.load(); if (l == -2) l = lib_->defaultList;
+    int l = layer ? listB_.load() : list_.load(); if (l == -2) l = layer ? lib_->defaultListB : lib_->defaultList;
+    if (layer && l < 0) return false;
     if (l < 0 || l >= (int) lib_->lists.size()) return true;
     const auto& gs = lib_->lists[(size_t) l].groups;
     return std::find(gs.begin(), gs.end(), g) != gs.end();
@@ -230,11 +255,14 @@ void Engine::monoNoteOn(int note, int vel, int previous) {
 }
 
 void Engine::startNote(int note, int vel, float glideFrom, const Zone* const* skip, int nskip) {
+    const int n = layerCount(); for (int l = 0; l < n; ++l) startNoteLayer(note, vel, glideFrom, skip, nskip, l);
+}
+void Engine::startNoteLayer(int note, int vel, float glideFrom, const Zone* const* skip, int nskip, int layer) {
     const std::vector<int>& list = lib_->byNote[(size_t) note];
     int hits[64]; int nh = 0;
     for (int zi : list) {
         const Zone& z = lib_->zones[(size_t) zi]; const GroupCfg& g = lib_->groups[(size_t) z.group];
-        if (z.mute || g.mute || g.mode == GroupMode::Release || vel < z.vlo || vel > z.vhi || (lib_->anySolo && !g.solo) || (lib_->anyZoneSolo && !z.solo) || !groupAllowed(z.group)) continue;
+        if (z.mute || g.mute || g.mode == GroupMode::Release || vel < z.vlo || vel > z.vhi || (lib_->anySolo && !g.solo) || (lib_->anyZoneSolo && !z.solo) || !groupAllowed(z.group, layer)) continue;
         if (nh < 64) hits[nh++] = zi;
     }
     // round robin: one sequence per group per hit
@@ -256,11 +284,11 @@ void Engine::startNote(int note, int vel, float glideFrom, const Zone* const* sk
     }
     for (int i = 0; i < nc; ++i) {
         const Zone& z = lib_->zones[(size_t) chosen[i]]; const GroupCfg& g = lib_->groups[(size_t) z.group];
-        if (g.choke) for (auto& v : voices_) if (v.on && !v.releasing && v.group == z.group && v.choke) kill(v, true);
+        if (g.choke) for (auto& v : voices_) if (v.on && !v.releasing && v.group == z.group && v.layer == layer && v.choke) kill(v, true);
         bool skipIt = false; for (int k = 0; k < nskip; ++k) if (skip[k] == &z) skipIt = true;
         if (skipIt) continue;
-        if (g.voices > 0) { int cnt = 0; unsigned long oldest = ~0ul; Voice* ov = nullptr; for (auto& v : voices_) if (v.on && !v.releasing && v.group == z.group) { cnt++; if (v.age < oldest) { oldest = v.age; ov = &v; } } if (cnt >= g.voices && ov) kill(*ov, true); }
-        startZone(z, note, vel, false, glideFrom);
+        if (g.voices > 0) { int cnt = 0; unsigned long oldest = ~0ul; Voice* ov = nullptr; for (auto& v : voices_) if (v.on && !v.releasing && v.group == z.group && v.layer == layer) { cnt++; if (v.age < oldest) { oldest = v.age; ov = &v; } } if (cnt >= g.voices && ov) kill(*ov, true); }
+        startZone(z, note, vel, false, glideFrom, layer);
     }
 }
 
@@ -282,9 +310,9 @@ void Engine::noteOff(int note) {
     }
     if (sustain_) { for (auto& v : voices_) if (v.on && !v.fromRelease && v.note == note) v.held = true; return; }
     for (auto& v : voices_) if (v.on && !v.releasing && !v.fromRelease && v.note == note && !v.oneshot) kill(v, false);
-    for (int zi : lib_->byNote[(size_t) note]) {
+    for (int l = 0, nl = layerCount(); l < nl; ++l) for (int zi : lib_->byNote[(size_t) note]) {
         const Zone& z = lib_->zones[(size_t) zi];
-        if (lib_->groups[(size_t) z.group].mode == GroupMode::Release && !z.mute && 100 >= z.vlo && 100 <= z.vhi && !lib_->groups[(size_t) z.group].mute && groupAllowed(z.group)) startZone(z, note, 100, true);
+        if (lib_->groups[(size_t) z.group].mode == GroupMode::Release && !z.mute && 100 >= z.vlo && 100 <= z.vhi && !lib_->groups[(size_t) z.group].mute && groupAllowed(z.group, l)) startZone(z, note, 100, true, 0, l);
     }
 }
 
@@ -359,6 +387,7 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
         }
         // pitch on top of the note: glide still to go plus the pitch wheel
         float lgGain = 1, lgPan = 0, lgSemis = 0; groupLive(v.group, lgGain, lgPan, lgSemis);
+        { float yG = 1, yP = 0, yS = 0; layerLive(v.layer, yG, yP, yS); lgGain *= yG; lgPan = std::min(1.f, std::max(-1.f, lgPan + yP)); lgSemis += yS; }
         /* per-note LFO (to cutoff, pitch, volume) and per-note filter settings for this block */
         const GroupCfg& gcf = lib_->groups[(size_t) v.group]; const GroupCfg::VFilter& vf = gcf.vf; const GroupCfg::VLfo& vl = gcf.vl;
         float lfo = 0;
@@ -383,7 +412,7 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
         if (v.glide != 0.f) { const float mv = v.glideStep * (float) n; v.glide = std::fabs(v.glide) <= mv ? 0.f : v.glide - (v.glide > 0 ? mv : -mv); }
         const double ratio = v.ratio * pm;
         float eAi = 0, eDi = 0, eS = 1;
-        if (v.adsr) { float a, d, s, r; groupEnv(v.group, a, d, s, r); (void) r; eS = s; eAi = a < .5f ? 2.f : 1.f / (float) (a / 1000.0 * sr_); eDi = d < .5f ? 2.f : (1.f - s) / (float) (d / 1000.0 * sr_); }
+        if (v.adsr) { float a, d, s, r; voiceEnv(v, a, d, s, r); (void) r; eS = s; eAi = a < .5f ? 2.f : 1.f / (float) (a / 1000.0 * sr_); eDi = d < .5f ? 2.f : (1.f - s) / (float) (d / 1000.0 * sr_); }
         const float x = vpan <= 0 ? vpan + 1 : vpan, gL = std::cos(x * (float) kPi / 2), gR = std::sin(x * (float) kPi / 2), g = v.gain * gainScale;
         for (int i = 0; i < n; ++i) {
             if (!a.loop && v.pos >= (double) a.len) { endVoice(v); break; }

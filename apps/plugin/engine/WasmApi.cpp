@@ -41,6 +41,7 @@ void visu_note_off(int note) { eng().noteOff(note); }
 void visu_sustain(int down) { eng().sustain(down != 0); }
 void visu_all_off() { eng().allNotesOff(); }
 void visu_set_list(int index) { eng().setList(index); }
+void visu_set_list_b(int index) { eng().setListB(index); }
 void visu_set_gain(float g) { eng().setMasterGain(g); }
 // name is a NUL-terminated string allocated with visu_alloc (freed here)
 int visu_set_tag(char* name, float value) { int ok = g_lib && g_lib->setTag(name, value) ? 1 : 0; std::free(name); return ok; }

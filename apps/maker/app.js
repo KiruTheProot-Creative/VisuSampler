@@ -38,11 +38,15 @@ const tagById=id=>S.tags.find(t=>t.id===id)||null;
 const tagByName=n=>S.tags.find(t=>t.name===n)||null;
 const bankTag=()=>tagByName('bank');
 const listTag=()=>tagByName('list');
+/* layer B: a second patch picked from the same banks and lists, playing at the same time (tags bankB and listB) */
+const layerBOn=()=>!!tagByName('listB');   /* the tags exist while layer B is switched on */
+const bankTagB=()=>layerBOn()?tagByName('bankB'):null;
+const listTagB=()=>layerBOn()?tagByName('listB'):null;
 const syncList=t=>t.basis==='bar'?SYNC_BAR:SYNC;
 function listsInBank(b){if(b===undefined)b=bankIdx();return S.lists.filter(l=>l.bank===b);}
 function stepsOf(t){
   if(t.kind==='sync') return syncList(t).map(s=>s.l);
-  if(t.kind==='list'){const a=listsInBank().map(l=>l.name);return a.length?a:['-'];}
+  if(t.kind==='list'){const a=listsInBank(t.layer?bankIdxB():undefined).map(l=>l.name);return a.length?a:['-'];}
   if(t.kind==='bank') return S.banks.map(b=>b.letter);
   return t.steps;
 }
@@ -51,6 +55,9 @@ function stepIdx(t){const n=stepsOf(t).length;return n<2?0:clamp(Math.round(t.va
 const bankIdx=()=>{const t=bankTag();return t?stepIdx(t):0;};
 const listIdx=()=>{const t=listTag();return t?stepIdx(t):0;};
 const curList=()=>listsInBank()[listIdx()]||null;
+const bankIdxB=()=>{const t=bankTagB();return t?stepIdx(t):0;};
+const listIdxB=()=>{const t=listTagB();return t?stepIdx(t):0;};
+const curListB=()=>layerBOn()&&listTagB()?listsInBank(bankIdxB())[listIdxB()]||null:null;
 const barBeats=sg=>sg.n*4/sg.d;
 function syncBeats(t,sg){const s=syncList(t)[stepIdx(t)];return t.basis==='bar'?s.b*barBeats(sg):s.b;}
 const msOfBeats=b=>b*60000/S.bpm;
@@ -84,8 +91,8 @@ function fmtTag(t,fmt){
   }
 }
 function loadStr(){return RT.load>=1?'READY':'LOADING '+Math.round(RT.load*100)+'%';}
-function listToken(p){
-  const bl=listsInBank(),idx=listIdx(),n=bl.length,letter=(S.banks[bankIdx()]||{letter:'?'}).letter;
+function listToken(p,B){
+  const bi=B?bankIdxB():bankIdx(),bl=listsInBank(bi),idx=B?listIdxB():listIdx(),n=bl.length,letter=(S.banks[bi]||{letter:'?'}).letter;
   let i=idx; if(p.mid.indexOf('next')>=0&&n) i=(idx+1)%n; else if(p.mid.indexOf('prev')>=0&&n) i=(idx-1+n)%n;
   const l=bl[i],f=p.n===1?'name':p.fmt.toLowerCase();
   switch(f){
@@ -99,12 +106,12 @@ function listToken(p){
     default: return '?'+p.fmt;
   }
 }
-function bankToken(p){
-  const b=S.banks[bankIdx()]||{letter:'?',name:''},f=p.n===1?'letter':p.fmt.toLowerCase();
+function bankToken(p,B){
+  const bi=B?bankIdxB():bankIdx(),b=S.banks[bi]||{letter:'?',name:''},f=p.n===1?'letter':p.fmt.toLowerCase();
   switch(f){
     case 'letter': return b.letter;
     case 'name': return b.name||b.letter;
-    case 'count': return String(listsInBank().length);
+    case 'count': return String(listsInBank(bi).length);
     default: return '?'+p.fmt;
   }
 }
@@ -123,6 +130,8 @@ function expand(text){
       case 'timesig': return esc(p.fmt==='bar'||p.fmt==='ms'?msStr(msOfBeats(barBeats(S.sig))):p.fmt==='num'?String(S.sig.n):p.fmt==='den'?String(S.sig.d):S.sig.n+'/'+S.sig.d);
       case 'list': return esc(listToken(p));
       case 'bank': return esc(bankToken(p));
+      case 'listB': return layerBOn()?esc(listToken(p,1)):'-';
+      case 'bankB': return layerBOn()?esc(bankToken(p,1)):'-';
     }
     const t=tagByName(p.name);
     if(!t) return '<span class="bad">{'+p.name+'?}</span>';
@@ -631,9 +640,10 @@ function setTag(t,v){
   if(n>1) v=Math.round(v*(n-1))/(n-1); else if(t.kind!=='number') v=0;
   if(v===t.value) return;
   t.value=v;
-  if(t.kind==='bank'){const lt=listTag();if(lt)lt.value=0;}
+  if(t.kind==='bank'){const lt=t.layer?tagByName('listB'):listTag();if(lt)lt.value=0;}
   onTag(t);
-  if(t.kind==='bank'||t.kind==='list') listChanged();
+  if((t.kind==='bank'||t.kind==='list')&&t.layer){listChangedB();}
+  else if(t.kind==='bank'||t.kind==='list') listChanged();
   fireChange(t);
 }
 function onTag(t){
@@ -669,6 +679,11 @@ function listChanged(){
   if(l&&l.vals) Object.keys(l.vals).forEach(k=>{const t=tagByName(k);if(t&&!t.sys)setTag(t,l.vals[k]);});
   scheduleLoad();
   S.els.forEach(el=>{if(el.type==='list'&&el.rules&&el.rules.length)fireEvent(el,'change');});
+}
+/* layer B changed: displays update and the engine hears about it; the list's stored knob values belong to layer A */
+function listChangedB(){
+  refreshDisplays();if(typeof engineSendState==='function')engineSendState();if(typeof reportListB==='function')reportListB();
+  S.els.forEach(el=>{if(el.type==='list'&&el.layer&&el.rules&&el.rules.length)fireEvent(el,'change');});
 }
 function updateTagUI(t){
   if(S.tab!=='tags') return;
@@ -3124,13 +3139,13 @@ if(navigator.requestMIDIAccess){
    apps/plugin/engine is the only engine source. GitHub builds it natively for the VST and as engine.wasm for this app.
    The project is handed to the engine as an in-memory .vsamp whenever it changes; notes, knobs and lists go over the worklet port.
    Only the sample editor's previews (and a fallback if engine.wasm cannot load) still use the old JS path. */
-const ENG={node:null,out:null,starting:false,failed:'',loaded:false,sig:'',pendingSig:'',timer:0,voices:0,zones:0,lastList:-2};
+const ENG={node:null,out:null,starting:false,failed:'',loaded:false,sig:'',pendingSig:'',timer:0,voices:0,zones:0,lastList:-2,lastListB:-9};
 const ENGINE_MODES=['sampler','slicer','speedkeep','granular','wavetable'];
 const engineZone=z=>{const s=sampleById(z.sample);return !!s&&ENGINE_MODES.indexOf(smOf(s).mode)>=0;};
 const engineOn=()=>!!(ENG.node&&ENG.loaded);
 /* the worklet code is built into app.js (build.py) and loaded from a blob, so it never depends on how the page is served
    (the desktop app serves files from its own app:// scheme, where worklet module loading is not reliable) */
-const ENGINE_WORKLET_SRC="/* Loads engine.wasm (the C++ engine) and wraps its C interface. Works in Node, the browser and an AudioWorklet. */\nfunction importsFor(module){\n  /* the standalone build may import a few WASI/env functions it never really needs here; give it harmless stubs */\n  const imports={};\n  for(const im of WebAssembly.Module.imports(module)){\n    if(im.kind!=='function')continue;\n    (imports[im.module]||(imports[im.module]={}))[im.name]=im.name==='proc_exit'?code=>{throw new Error('engine exited '+code);}:()=>0;\n  }\n  return imports;\n}\nfunction instantiateSync(module){return wrap(new WebAssembly.Instance(module,importsFor(module)));}\nasync function instantiate(bytesOrModule){\n  const module=bytesOrModule instanceof WebAssembly.Module?bytesOrModule:await WebAssembly.compile(bytesOrModule);\n  return wrap(await WebAssembly.instantiate(module,importsFor(module)));\n}\n/* UTF-8 by hand: an AudioWorklet has no TextEncoder or TextDecoder */\nfunction utf8(s){\n  const out=[];\n  for(const ch of String(s)){let c=ch.codePointAt(0);\n    if(c<0x80)out.push(c);else if(c<0x800)out.push(0xc0|c>>6,0x80|c&63);\n    else if(c<0x10000)out.push(0xe0|c>>12,0x80|c>>6&63,0x80|c&63);else out.push(0xf0|c>>18,0x80|c>>12&63,0x80|c>>6&63,0x80|c&63);}\n  return Uint8Array.from(out);\n}\nfunction fromUtf8(b){\n  let s='';for(let i=0;i<b.length;){const c=b[i++];\n    if(c<0x80)s+=String.fromCharCode(c);\n    else if(c<0xe0)s+=String.fromCharCode((c&31)<<6|b[i++]&63);\n    else if(c<0xf0){const c2=b[i++],c3=b[i++];s+=String.fromCharCode((c&15)<<12|(c2&63)<<6|c3&63);}\n    else{const c2=b[i++],c3=b[i++],c4=b[i++];s+=String.fromCodePoint((c&7)<<18|(c2&63)<<12|(c3&63)<<6|c4&63);}}\n  return s;\n}\nfunction wrap(inst){\n  const x=inst.exports;if(x._initialize)x._initialize();\n  const str=p=>{const m=new Uint8Array(x.memory.buffer);let e=p;while(m[e])e++;return fromUtf8(m.subarray(p,e));};\n  let maxFrames=0;\n  return{\n    exports:x,\n    prepare(sampleRate,frames=512){maxFrames=frames;x.visu_prepare(sampleRate,frames);},\n    /** Loads a .vsamp. Returns null on success, or the error text. */\n    load(bytes){const p=x.visu_alloc(bytes.length);new Uint8Array(x.memory.buffer,p,bytes.length).set(bytes);return x.visu_load(p,bytes.length)?null:str(x.visu_error());},\n    unload(){x.visu_unload();},\n    noteOn(n,v){x.visu_note_on(n,v);},noteOff(n){x.visu_note_off(n);},sustain(d){x.visu_sustain(d?1:0);},allOff(){x.visu_all_off();},\n    setList(i){x.visu_set_list(i);},setGain(g){x.visu_set_gain(g);},\n    setTag(name,v){const b=utf8(name+'\\0'),p=x.visu_alloc(b.length);new Uint8Array(x.memory.buffer,p,b.length).set(b);return !!x.visu_set_tag(p,v);},\n    controller(cc,v){x.visu_controller(cc,v);},pitchBend(v){x.visu_pitch_bend(v);},\n    /** Renders n frames (n <= the frames given to prepare). The returned arrays are views and are only valid until the next call. */\n    render(n){x.visu_render(n);return[new Float32Array(x.memory.buffer,x.visu_left(),n),new Float32Array(x.memory.buffer,x.visu_right(),n)];},\n    get voices(){return x.visu_voices();},get zones(){return x.visu_zones();},get unsupportedZones(){return x.visu_unsupported_zones();}\n  };\n}\n\n/* AudioWorklet that plays a library with the WebAssembly engine.\n   new AudioWorkletNode(ctx,'visu-engine',{numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}})\n   port messages: {t:'load',bytes} {t:'on',n,v} {t:'off',n} {t:'sustain',d} {t:'alloff'} {t:'list',i} {t:'gain',g}\n   it posts {t:'loaded',error,zones,unsupportedZones} and {t:'voices',n} */\n\nclass VisuEngine extends AudioWorkletProcessor{\n  constructor(o){\n    super();this.e=instantiateSync(o.processorOptions.module);this.e.prepare(sampleRate,128);this.lastV=-1;this.tick=0;\n    this.port.onmessage=({data:m})=>{try{this.handle(m);}catch(err){this.port.postMessage({t:'error',error:String(err&&err.message||err)});}};\n  }\n  handle(m){const e=this.e;\n      if(m.t==='load'){const err=e.load(new Uint8Array(m.bytes));this.port.postMessage({t:'loaded',error:err,zones:e.zones,unsupportedZones:e.unsupportedZones});}\n      else if(m.t==='on')e.noteOn(m.n,m.v);else if(m.t==='off')e.noteOff(m.n);else if(m.t==='sustain')e.sustain(m.d);\n      else if(m.t==='alloff')e.allOff();else if(m.t==='list')e.setList(m.i);else if(m.t==='gain')e.setGain(m.g);else if(m.t==='tag')e.setTag(m.name,m.v);else if(m.t==='cc')e.controller(m.cc,m.v);else if(m.t==='bend')e.pitchBend(m.v);else if(m.t==='unload')e.unload();\n  }\n  process(_,outputs){\n    const out=outputs[0],n=out[0].length,[l,r]=this.e.render(n);out[0].set(l);if(out[1])out[1].set(r);\n    if(++this.tick%20===0){const v=this.e.voices;if(v!==this.lastV){this.lastV=v;this.port.postMessage({t:'voices',n:v});}}\n    return true;\n  }\n}\nregisterProcessor('visu-engine',VisuEngine);\n";
+const ENGINE_WORKLET_SRC="/* Loads engine.wasm (the C++ engine) and wraps its C interface. Works in Node, the browser and an AudioWorklet. */\nfunction importsFor(module){\n  /* the standalone build may import a few WASI/env functions it never really needs here; give it harmless stubs */\n  const imports={};\n  for(const im of WebAssembly.Module.imports(module)){\n    if(im.kind!=='function')continue;\n    (imports[im.module]||(imports[im.module]={}))[im.name]=im.name==='proc_exit'?code=>{throw new Error('engine exited '+code);}:()=>0;\n  }\n  return imports;\n}\nfunction instantiateSync(module){return wrap(new WebAssembly.Instance(module,importsFor(module)));}\nasync function instantiate(bytesOrModule){\n  const module=bytesOrModule instanceof WebAssembly.Module?bytesOrModule:await WebAssembly.compile(bytesOrModule);\n  return wrap(await WebAssembly.instantiate(module,importsFor(module)));\n}\n/* UTF-8 by hand: an AudioWorklet has no TextEncoder or TextDecoder */\nfunction utf8(s){\n  const out=[];\n  for(const ch of String(s)){let c=ch.codePointAt(0);\n    if(c<0x80)out.push(c);else if(c<0x800)out.push(0xc0|c>>6,0x80|c&63);\n    else if(c<0x10000)out.push(0xe0|c>>12,0x80|c>>6&63,0x80|c&63);else out.push(0xf0|c>>18,0x80|c>>12&63,0x80|c>>6&63,0x80|c&63);}\n  return Uint8Array.from(out);\n}\nfunction fromUtf8(b){\n  let s='';for(let i=0;i<b.length;){const c=b[i++];\n    if(c<0x80)s+=String.fromCharCode(c);\n    else if(c<0xe0)s+=String.fromCharCode((c&31)<<6|b[i++]&63);\n    else if(c<0xf0){const c2=b[i++],c3=b[i++];s+=String.fromCharCode((c&15)<<12|(c2&63)<<6|c3&63);}\n    else{const c2=b[i++],c3=b[i++],c4=b[i++];s+=String.fromCodePoint((c&7)<<18|(c2&63)<<12|(c3&63)<<6|c4&63);}}\n  return s;\n}\nfunction wrap(inst){\n  const x=inst.exports;if(x._initialize)x._initialize();\n  const str=p=>{const m=new Uint8Array(x.memory.buffer);let e=p;while(m[e])e++;return fromUtf8(m.subarray(p,e));};\n  let maxFrames=0;\n  return{\n    exports:x,\n    prepare(sampleRate,frames=512){maxFrames=frames;x.visu_prepare(sampleRate,frames);},\n    /** Loads a .vsamp. Returns null on success, or the error text. */\n    load(bytes){const p=x.visu_alloc(bytes.length);new Uint8Array(x.memory.buffer,p,bytes.length).set(bytes);return x.visu_load(p,bytes.length)?null:str(x.visu_error());},\n    unload(){x.visu_unload();},\n    noteOn(n,v){x.visu_note_on(n,v);},noteOff(n){x.visu_note_off(n);},sustain(d){x.visu_sustain(d?1:0);},allOff(){x.visu_all_off();},\n    setList(i){x.visu_set_list(i);},setListB(i){if(x.visu_set_list_b)x.visu_set_list_b(i);},setGain(g){x.visu_set_gain(g);},\n    setTag(name,v){const b=utf8(name+'\\0'),p=x.visu_alloc(b.length);new Uint8Array(x.memory.buffer,p,b.length).set(b);return !!x.visu_set_tag(p,v);},\n    controller(cc,v){x.visu_controller(cc,v);},pitchBend(v){x.visu_pitch_bend(v);},\n    /** Renders n frames (n <= the frames given to prepare). The returned arrays are views and are only valid until the next call. */\n    render(n){x.visu_render(n);return[new Float32Array(x.memory.buffer,x.visu_left(),n),new Float32Array(x.memory.buffer,x.visu_right(),n)];},\n    get voices(){return x.visu_voices();},get zones(){return x.visu_zones();},get unsupportedZones(){return x.visu_unsupported_zones();}\n  };\n}\n\n/* AudioWorklet that plays a library with the WebAssembly engine.\n   new AudioWorkletNode(ctx,'visu-engine',{numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}})\n   port messages: {t:'load',bytes} {t:'on',n,v} {t:'off',n} {t:'sustain',d} {t:'alloff'} {t:'list',i} {t:'listB',i} {t:'gain',g}\n   it posts {t:'loaded',error,zones,unsupportedZones} and {t:'voices',n} */\n\nclass VisuEngine extends AudioWorkletProcessor{\n  constructor(o){\n    super();this.e=instantiateSync(o.processorOptions.module);this.e.prepare(sampleRate,128);this.lastV=-1;this.tick=0;\n    this.port.onmessage=({data:m})=>{try{this.handle(m);}catch(err){this.port.postMessage({t:'error',error:String(err&&err.message||err)});}};\n  }\n  handle(m){const e=this.e;\n      if(m.t==='load'){const err=e.load(new Uint8Array(m.bytes));this.port.postMessage({t:'loaded',error:err,zones:e.zones,unsupportedZones:e.unsupportedZones});}\n      else if(m.t==='on')e.noteOn(m.n,m.v);else if(m.t==='off')e.noteOff(m.n);else if(m.t==='sustain')e.sustain(m.d);\n      else if(m.t==='alloff')e.allOff();else if(m.t==='list')e.setList(m.i);else if(m.t==='listB')e.setListB(m.i);else if(m.t==='gain')e.setGain(m.g);else if(m.t==='tag')e.setTag(m.name,m.v);else if(m.t==='cc')e.controller(m.cc,m.v);else if(m.t==='bend')e.pitchBend(m.v);else if(m.t==='unload')e.unload();\n  }\n  process(_,outputs){\n    const out=outputs[0],n=out[0].length,[l,r]=this.e.render(n);out[0].set(l);if(out[1])out[1].set(r);\n    if(++this.tick%20===0){const v=this.e.voices;if(v!==this.lastV){this.lastV=v;this.port.postMessage({t:'voices',n:v});}}\n    return true;\n  }\n}\nregisterProcessor('visu-engine',VisuEngine);\n";
 function engineFail(why){
   ENG.failed=why;console.warn('engine',why);updVoices();
   flash('The shared engine could not start ('+why+'). Envelopes, knobs on groups and FX on/off buttons need it.');
@@ -3148,7 +3163,7 @@ async function engineStart(){
     const node=new AudioWorkletNode(AU.ctx,'visu-engine',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}});
     const out=AU.ctx.createGain();out.gain.value=2.4;node.connect(out);out.connect(AU.master);
     node.port.onmessage=({data:m})=>{
-      if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;engineSendState();updVoices();}
+      if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;ENG.lastListB=-9;engineSendState();updVoices();}
       else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
       else if(m.t==='error'){if(ENG.lastErr!==m.error){ENG.lastErr=m.error;flash('Engine error: '+m.error);console.warn('engine worklet',m.error);}}
     };
@@ -3171,7 +3186,7 @@ async function engineBytes(){
     smeta.push({id:s.id,name:s.name,sr:b.sr,chn:b.ch.length,frames:b.ch[0].length,root:s.root,fine:s.fine||0,loop:s.loop||null,sm:s.sm,bits:32,data:await pack.add(encodePCM(b.ch,32),{})});
   }
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
-  sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;}
+  sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;const cb=curListB();sn.currentListB=cb?S.lists.indexOf(cb):-1;}
   const fxRanges={};Object.keys(FXT).forEach(k=>{fxRanges[k]={};FXT[k].params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0];});});
   const zones=JSON.parse(JSON.stringify(S.zones));
   const manifest={format:'vsamp',formatVersion:1,lib:{id:'maker-live',name:S.lib.name},banner:{images:{}},project:sn,fxRanges,features:[],samples:smeta,zones};
@@ -3194,6 +3209,8 @@ function engineSendState(){
   S.tags.forEach(t=>{if(!t.sys)ENG.node.port.postMessage({t:'tag',name:t.name,v:t.value});});
   const i=engineListIndex();
   if(i!==ENG.lastList){ENG.lastList=i;ENG.node.port.postMessage({t:'list',i});}
+  const lb=curListB(),ib=lb?S.lists.indexOf(lb):-3;   /* -3: layer B off */
+  if(ib!==ENG.lastListB){ENG.lastListB=ib;ENG.node.port.postMessage({t:'listB',i:ib});}
 }
 setInterval(()=>{if(AU.ctx&&!ENG.node&&!ENG.starting&&!ENG.failed)engineStart();if(ENG.node)engineSync(false);},250);
 const setTagE=setTag;
@@ -4828,13 +4845,15 @@ function snPlayHTML(){
     +nf('Pitch-bend range','data-pl="bend"',p.bend,0,48,1,'semitones')
     +nf('Voice limit','data-pl="maxVoices"',p.maxVoices,0,256,1,'0 = 256')
     +'<label class="f"><span>When full, steal</span><select data-pl="steal">'+mopt([['oldest','The oldest note'],['quietest','The quietest note']],p.steal)+'</select></label>'
-    +'<p class="hint" style="display:block">Glide works in mono. Released notes are always stolen first. In the player a CPU guard also lowers the limit for a moment when the computer cannot keep up.</p></div>';
+    +'<p class="hint" style="display:block">Glide works in mono. Released notes are always stolen first. In the player a CPU guard also lowers the limit for a moment when the computer cannot keep up.</p>'
+    +layersHTML()+'</div>';
 }
 $('#snInsPlay').addEventListener('change',e=>{
   const t=e.target,k=t.dataset.pl;if(!k)return;
   const p=playOf();
   if(t.type==='checkbox')p[k]=t.checked;else if(t.type==='number'){const v=parseFloat(t.value);p[k]=isFinite(v)?Math.max(+t.min||0,Math.min(+t.max||1e9,v)):PLAY_DEF[k];}else p[k]=t.value;
   if(!p.mono)p.legato=false;
+  if(k==='layerB')setLayerB(p,t.checked);
   S.play=p;mapLeftRender();$('#snInsPlay').innerHTML=snPlayHTML();
 });
 const snShowPlay=snShow;
@@ -4842,6 +4861,58 @@ snShow=function(keepIns){
   snShowPlay(keepIns);const el=$('#snInsPlay'),on=S.snd.focus==='play';el.hidden=!on;
   if(on){$('#rightM').hidden=true;if(!keepIns||!el.innerHTML)el.innerHTML=snPlayHTML();}
 };
+
+/* ---------- layers: patch A and patch B play at the same time ----------
+   Both pick from the same banks and lists. Layer A is the usual bank/list; layer B has its own tags bankB and listB
+   ({listB.name}, {listB.id}, {bankB} in texts; next/previous on listB in buttons). Each layer has its own knobs on
+   volume, pan, semitones and fine tune, and its own envelope, applied on top of the groups (project.play.layers). */
+const LAYER_DEF=()=>({links:{},env:{on:false,a:5,d:300,s:100,r:300,tags:{}}});
+const layerOf=(p,i)=>{const L=(p.layers&&p.layers[i])||LAYER_DEF();return{links:Object.assign({},L.links||{}),env:Object.assign({},LAYER_DEF().env,L.env||{},{tags:Object.assign({},(L.env&&L.env.tags)||{})})};};
+function setLayerB(p,on){
+  p.layerB=on;
+  let b=tagByName('bankB'),l=tagByName('listB');
+  if(on){
+    if(!b){b=mkTag('bankB','bank',{sys:true,layer:1});S.tags.push(b);}
+    if(!l){l=mkTag('listB','list',{sys:true,layer:1});S.tags.push(l);}
+    /* start B on the next list after A, so both are heard */
+    const a=curList();if(a){const i=S.lists.indexOf(a),nx=S.lists[(i+1)%S.lists.length];b.value=0;setStep(b,nx.bank);setStep(l,listsInBank(nx.bank).indexOf(nx));}
+  }else S.tags=S.tags.filter(t=>t!==b&&t!==l);
+  p.layers=[layerOf(p,0),layerOf(p,1)];
+  if(typeof renderRight==='function'&&S.view!=='sound')renderRight();
+  refreshDisplays();
+}
+const LYLINK=[['vol','Volume','dB',0,-60],['pan','Pan','L–R',-100,100],['tune','Semitones','st',-12,12],['fine','Fine tune','cents',-100,100]];
+function layersHTML(){
+  const p=playOf(),on=layerBOn();
+  let h='<div class="snenv"><label class="f chk"><input type="checkbox" data-pl="layerB"'+(on?' checked':'')+'><span>Layer B: a second patch at the same time</span></label>';
+  if(!on)return h+'<p class="hint">Patch A and patch B pick from the same banks and lists, and a key plays both.</p></div>';
+  const knobs=[['','no knob']].concat(S.tags.filter(t=>!t.sys&&t.kind==='number').map(t=>[t.id,t.name]));
+  h+='<p class="hint">Layer B uses the tags <b>bankB</b> and <b>listB</b>: buttons with next/previous on listB, and texts like {listB.id} {listB.name}. The knobs below work on everything a layer plays, on top of the groups\' own settings.</p></div>';
+  for(let i=0;i<2;i++){
+    const L=layerOf(p,i),e=L.env,nm=i?'B':'A';
+    h+='<details class="snlinks"'+(Object.keys(L.links).length||e.on?' open':'')+'><summary>Layer '+nm+' knobs</summary>'
+      +LYLINK.map(([k,l,u])=>{const x=L.links[k];
+        return '<div class="envrow"><span class="lk">'+l+'</span><select data-ly="'+i+':link:'+k+'" aria-label="Layer '+nm+' knob for '+l+'">'+mopt(knobs,x?x.tag:'')+'</select></div>'
+          +(x?'<div class="glrange"><label>from <input type="number" data-ly="'+i+':from:'+k+'" value="'+x.from+'" step="1"></label><label>to <input type="number" data-ly="'+i+':to:'+k+'" value="'+x.to+'" step="1"></label><em class="sfx">'+u+'</em></div>':'');}).join('')
+      +'<label class="f chk"><input type="checkbox" data-ly="'+i+':envon:"'+(e.on?' checked':'')+'><span>Envelope for layer '+nm+' (replaces the groups\' envelopes)</span></label>'
+      +(e.on?[['a','Attack',10000,'ms'],['d','Decay',10000,'ms'],['s','Sustain',100,'%'],['r','Release',10000,'ms']].map(([k,l,mx,u])=>
+        '<div class="envrow"><label class="f"><span>'+l+'</span><input type="number" data-ly="'+i+':env:'+k+'" min="0" max="'+mx+'" step="1" value="'+e[k]+'"'+(e.tags[k]?' disabled':'')+'><em class="sfx">'+u+'</em></label>'
+        +'<select data-ly="'+i+':envtag:'+k+'" aria-label="Layer '+nm+' knob for '+l+'">'+mopt(knobs,e.tags[k]||'')+'</select></div>').join(''):'')
+      +'</details>';
+  }
+  return h;
+}
+$('#snInsPlay').addEventListener('change',e=>{
+  const t=e.target;if(!t.dataset.ly)return;
+  const [i,kind,k]=t.dataset.ly.split(':'),p=playOf(),ls=[layerOf(p,0),layerOf(p,1)],L=ls[+i],d=LYLINK.find(x=>x[0]===k);
+  if(kind==='link'){const sw=+i===1&&k==='vol';   /* B's volume defaults the other way round: one knob crossfades A and B */
+    if(t.value)L.links[k]=Object.assign({from:sw?d[4]:d[3],to:sw?d[3]:d[4]},L.links[k]||{},{tag:t.value});else delete L.links[k];}
+  else if(kind==='from'||kind==='to'){const v=parseFloat(t.value);if(L.links[k]&&isFinite(v))L.links[k][kind]=v;}
+  else if(kind==='envon')L.env.on=t.checked;
+  else if(kind==='env'){const v=parseFloat(t.value);L.env[k]=isFinite(v)?Math.max(0,Math.min(+t.max,v)):LAYER_DEF().env[k];}
+  else if(kind==='envtag'){if(t.value)L.env.tags[k]=t.value;else delete L.env.tags[k];}
+  p.layers=ls;S.play=p;$('#snInsPlay').innerHTML=snPlayHTML();
+});
 
 /* ---------- visual loop editor (Sound tab) ----------
    The waveform edits the loop of the selected zones (the loop that plays), or the sample's default loop when no zone is picked.
@@ -5066,7 +5137,7 @@ function libraryFeatures(set){
   S.samples.forEach(s=>{const sm=smOf(s);if(S.zones.some(z=>z.sample===s.id)){add(sm.mode);if(sm.uni.on)add('unison');}});
   set.zones.forEach(z=>{const g=gcfg(z.group);if(z.loop&&z.loop.on){add('loop');if(z.loop.pp)add('pingpong');}if(z.rev)add('reverse');if(z.vstart)add('velstart');
     if(z.fadeLo||z.fadeHi||z.vfadeLo||z.vfadeHi)add('crossfade');if(z.hum&&(z.hum.tune||z.hum.vol||z.hum.start))add('humanize');
-    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.links&&Object.keys(g.links).length)add('grouplinks');if((g.vfilter&&g.vfilter.on)||(g.vlfo&&g.vlfo.on))add('vfilter');if(g.voices)add('voicelimit');});
+    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.links&&Object.keys(g.links).length)add('grouplinks');if((g.vfilter&&g.vfilter.on)||(g.vlfo&&g.vlfo.on))add('vfilter');if(g.voices)add('voicelimit');});if(layerBOn())add('layers');
   if(S.lists.length)add('lists');if(S.els.length)add('ui');
   Object.values(S.fx.graphs).forEach(g=>g.nodes.forEach(n=>{if(FXT[n.type]&&FXT[n.type].kind!=='io')add('fx:'+n.type);}));
   return [...f].sort();
@@ -5103,7 +5174,7 @@ async function buildVsamp(progress){
     fonts[fam]={lic:f.lic,data:await pack.add(new Uint8Array(f.buf),{compress:true})};
   }
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
-  sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;}
+  sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;const cb=curListB();sn.currentListB=cb?S.lists.indexOf(cb):-1;}
   /* parameter ranges of every FX module, so the player can apply knobs and modulation exactly like the Maker */
   const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0];});});
   const est=estimate(o),dropped=set.stats.unusedSkipped;
@@ -5425,6 +5496,6 @@ S.tab='props';
 syncToolbar(); layout(); mountAll(); renderLayers(); renderRight();
 new ResizeObserver(()=>{if(S.view==='design')layout();}).observe(vp);
 setView('sound');
-if(window.__VSTEST) window.__vs={S,setStep:(t,i)=>setStep(t,i),listsInBank:b=>listsInBank(b),curList:()=>curList(),snShow:()=>snShow(),HIST,deleteSamples:ids=>deleteSamples(ids),smOp:(o,a)=>smOp(o,a),ENG,engineBytes:()=>engineBytes(),setTag:(t,v)=>setTag(t,v),rerender:()=>{rerenderAll();placeSel();},ensureAudio,renderZone,touchMap,noteOn,noteOff,addBuffer,autoMapSamples,zoneConflicts,AU,SV,smOf,zoneData,uniVoices,BUF,sampleById,demoExtras,mapSlices,smOp,mkZone,detectTransients,smSample,previewOn,previewOff,PV,estimate,buildVsamp,parseVsamp,exRender,exBuild,bannerRedraw,crc32,fmtBytes,saveProject,openProject,restore,snapshot,FXT,FXA,graphOf,fxNode,mkCable,fxRender,sampBus,sampPanic,mapLeftRender,soundEnter,ENG};
+if(window.__VSTEST) window.__vs={S,setStep:(t,i)=>setStep(t,i),listsInBank:b=>listsInBank(b),curList:()=>curList(),snShow:()=>snShow(),HIST,deleteSamples:ids=>deleteSamples(ids),smOp:(o,a)=>smOp(o,a),ENG,engineBytes:()=>engineBytes(),setTag:(t,v)=>setTag(t,v),rerender:()=>{rerenderAll();placeSel();},ensureAudio,renderZone,touchMap,noteOn,noteOff,addBuffer,autoMapSamples,zoneConflicts,AU,SV,smOf,zoneData,uniVoices,BUF,sampleById,demoExtras,mapSlices,smOp,mkZone,detectTransients,smSample,previewOn,previewOff,PV,estimate,buildVsamp,parseVsamp,exRender,exBuild,bannerRedraw,crc32,fmtBytes,saveProject,openProject,restore,snapshot,FXT,FXA,graphOf,fxNode,mkCable,fxRender,sampBus,sampPanic,mapLeftRender,soundEnter,ENG,expand:s=>expand(s),curListB:()=>curListB(),fireAct:(name,verb)=>{const t=tagByName(name);if(verb==="next")stepBy(t,1);else stepBy(t,-1);}};
 
 })();

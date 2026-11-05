@@ -16,8 +16,11 @@ new ResizeObserver(()=>layout()).observe(stageEl);
 /* tell the plugin when the chosen list changes, so the engine plays it */
 let lastList=-2;
 function reportList(){const l=curList(),i=l?S.lists.indexOf(l):-1;if(i!==lastList){lastList=i;parent.postMessage({t:'list',index:i},'*');}}
+let lastListB=-9;
+function reportListB(){const l=curListB(),i=l?S.lists.indexOf(l):-3;if(i!==lastListB){lastListB=i;parent.postMessage({t:'listB',index:i},'*');}}
+function chooseListB(i){const l=S.lists[i],bt=bankTagB(),lt=listTagB();if(!l||!bt||!lt)return;setStep(bt,l.bank);setStep(lt,listsInBank(l.bank).indexOf(l));}
 const setTag0=setTag;
-setTag=function(t,v){setTag0(t,v);reportList();parent.postMessage({t:'tag',name:t.name,value:t.value},'*');};
+setTag=function(t,v){setTag0(t,v);reportList();reportListB();parent.postMessage({t:'tag',name:t.name,value:t.value},'*');};
 function chooseList(i){const l=S.lists[i];if(!l)return;const bt=bankTag(),lt=listTag();if(bt)setStep(bt,l.bank);if(lt)setStep(lt,listsInBank(l.bank).indexOf(l));}
 window.addEventListener('message',async e=>{
   const m=e.data||{};
@@ -32,9 +35,11 @@ window.addEventListener('message',async e=>{
     Object.keys(m.tags||{}).forEach(name=>{const t=tagByName(name);if(t&&t.kind!=='bank'&&t.kind!=='list')t.value=Math.min(1,Math.max(0,+m.tags[name]||0));});
     if(m.tags&&Object.keys(m.tags).length){rerenderAll();showPage();}
     if(m.list!=null&&m.list>=0)chooseList(m.list);else refreshDisplays();
-    lastList=-2;reportList();
+    if(m.listB!=null&&m.listB>=0)chooseListB(m.listB);
+    lastList=-2;reportList();lastListB=-9;reportListB();
     document.fonts.ready.then(()=>rerenderAll());
   }else if(m.t==='list'){chooseList(m.index);}
+  else if(m.t==='listB'){chooseListB(m.index);}
   else if(m.t==='tags'){   /* moved by DAW automation or a MIDI controller: show it, do not send it back */
     Object.keys(m.values||{}).forEach(n=>{const t=tagByName(n);if(t)setTag0(t,+m.values[n]);});
   }

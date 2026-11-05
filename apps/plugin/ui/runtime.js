@@ -33,11 +33,15 @@ const tagById=id=>S.tags.find(t=>t.id===id)||null;
 const tagByName=n=>S.tags.find(t=>t.name===n)||null;
 const bankTag=()=>tagByName('bank');
 const listTag=()=>tagByName('list');
+/* layer B: a second patch picked from the same banks and lists, playing at the same time (tags bankB and listB) */
+const layerBOn=()=>!!tagByName('listB');   /* the tags exist while layer B is switched on */
+const bankTagB=()=>layerBOn()?tagByName('bankB'):null;
+const listTagB=()=>layerBOn()?tagByName('listB'):null;
 const syncList=t=>t.basis==='bar'?SYNC_BAR:SYNC;
 function listsInBank(b){if(b===undefined)b=bankIdx();return S.lists.filter(l=>l.bank===b);}
 function stepsOf(t){
   if(t.kind==='sync') return syncList(t).map(s=>s.l);
-  if(t.kind==='list'){const a=listsInBank().map(l=>l.name);return a.length?a:['-'];}
+  if(t.kind==='list'){const a=listsInBank(t.layer?bankIdxB():undefined).map(l=>l.name);return a.length?a:['-'];}
   if(t.kind==='bank') return S.banks.map(b=>b.letter);
   return t.steps;
 }
@@ -46,6 +50,9 @@ function stepIdx(t){const n=stepsOf(t).length;return n<2?0:clamp(Math.round(t.va
 const bankIdx=()=>{const t=bankTag();return t?stepIdx(t):0;};
 const listIdx=()=>{const t=listTag();return t?stepIdx(t):0;};
 const curList=()=>listsInBank()[listIdx()]||null;
+const bankIdxB=()=>{const t=bankTagB();return t?stepIdx(t):0;};
+const listIdxB=()=>{const t=listTagB();return t?stepIdx(t):0;};
+const curListB=()=>layerBOn()&&listTagB()?listsInBank(bankIdxB())[listIdxB()]||null:null;
 const barBeats=sg=>sg.n*4/sg.d;
 function syncBeats(t,sg){const s=syncList(t)[stepIdx(t)];return t.basis==='bar'?s.b*barBeats(sg):s.b;}
 const msOfBeats=b=>b*60000/S.bpm;
@@ -79,8 +86,8 @@ function fmtTag(t,fmt){
   }
 }
 function loadStr(){return RT.load>=1?'READY':'LOADING '+Math.round(RT.load*100)+'%';}
-function listToken(p){
-  const bl=listsInBank(),idx=listIdx(),n=bl.length,letter=(S.banks[bankIdx()]||{letter:'?'}).letter;
+function listToken(p,B){
+  const bi=B?bankIdxB():bankIdx(),bl=listsInBank(bi),idx=B?listIdxB():listIdx(),n=bl.length,letter=(S.banks[bi]||{letter:'?'}).letter;
   let i=idx; if(p.mid.indexOf('next')>=0&&n) i=(idx+1)%n; else if(p.mid.indexOf('prev')>=0&&n) i=(idx-1+n)%n;
   const l=bl[i],f=p.n===1?'name':p.fmt.toLowerCase();
   switch(f){
@@ -94,12 +101,12 @@ function listToken(p){
     default: return '?'+p.fmt;
   }
 }
-function bankToken(p){
-  const b=S.banks[bankIdx()]||{letter:'?',name:''},f=p.n===1?'letter':p.fmt.toLowerCase();
+function bankToken(p,B){
+  const bi=B?bankIdxB():bankIdx(),b=S.banks[bi]||{letter:'?',name:''},f=p.n===1?'letter':p.fmt.toLowerCase();
   switch(f){
     case 'letter': return b.letter;
     case 'name': return b.name||b.letter;
-    case 'count': return String(listsInBank().length);
+    case 'count': return String(listsInBank(bi).length);
     default: return '?'+p.fmt;
   }
 }
@@ -118,6 +125,8 @@ function expand(text){
       case 'timesig': return esc(p.fmt==='bar'||p.fmt==='ms'?msStr(msOfBeats(barBeats(S.sig))):p.fmt==='num'?String(S.sig.n):p.fmt==='den'?String(S.sig.d):S.sig.n+'/'+S.sig.d);
       case 'list': return esc(listToken(p));
       case 'bank': return esc(bankToken(p));
+      case 'listB': return layerBOn()?esc(listToken(p,1)):'-';
+      case 'bankB': return layerBOn()?esc(bankToken(p,1)):'-';
     }
     const t=tagByName(p.name);
     if(!t) return '<span class="bad">{'+p.name+'?}</span>';
@@ -511,9 +520,10 @@ function setTag(t,v){
   if(n>1) v=Math.round(v*(n-1))/(n-1); else if(t.kind!=='number') v=0;
   if(v===t.value) return;
   t.value=v;
-  if(t.kind==='bank'){const lt=listTag();if(lt)lt.value=0;}
+  if(t.kind==='bank'){const lt=t.layer?tagByName('listB'):listTag();if(lt)lt.value=0;}
   onTag(t);
-  if(t.kind==='bank'||t.kind==='list') listChanged();
+  if((t.kind==='bank'||t.kind==='list')&&t.layer){listChangedB();}
+  else if(t.kind==='bank'||t.kind==='list') listChanged();
   fireChange(t);
 }
 function onTag(t){
@@ -549,6 +559,11 @@ function listChanged(){
   if(l&&l.vals) Object.keys(l.vals).forEach(k=>{const t=tagByName(k);if(t&&!t.sys)setTag(t,l.vals[k]);});
   scheduleLoad();
   S.els.forEach(el=>{if(el.type==='list'&&el.rules&&el.rules.length)fireEvent(el,'change');});
+}
+/* layer B changed: displays update and the engine hears about it; the list's stored knob values belong to layer A */
+function listChangedB(){
+  refreshDisplays();if(typeof engineSendState==='function')engineSendState();if(typeof reportListB==='function')reportListB();
+  S.els.forEach(el=>{if(el.type==='list'&&el.layer&&el.rules&&el.rules.length)fireEvent(el,'change');});
 }
 function updateTagUI(t){
   if(S.tab!=='tags') return;
@@ -840,8 +855,11 @@ new ResizeObserver(()=>layout()).observe(stageEl);
 /* tell the plugin when the chosen list changes, so the engine plays it */
 let lastList=-2;
 function reportList(){const l=curList(),i=l?S.lists.indexOf(l):-1;if(i!==lastList){lastList=i;parent.postMessage({t:'list',index:i},'*');}}
+let lastListB=-9;
+function reportListB(){const l=curListB(),i=l?S.lists.indexOf(l):-3;if(i!==lastListB){lastListB=i;parent.postMessage({t:'listB',index:i},'*');}}
+function chooseListB(i){const l=S.lists[i],bt=bankTagB(),lt=listTagB();if(!l||!bt||!lt)return;setStep(bt,l.bank);setStep(lt,listsInBank(l.bank).indexOf(l));}
 const setTag0=setTag;
-setTag=function(t,v){setTag0(t,v);reportList();parent.postMessage({t:'tag',name:t.name,value:t.value},'*');};
+setTag=function(t,v){setTag0(t,v);reportList();reportListB();parent.postMessage({t:'tag',name:t.name,value:t.value},'*');};
 function chooseList(i){const l=S.lists[i];if(!l)return;const bt=bankTag(),lt=listTag();if(bt)setStep(bt,l.bank);if(lt)setStep(lt,listsInBank(l.bank).indexOf(l));}
 window.addEventListener('message',async e=>{
   const m=e.data||{};
@@ -856,9 +874,11 @@ window.addEventListener('message',async e=>{
     Object.keys(m.tags||{}).forEach(name=>{const t=tagByName(name);if(t&&t.kind!=='bank'&&t.kind!=='list')t.value=Math.min(1,Math.max(0,+m.tags[name]||0));});
     if(m.tags&&Object.keys(m.tags).length){rerenderAll();showPage();}
     if(m.list!=null&&m.list>=0)chooseList(m.list);else refreshDisplays();
-    lastList=-2;reportList();
+    if(m.listB!=null&&m.listB>=0)chooseListB(m.listB);
+    lastList=-2;reportList();lastListB=-9;reportListB();
     document.fonts.ready.then(()=>rerenderAll());
   }else if(m.t==='list'){chooseList(m.index);}
+  else if(m.t==='listB'){chooseListB(m.index);}
   else if(m.t==='tags'){   /* moved by DAW automation or a MIDI controller: show it, do not send it back */
     Object.keys(m.values||{}).forEach(n=>{const t=tagByName(n);if(t)setTag0(t,+m.values[n]);});
   }
