@@ -11,6 +11,13 @@ imports='''import {
 ''' % CORE
 parts=sorted(glob.glob(os.path.join(d,'src','parts','p*.js')))
 js='\n'.join(open(p,encoding='utf8').read() for p in parts)
+# the engine's AudioWorklet (engine.js + worklet.js, no imports) goes into app.js as text, loaded from a blob at run time
+import json,re
+EW=os.path.join(d,'..','..','packages','engine-wasm','src')
+eng=open(os.path.join(EW,'engine.js'),encoding='utf8').read().replace('export function','function').replace('export async function','async function')
+wk=re.sub(r"^import .*$",'',open(os.path.join(EW,'worklet.js'),encoding='utf8').read(),flags=re.M)
+assert "/*@@WORKLET@@*/''" in js
+js=js.replace("/*@@WORKLET@@*/''",json.dumps(eng+'\n'+wk))
 app=imports+"(function(){\n'use strict';\n"+js+"\n})();\n"
 open(os.path.join(d,'app.js'),'w',encoding='utf8').write(app)
 css=r('style.css')+'\n'+r('style-extra.css')+'\n'+r('style-unity.css')

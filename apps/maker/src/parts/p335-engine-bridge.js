@@ -6,23 +6,36 @@ const ENG={node:null,out:null,starting:false,failed:'',loaded:false,sig:'',pendi
 const ENGINE_MODES=['sampler','slicer','speedkeep','granular','wavetable'];
 const engineZone=z=>{const s=sampleById(z.sample);return !!s&&ENGINE_MODES.indexOf(smOf(s).mode)>=0;};
 const engineOn=()=>!!(ENG.node&&ENG.loaded);
+/* the worklet code is built into app.js (build.py) and loaded from a blob, so it never depends on how the page is served
+   (the desktop app serves files from its own app:// scheme, where worklet module loading is not reliable) */
+const ENGINE_WORKLET_SRC=/*@@WORKLET@@*/'';
+function engineFail(why){
+  ENG.failed=why;console.warn('engine',why);updVoices();
+  flash('The shared engine could not start ('+why+'). Envelopes, knobs on groups and FX on/off buttons need it.');
+}
 async function engineStart(){
-  if(ENG.node||ENG.starting||ENG.failed||!AU.ctx||!AU.ctx.audioWorklet) return;
+  if(ENG.node||ENG.starting||ENG.failed||!AU.ctx) return;
+  if(!AU.ctx.audioWorklet){engineFail('this window has no AudioWorklet');return;}
   ENG.starting=true;
   try{
     const base=new URL('../../packages/engine-wasm/',location.href);
-    const bytes=await (await fetch(new URL('engine.wasm',base))).arrayBuffer(),module=await WebAssembly.compile(bytes);
-    await AU.ctx.audioWorklet.addModule(new URL('src/worklet.js',base).href);
+    const res=await fetch(new URL('engine.wasm',base));if(!res.ok)throw new Error('engine.wasm: '+res.status);
+    const module=await WebAssembly.compile(await res.arrayBuffer());
+    const url=ENGINE_WORKLET_SRC&&!/[?&]wfile/.test(location.search)?URL.createObjectURL(new Blob([ENGINE_WORKLET_SRC],{type:'text/javascript'})):new URL('src/worklet.js',base).href;
+    await AU.ctx.audioWorklet.addModule(url);
     const node=new AudioWorkletNode(AU.ctx,'visu-engine',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}});
     const out=AU.ctx.createGain();out.gain.value=2.4;node.connect(out);out.connect(AU.master);
     node.port.onmessage=({data:m})=>{
-      if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;if(m.error)flash('Engine could not load the project: '+m.error);ENG.lastList=-2;engineSendState();}
+      if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;engineSendState();updVoices();}
       else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
     };
     ENG.node=node;ENG.out=out;ENG.sig='';engineSync(true);
-  }catch(err){ENG.failed=String(err&&err.message||err);console.warn('engine',err);}
+  }catch(err){engineFail(String(err&&err.message||err));}
   ENG.starting=false;
 }
+/* for the desktop app's self-check (and anyone curious in the console) */
+window.__visuEngine=()=>({on:engineOn(),failed:ENG.failed||'',loadError:ENG.loadError||'',zones:ENG.zones,voices:ENG.voices,started:!!ENG.node});
+window.__visuStartAudio=()=>{ensureAudio();return !!AU.ctx;};
 /* what decides that the engine needs the project again */
 function engineSig(){
   return S.map.ver+'|'+S.samples.length+'|'+JSON.stringify([S.gset,S.fx.graphs,S.lists.map(l=>[l.bank,l.groups]),S.tags.map(t=>[t.id,t.name,t.kind,t.basis,t.steps]),S.map.interp,S.bpm,S.sig]);

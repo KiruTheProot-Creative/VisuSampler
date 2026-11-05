@@ -27,6 +27,15 @@ jobs:
       - name: Install
         run: npm install --no-audit --no-fund
         working-directory: apps/maker-desktop
+      - name: Engine self-check (old way, worklet loaded as a file; allowed to fail)
+        continue-on-error: true
+        shell: bash
+        run: npm run copy && timeout 120 npx electron . --smoke --worklet-file
+        working-directory: apps/maker-desktop
+      - name: Engine self-check (the shared engine must run inside the desktop app)
+        shell: bash
+        run: npm run copy && timeout 120 npx electron . --smoke
+        working-directory: apps/maker-desktop
       - name: Build installer
         run: npm run dist
         working-directory: apps/maker-desktop

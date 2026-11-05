@@ -98,7 +98,7 @@ function sampNoteOff(note){
   updVoices();
 }
 function sampPanic(){SV.list.forEach(v=>stopVoice(v,40));SV.list=[];SV.held.clear();updVoices();}
-function updVoices(){const e=$('#mapVoices');if(e)e.textContent=(SV.list.filter(v=>!v.dead).length+(engineOn()?ENG.voices:0))+' voices · no limit'+(engineOn()?' · shared engine':'');}
+function updVoices(){const e=$('#mapVoices');if(e)e.textContent=(SV.list.filter(v=>!v.dead).length+(engineOn()?ENG.voices:0))+' voices · no limit'+(engineOn()?' · shared engine':ENG.failed||ENG.loadError?' · ENGINE OFF: '+(ENG.failed||ENG.loadError):'');if(e)e.classList.toggle('engoff',!engineOn()&&!!(ENG.failed||ENG.loadError));}
 /* dispatchers: the sampler plays when zones exist, otherwise the little synth does */
 const hasSampler=()=>S.zones.length>0&&S.zones.some(z=>BUF.has(z.sample));
 function noteOn(m,vel){

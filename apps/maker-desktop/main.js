@@ -7,7 +7,17 @@ const WWW=path.join(__dirname,'www');
 function createWindow(){
   const win=new BrowserWindow({width:1500,height:900,minWidth:1100,minHeight:640,backgroundColor:'#262626',title:'VisuMaker',
     webPreferences:{contextIsolation:true,sandbox:true,preload:path.join(__dirname,'preload.js')}});
-  win.loadURL('app://local/apps/maker/index.html');
+  win.loadURL('app://local/apps/maker/index.html'+(process.argv.includes('--worklet-file')?'?wfile=1':''));
+  /* --smoke: start the audio, wait, and report whether the shared engine runs (used by the Windows build check) */
+  if(process.argv.includes('--smoke'))win.webContents.once('did-finish-load',async()=>{
+    try{
+      await win.webContents.executeJavaScript('window.__visuStartAudio()',true);
+      await new Promise(r=>setTimeout(r,8000));
+      const st=JSON.parse(await win.webContents.executeJavaScript('JSON.stringify(window.__visuEngine())',true));
+      console.log('VISU-ENGINE '+JSON.stringify(st));
+      app.exit(st.on?0:1);
+    }catch(e){console.log('VISU-ENGINE error '+e.message);app.exit(2);}
+  });
   win.webContents.setWindowOpenHandler(({url})=>{if(/^https?:/.test(url))shell.openExternal(url);return{action:'deny'};});
 }
 app.whenReady().then(()=>{
