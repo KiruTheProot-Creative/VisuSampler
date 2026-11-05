@@ -1,5 +1,8 @@
 // Checks the C++ engine against the JS core (golden vectors) and against the example library.
 #include <memory>
+#include <thread>
+#include <chrono>
+#include <cstdio>
 #include "Engine.h"
 #include <cmath>
 #include <cstdio>
@@ -185,6 +188,32 @@ static void testGroupLinks() {
     lib->setTag("wtpos", 0);
 }
 
+// long samples stream from disk and sound exactly like the same library fully in memory
+static void testStreaming() {
+    for (const char* name : { "stream.vsamp", "stream-z.vsamp" }) {
+        const std::string path = std::string(TEST_DATA_DIR) + "/" + name; std::string err;
+        auto disk = Library::load(path, err, 48000);
+        std::vector<uint8_t> bytes; { std::FILE* f = std::fopen(path.c_str(), "rb"); std::fseek(f, 0, SEEK_END); bytes.resize((size_t) std::ftell(f)); std::fseek(f, 0, SEEK_SET); if (std::fread(bytes.data(), 1, bytes.size(), f) != bytes.size()) bytes.clear(); std::fclose(f); }
+        auto mem = Library::loadBytes(bytes, err, 48000);
+        if (!disk || !mem) { CHECK(false, "%s loads (%s)", name, err.c_str()); continue; }
+        CHECK(disk->streamedSamples() == 1 && mem->streamedSamples() == 0 && disk->memoryBytes() * 3 < mem->memoryBytes(),
+              "%s: the long sample streams; %.1f MB in memory instead of %.1f MB", name, disk->memoryBytes() / 1048576.0, mem->memoryBytes() / 1048576.0);
+        for (int note : { 60, 79, 96 }) {   // straight, pitched up (faster reading), and a zone that starts 3 s in
+            auto a = std::make_unique<Engine>(), b = std::make_unique<Engine>();
+            a->prepare(48000); b->prepare(48000); a->setMasterGain(1); b->setMasterGain(1); a->setLibrary(disk); b->setLibrary(mem);
+            a->noteOn(note, 110); b->noteOn(note, 110);
+            std::vector<float> la(480), ra(480), lb(480), rb(480); double maxd = 0, peak = 0; const long miss0 = a->streamMisses(); int streaming = 0;
+            for (int blk = 0; blk < 500; ++blk) {   // 5 s, about five times faster than real time
+                std::fill(la.begin(), la.end(), 0.f); std::fill(ra.begin(), ra.end(), 0.f); std::fill(lb.begin(), lb.end(), 0.f); std::fill(rb.begin(), rb.end(), 0.f);
+                a->render(la.data(), ra.data(), 480); b->render(lb.data(), rb.data(), 480); streaming = std::max(streaming, a->streamingVoices());
+                for (int i = 0; i < 480; ++i) { maxd = std::max(maxd, (double) std::max(std::fabs(la[i] - lb[i]), std::fabs(ra[i] - rb[i]))); peak = std::max(peak, (double) std::fabs(lb[i])); }
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            CHECK(streaming == 1 && maxd < 1e-5 && peak > .1 && a->streamMisses() == miss0, "%s note %d: streamed audio matches memory (max difference %.2g, %ld late reads)", name, note, maxd, a->streamMisses() - miss0);
+        }
+    }
+}
+
 static void testDemo() {
     std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
     CHECK(lib != nullptr, "demo library loads %s", err.c_str());
@@ -282,7 +311,7 @@ static void testFx() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testStreaming(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

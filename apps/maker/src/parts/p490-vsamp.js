@@ -1,3 +1,4 @@
+const STREAM_CHUNK=32768;   /* frames per audio chunk in exported libraries */
 /* ---------- the .vsamp container ----------
    8 bytes  magic "VSAMP\0" 0x01 0x00
    u32 LE   manifest length
@@ -29,8 +30,10 @@ async function buildVsamp(progress){
   const smeta=[];let i=0;
   for(const it of set.samples){
     i++;if(i%3===0){say('Packing audio '+i+' / '+set.samples.length);await tick();}
-    const m=it.meta,bits=o.bits,e=await pack.add(encodePCM(it.ch,bits),{compress:o.compress});
-    smeta.push({id:m.id,name:m.name,sr:m.sr,chn:it.ch.length,frames:it.ch[0].length,root:m.root,fine:m.fine||0,loop:m.loop||null,baked:!!m.baked,sm:m.baked?undefined:m.sm,bits,data:e});
+    /* audio in chunks that unpack on their own: VisuPlayer keeps only the start of a sample in memory and streams the rest */
+    const m=it.meta,bits=o.bits,n=it.ch[0].length,chunks=[];
+    for(let a=0;a<n;a+=STREAM_CHUNK)chunks.push(await pack.add(encodePCM(it.ch.map(d=>d.subarray(a,Math.min(n,a+STREAM_CHUNK))),bits),{compress:o.compress}));
+    smeta.push({id:m.id,name:m.name,sr:m.sr,chn:it.ch.length,frames:n,root:m.root,fine:m.fine||0,loop:m.loop||null,baked:!!m.baked,sm:m.baked?undefined:m.sm,bits,chunkFrames:STREAM_CHUNK,chunks});
   }
   /* images */
   say('Banner…');await tick();

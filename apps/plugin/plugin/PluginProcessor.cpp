@@ -68,7 +68,8 @@ void VisuProcessor::loadLibrary(const juce::String& id, bool keepTags)
             { const juce::ScopedLock l(tagLock_); for (auto& t : tagState_) lib->setTag(t.first.toStdString(), t.second); }
             current_ = lib; currentFile_ = file; currentId_ = id;
             engine_.setList(list_); engine_.setLibrary(lib);
-            status_ = juce::String((int) lib->zones.size()) + " zones ready";
+            status_ = juce::String((int) lib->zones.size()) + " zones ready · " + juce::String(lib->memoryBytes() / 1048576.0, 1) + " MB in memory";
+            if (lib->streamedSamples() > 0) status_ << " · " << lib->streamedSamples() << " samples stream from disk";
             if (lib->unsupportedZones) status_ << " · " << lib->unsupportedZones << " zones use sample modes this version does not play yet";
             sendChangeMessage();
         });

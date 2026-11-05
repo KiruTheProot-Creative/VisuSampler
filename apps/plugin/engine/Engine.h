@@ -1,6 +1,9 @@
 // Real-time sample playback. No allocation, locks or file access on the audio thread.
 #pragma once
 #include "Library.h"
+#ifndef VISU_NO_FILES
+#include "Stream.h"
+#endif
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -30,6 +33,9 @@ public:
     void pitchBend(float v01);
     void aftertouch(float v01);
     int activeVoices() const { return active_.load(); }
+    // streaming from disk: voices reading from disk now, and how often the disk was late (silence played)
+    int streamingVoices() const;
+    long streamMisses() const;
     // CPU guard: the host reports how much of the block's time the last render took (1 = all of it).
     // Under load the engine lowers its voice limit and steals the extra voices; it recovers when the load drops.
     void reportLoad(float fraction);
@@ -44,7 +50,8 @@ private:
         int note = 0, group = -1, choke = 0; unsigned long age = 0; long maxLife = -1;
         // speed-keeping: two overlapping grains read at the pitch while the position moves at the speed (from EmulonX)
         bool stolen = false; float glide = 0, glideStep = 0; int vel = 100;   // glide: semitones still to slide (from EmulonX)
-        bool adsr = false; int stage = 0; float gmul = -1;   // group envelope: 0 attack, 1 decay, 2 sustain
+        bool adsr = false; int stage = 0; float gmul = -1;
+        int slot = -1;   // disk stream for a long sample (player)   // group envelope: 0 attack, 1 decay, 2 sustain
         int kind = 0;   // 0 sample, 2 granular, 3 wavetable
         struct Grain { double o, p0, rate; };
         static constexpr int kMaxGrains = 64;
@@ -56,6 +63,7 @@ private:
     int renderVoices(float* L, float* R, int n, float gainScale);
     fx::Control ctl_;
     void kill(Voice& v, bool fast);
+    void endVoice(Voice& v);
     void startZone(const Zone& z, int note, int vel, bool fromRelease, float glideFrom = 0);
     void startNote(int note, int vel, float glideFrom, const Zone* const* skip, int nskip);
     void monoNoteOn(int note, int vel, int previous);
@@ -83,6 +91,9 @@ private:
     Voice voices_[kMaxVoices];
     unsigned long clock_ = 0; bool sustain_ = false; bool heldNotes_[128] = {};
     int rr_[256] = {}; uint32_t rng_ = 12345;
+#ifndef VISU_NO_FILES
+    std::unique_ptr<Streamer> streamer_;   // made on the message thread by the first library that streams, kept from then on
+#endif
 };
 
 } // namespace visu

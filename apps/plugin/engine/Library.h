@@ -27,6 +27,8 @@ struct Sample {
     // wavetable: single-cycle frames, the position can follow a knob (tag) or sweep
     int wtFrame = 2048, wtFrames = 1, wtTag = -1; float wtPos = 0, wtPos2 = -1, wtSweep = 2500, wtGain = 1; std::string wtTagId;
     bool supported() const { return mode == "sampler" || mode == "slicer" || mode == "speedkeep" || mode == "granular" || mode == "wavetable"; }
+    // streaming (player only): ch holds only the first headFrames; the rest is read from disk while playing
+    int streamSrc = -1; size_t headFrames = 0;
 };
 
 struct GroupCfg {
@@ -46,6 +48,7 @@ struct ZoneAudio {
     std::vector<float> own[2];
     const float* ch[2] = { nullptr, nullptr };
     long len = 0; bool loop = false; long loopS = 0, loopE = 0;
+    int streamSrc = -1; long head = 0;   // streamed: frames from `head` on come from disk
 };
 
 struct Zone {
@@ -73,6 +76,9 @@ public:
     // sampleRate: the effects are prepared for it (reload the library if the host rate changes)
     static std::shared_ptr<Library> load(const std::string& path, std::string& error, double sampleRate = 48000);
     static std::shared_ptr<Library> loadBytes(std::vector<uint8_t> bytes, std::string& error, double sampleRate = 48000);
+    // How much audio sits in memory, and how many samples stream from disk (shown in the player).
+    size_t memoryBytes() const; int streamedSamples() const;
+    static constexpr size_t kPreloadFrames = 16384;   // in memory per streamed sample, plus the furthest zone start
     // Reads only the header info and banner images (fast, for the browser).
     static bool readInfo(const std::string& path, LibraryInfo& info, std::string& error);
 

@@ -62,10 +62,16 @@ export function readVsamp(bytes){
   };
   return{manifest,blob};
 }
+/** A sample's audio bytes: one blob (data), or chunks that each unpack on their own (chunks), so players can stream. */
+export async function sampleAudio(r,s){
+  if(!s.chunks)return r.blob(s.data);
+  const parts=[];let n=0;for(const c of s.chunks){const d=await r.blob(c);parts.push(d);n+=d.length;}
+  const out=new Uint8Array(n);let o=0;for(const d of parts){out.set(d,o);o+=d.length;}return out;
+}
 /** Every blob reference in a manifest, with a readable label. */
 export function listBlobs(m){
   const all=[];
-  m.samples.forEach(s=>all.push(['audio '+s.name,s.data]));
+  m.samples.forEach(s=>{if(s.chunks)s.chunks.forEach((c,i)=>all.push(['audio '+s.name+' part '+(i+1),c]));else all.push(['audio '+s.name,s.data]);});
   Object.keys(m.banner.images||{}).forEach(k=>all.push(['banner '+k,m.banner.images[k]]));
   Object.keys(m.banner.layers||{}).forEach(k=>all.push(['layer '+k,m.banner.layers[k].data]));
   Object.keys(m.assets||{}).forEach(k=>all.push(['image '+k,m.assets[k].data]));
@@ -80,7 +86,7 @@ export async function verifyVsamp(bytes){
   for(const a of all){try{const d=await r.blob(a[1]);if(d.length!==a[1].raw)out.errors.push(a[0]+': wrong size after unpacking.');}catch(e){out.errors.push(a[0]+': '+e.message+'.');}}
   const ids=new Set(m.samples.map(s=>s.id));
   m.zones.forEach(z=>{if(!ids.has(z.sample))out.errors.push('A zone points at a missing sample.');});
-  if(m.samples[0]){try{const s=m.samples[0],ch=decodePCM(await r.blob(s.data),s.chn,s.bits);if(ch[0].length!==s.frames)out.errors.push('Decoded length differs from the manifest.');}catch(e){out.errors.push('Could not decode audio.');}}
+  if(m.samples[0]){try{const s=m.samples[0],ch=decodePCM(await sampleAudio(r,s),s.chn,s.bits);if(ch[0].length!==s.frames)out.errors.push('Decoded length differs from the manifest.');}catch(e){out.errors.push('Could not decode audio.');}}
   out.info={blobs:all.length,samples:m.samples.length,zones:m.zones.length,bytes:bytes.length};
   out.manifest=m;out.ok=out.errors.length===0;return out;
 }

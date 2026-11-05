@@ -38,3 +38,9 @@ Audio blobs are interleaved PCM.
 ## project.play
 How the library plays: `{mono, legato, glide (ms), bend (semitones, default 2), maxVoices (0 = 256), steal ("oldest" | "quietest")}`.
 Glide works in mono. Released notes are stolen first. The player also lowers the voice limit for a moment when the CPU cannot keep up.
+
+## Streamed audio (chunks)
+Exported samples store their audio as `chunks` (each chunk a blob of `chunkFrames` frames, 32768 by default, packed or raw on its own)
+instead of one `data` blob. VisuPlayer keeps only the start of a long sample in memory (16384 frames plus the furthest zone start)
+and reads the rest from disk while it plays. Samples that loop, play reversed, or use the speed-keeping, granular or wavetable modes
+are loaded fully. Older files with one raw `data` blob also stream; one packed `data` blob is loaded fully.

@@ -1,4 +1,9 @@
 #include "Library.h"
+#ifndef VISU_NO_FILES
+#include "Stream.h"
+#else
+namespace visu { struct StreamSource { std::string path; uint64_t base = 0; std::vector<BlobRef> chunks; int chunkFrames = 32768; int chn = 1, bits = 16; uint64_t frames = 0; }; }
+#endif
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -49,6 +54,11 @@ std::vector<UnisonVoice> unisonVoices(const Json& u) {
 static double fadeCurve(double t, const std::string& c) { t = std::min(1.0, std::max(0.0, t)); return c == "linear" ? t : c == "s" ? t * t * (3 - 2 * t) : std::sin(t * 3.14159265358979323846 / 2); }
 
 static void prepareAudio(Zone& z, const Sample& s, const Json& zj) {
+    if (s.streamSrc >= 0) {   // streamed: the head is in memory, the rest comes from disk
+        ZoneAudio& a = z.audio; const long total = (long) s.frames;
+        a.len = zj["end"].num() > 0 ? std::min(total, std::max(64L, (long) std::lround(zj["end"].num() / 1000.0 * s.sr))) : total;
+        a.ch[0] = s.ch[0].data(); a.ch[1] = s.chn > 1 ? s.ch[1].data() : nullptr; a.streamSrc = s.streamSrc; a.head = (long) s.headFrames; return;
+    }
     long total = (long) s.frames; ZoneAudio& a = z.audio;
     long endAbs = zj["end"].num() > 0 ? std::min(total, std::max(64L, (long) std::lround(zj["end"].num() / 1000.0 * s.sr))) : total;
     const Json& L = zj["loop"];
@@ -100,7 +110,7 @@ const std::vector<std::string>& supportedFeatures() {
 
 #ifndef VISU_NO_FILES
 std::shared_ptr<Library> Library::load(const std::string& path, std::string& error, double sampleRate) {
-    VsampFile f; if (!f.openFile(path, error)) return nullptr;
+    VsampFile f; if (!f.openFileLazy(path, error)) return nullptr;   // audio is read as needed, long samples stream
     return fromFile(f, error, sampleRate);
 }
 #endif
@@ -135,6 +145,14 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         const bool fxOk = ft.rfind("fx:", 0) == 0 && std::find(fx::supportedModules().begin(), fx::supportedModules().end(), ft.substr(3)) != fx::supportedModules().end();
         if (!fxOk && std::find(supportedFeatures().begin(), supportedFeatures().end(), ft) == supportedFeatures().end()) L->unsupported.push_back(ft);
     }
+    /* which samples can stream: played straight through (no loop, not reversed) in sampler or slicer mode,
+       and long enough that keeping only the start in memory saves something */
+    std::map<std::string, double> maxStartMs; std::map<std::string, bool> needAll;
+    for (size_t i = 0; i < m["zones"].size(); ++i) {
+        const Json& zj = m["zones"][i]; const std::string sid = zj["sample"].str();
+        if (zj["loop"]["on"].boolean() || zj["rev"].boolean()) needAll[sid] = true;
+        maxStartMs[sid] = std::max(maxStartMs[sid], zj["start"].num() + std::max(0.0, zj["vstart"].num()) + std::max(0.0, zj["hum"]["start"].num()));
+    }
     std::map<std::string, int> sidx;
     for (size_t i = 0; i < m["samples"].size(); ++i) {
         const Json& sj = m["samples"][i]; Sample s;
@@ -144,11 +162,37 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         { const Json& g = sj["sm"]["gr"]; s.grSize = (float) g["size"].num(90); s.grDensity = (float) g["density"].num(28); s.grPos = (float) g["pos"].num(45); s.grSpread = (float) g["spread"].num(15);
           s.grJitter = (float) g["jitter"].num(0); const std::string sh = g["shape"].str("hann"); s.grShape = sh == "tri" ? 1 : sh == "rect" ? 2 : 0; }
         { const Json& w = sj["sm"]["wt"]; s.wtFrame = std::max(32, w["frame"].integer(2048)); s.wtPos = (float) w["pos"].num(0); s.wtPos2 = (float) w["pos2"].num(-1); s.wtSweep = (float) w["sweep"].num(2500); s.wtTagId = w["tag"].str(""); }
-        std::vector<uint8_t> raw; if (!f.blob(VsampFile::ref(sj["data"]), raw, error)) return nullptr;
-        std::vector<float> tmp[2]; int fch = std::max(1, sj["chn"].integer(1));
-        std::vector<float> all[8]; if (fch > 8) { error = "Too many channels."; return nullptr; }
-        decodePCM(raw.data(), raw.size(), fch, sj["bits"].integer(16), all);
-        s.frames = all[0].size(); s.ch[0] = std::move(all[0]); if (s.chn > 1) s.ch[1] = std::move(all[1]);
+        const int fch = std::max(1, sj["chn"].integer(1)), bits = sj["bits"].integer(16);
+        if (fch > 8) { error = "Too many channels."; return nullptr; }
+        /* the audio: chunks (new exports) or one block; chunks can be read one by one */
+        StreamSource src; src.path = f.path(); src.base = f.base(); src.chn = fch; src.bits = bits;
+        const int bps = bits == 24 ? 3 : bits == 32 ? 4 : 2;
+        if (sj.has("chunks")) { src.chunkFrames = std::max(1, sj["chunkFrames"].integer(32768)); for (size_t k = 0; k < sj["chunks"].size(); ++k) src.chunks.push_back(VsampFile::ref(sj["chunks"][k])); }
+        else {
+            const BlobRef d = VsampFile::ref(sj["data"]);
+            if (!d.deflate) { const uint64_t cb = (uint64_t) src.chunkFrames * (uint64_t) (fch * bps);   // a raw block: virtual chunks
+                for (uint64_t o = 0; o < d.len; o += cb) { BlobRef r; r.off = d.off + o; r.len = std::min(cb, d.len - o); r.raw = r.len; r.nocrc = true; src.chunks.push_back(r); }
+                if (src.chunks.size() > 1 && !f.lazy()) { std::vector<uint8_t> all; if (!f.blob(d, all, error)) return nullptr; }   /* in memory: still check the whole block */ }
+            else src.chunks.push_back(d);   // one packed block: cannot stream
+        }
+        src.frames = (uint64_t) sj["frames"].num(0);
+        const bool canStream = f.lazy() && !src.chunks.empty() && src.frames > 0 && (src.chunks.size() > 1) && (s.mode == "sampler" || s.mode == "slicer") && !needAll[s.id];
+        const size_t head = std::min<size_t>((size_t) src.frames, kPreloadFrames + (size_t) std::ceil(maxStartMs[s.id] / 1000.0 * s.sr));
+        const bool stream = canStream && head + (size_t) src.chunkFrames < (size_t) src.frames;
+        std::vector<float> all[8];
+        for (size_t k = 0; k < src.chunks.size(); ++k) {   // decode all chunks, or only those covering the head
+            if (stream && k * (size_t) src.chunkFrames >= head) break;
+            std::vector<uint8_t> raw; if (!f.blob(src.chunks[k], raw, error)) return nullptr;
+            std::vector<float> part[8]; decodePCM(raw.data(), raw.size(), fch, bits, part);
+            for (int c = 0; c < fch; ++c) all[c].insert(all[c].end(), part[c].begin(), part[c].end());
+        }
+        s.ch[0] = std::move(all[0]); if (s.chn > 1) s.ch[1] = std::move(all[1]);
+        if (stream) { s.headFrames = std::min(head, s.ch[0].size()); s.frames = (size_t) src.frames;
+#ifndef VISU_NO_FILES
+            s.streamSrc = registerStreamSource(src);
+#endif
+        } else s.frames = s.ch[0].size();
+        if (s.streamSrc < 0 && stream) { error = "Streaming is not available in this build."; return nullptr; }
         if (s.mode == "wavetable") {   // level like the JS core: the loudest frame peaks at 0.8
             s.wtFrames = std::max(1, (int) (s.frames / (size_t) s.wtFrame)); float pk = 0;
             for (size_t i = 0; i < std::min(s.frames, (size_t) s.wtFrames * s.wtFrame); ++i) pk = std::max(pk, std::fabs(s.ch[0][i]));
@@ -223,3 +267,13 @@ bool Library::setTag(const std::string& name, float value) const {
 }
 
 } // namespace visu
+
+namespace visu {
+size_t Library::memoryBytes() const {
+    size_t b = 0;
+    for (auto& s : samples) for (auto& c : s.ch) b += c.size() * sizeof(float);
+    for (auto& z : zones) for (auto& c : z.audio.own) b += c.size() * sizeof(float);
+    return b;
+}
+int Library::streamedSamples() const { int n = 0; for (auto& s : samples) if (s.streamSrc >= 0) ++n; return n; }
+}

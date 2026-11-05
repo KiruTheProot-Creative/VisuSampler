@@ -14,6 +14,9 @@ void Engine::prepare(double sr) { sr_ = sr; }
 void Engine::setLibrary(std::shared_ptr<const Library> lib) {
     std::lock_guard<std::mutex> g(ownersMutex_);
     const Library* raw = lib.get();
+#ifndef VISU_NO_FILES
+    if (lib && lib->streamedSamples() > 0 && !streamer_) streamer_.reset(new Streamer());   // published to the audio thread with the library below
+#endif
     if (lib) owners_.push_back(std::move(lib));
     pending_.store(raw);
     // free libraries the audio thread can no longer be using (never frees on the audio thread)
@@ -25,7 +28,7 @@ void Engine::adopt() {
     const Library* p;
     do { p = pending_.load(); inUse_.store(p); } while (p != pending_.load());
     if (p == lib_) return;
-    for (auto& v : voices_) v.on = false;
+    for (auto& v : voices_) endVoice(v);
     lib_ = p;
     for (auto& r : rr_) r = 0;
     stackSize_ = 0; monoNote_ = lastNote_ = -1;
@@ -70,6 +73,27 @@ void Engine::groupEnv(int group, float& a, float& d, float& s, float& r) const {
     }
 }
 
+void Engine::endVoice(Voice& v) {
+    v.on = false;
+#ifndef VISU_NO_FILES
+    if (v.slot >= 0 && streamer_) { streamer_->close(v.slot); v.slot = -1; }
+#endif
+}
+int Engine::streamingVoices() const {
+#ifndef VISU_NO_FILES
+    return streamer_ ? streamer_->busy() : 0;
+#else
+    return 0;
+#endif
+}
+long Engine::streamMisses() const {
+#ifndef VISU_NO_FILES
+    return streamer_ ? streamer_->misses() : 0;
+#else
+    return 0;
+#endif
+}
+
 void Engine::kill(Voice& v, bool fast) {
     if (!v.on) return;
     if (!fast && v.adsr) {   // group envelope: fall from wherever it is to silence in R
@@ -91,7 +115,7 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
         while (sounding() >= limit() && stealOne()) {}   // over the limit: fade one out (released notes first)
         Voice* v = nullptr; unsigned long oldest = ~0ul; Voice* ov = nullptr;
         for (auto& c : voices_) { if (!c.on) { v = &c; break; } if (c.age < oldest) { oldest = c.age; ov = &c; } }
-        if (!v) v = ov;                                  // every slot busy (fading voices): reuse the oldest
+        if (!v) { v = ov; endVoice(*v); }                // every slot busy (fading voices): reuse the oldest
         const double semis = (z.keytrack ? note - z.root : 0) + (z.tune + gTune + u.tuneCents + jt) / 100.0;
         v->zone = &z; v->sample = &s; v->audio = &z.audio; v->interp = interpFor(z);
         v->ratio = std::pow(2.0, semis / 12.0) * s.sr / sr_;
@@ -119,6 +143,9 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
             if (v->kind == 2) { const double gl = std::max(64.0, std::round(s.grSize / 1000.0 * s.sr)); v->ngr = 0; v->gk = 0; v->gt = 0; v->nextSpawn = -gl; v->seed = (z.root * 31 + note) | 0; }
             else { v->wph = 0; v->wms = 0; v->wfade = 0; v->wf = 440.0 * std::pow(2.0, (z.root - 69) / 12.0) * v->pitch; }
         }
+#ifndef VISU_NO_FILES
+        v->slot = z.audio.streamSrc >= 0 && streamer_ ? streamer_->open(z.audio.streamSrc, z.audio.head) : -1;   // a long sample: the rest comes from disk
+#endif
         v->gmul = -1; v->stolen = false; v->vel = vel; v->glide = z.keytrack ? glideFrom : 0.f; v->glideStep = glideStepFor(v->glide);
     }
 }
@@ -271,9 +298,21 @@ static inline double lanczos(double x, double a) { if (x == 0) return 1; if (x <
 
 struct Reader {
     const float* d; long n; bool loop; long ls, le;
+    long head = -1;   // streamed: frames from head on come from the disk stream (or silence when there is none)
+#ifndef VISU_NO_FILES
+    const Streamer* st = nullptr; int slot = -1, c = 0;
+#endif
     inline float at(long i) const {
         if (loop && i >= le) i = ls + (i - ls) % (le - ls);
-        return (i < 0 || i >= n) ? 0.f : d[i];
+        if (i < 0 || i >= n) return 0.f;
+        if (head >= 0 && i >= head) {
+#ifndef VISU_NO_FILES
+            return slot >= 0 ? st->at(slot, c, i) : 0.f;
+#else
+            return 0.f;
+#endif
+        }
+        return d[i];
     }
     float read(double p, Interp m, double ratio) const {
         long i = (long) std::floor(p); double f = p - (double) i;
@@ -301,6 +340,13 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
         if (fx) { fx::Stereo& s = fx->groupIn(v.group); dL = s.l; dR = s.r; }
         const ZoneAudio& a = *v.audio;
         Reader r0{ a.ch[0], a.len, a.loop, a.loopS, a.loopE }, r1{ a.ch[1] ? a.ch[1] : a.ch[0], a.len, a.loop, a.loopS, a.loopE };
+        if (a.streamSrc >= 0) {
+            r0.head = r1.head = a.head;
+#ifndef VISU_NO_FILES
+            r0.st = r1.st = streamer_.get(); r0.slot = r1.slot = v.slot; r0.c = 0; r1.c = a.ch[1] ? 1 : 0;
+            if (streamer_) streamer_->setRead(v.slot, (int64_t) v.pos - 160);   // keep a little history for interpolation
+#endif
+        }
         // pitch on top of the note: glide still to go plus the pitch wheel
         float lgGain = 1, lgPan = 0, lgSemis = 0; groupLive(v.group, lgGain, lgPan, lgSemis);
         const double pm = (v.glide != 0.f || bendSemis != 0.0 || lgSemis != 0.f) ? std::pow(2.0, ((v.zone->keytrack ? v.glide + bendSemis : 0.0) + lgSemis) / 12.0) : 1.0;
@@ -312,7 +358,7 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
         if (v.adsr) { float a, d, s, r; groupEnv(v.group, a, d, s, r); (void) r; eS = s; eAi = a < .5f ? 2.f : 1.f / (float) (a / 1000.0 * sr_); eDi = d < .5f ? 2.f : (1.f - s) / (float) (d / 1000.0 * sr_); }
         const float x = vpan <= 0 ? vpan + 1 : vpan, gL = std::cos(x * (float) kPi / 2), gR = std::sin(x * (float) kPi / 2), g = v.gain * gainScale;
         for (int i = 0; i < n; ++i) {
-            if (!a.loop && v.pos >= (double) a.len) { v.on = false; break; }
+            if (!a.loop && v.pos >= (double) a.len) { endVoice(v); break; }
             if (v.maxLife >= 0 && --v.maxLife < 0) kill(v, false);
             if (v.adsr && !v.releasing) {
                 if (v.stage == 0) { v.env += eAi; if (v.env >= 1.f) { v.env = 1.f; v.stage = 1; } }
@@ -320,7 +366,7 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
                 else v.env += (eS - v.env) * .002f;   // sustain follows its knob live, smoothly
             }
             if (v.attackInc > 0 && v.env < 1.f && !v.releasing) { v.env += v.attackInc; if (v.env > 1.f) v.env = 1.f; }
-            if (v.releasing) { v.env -= v.relInc; if (v.env <= 0) { v.on = false; break; } }
+            if (v.releasing) { v.env -= v.relInc; if (v.env <= 0) { endVoice(v); break; } }
             float l, rr, oL, oR;
             if (v.kind == 2) {
                 /* granular (same grains as the JS core's cloud, but played live, so it never loops) */
