@@ -50,6 +50,23 @@ static void testGolden() {
     }
 }
 
+static void testKeepSpeed() {
+    std::string err; auto lib = Library::load(std::string(TEST_DATA_DIR) + "/golden.vsamp", err, 44100);
+    if (!lib) { CHECK(false, "golden loads"); return; }
+    auto run = [&](int note, double& seconds, int& crossings) {
+        Engine e; e.prepare(44100); e.setMasterGain(1); e.setLibrary(lib); e.noteOn(note, 127);
+        std::vector<float> L(441), R(441); int last = 0, cross = 0; double prev = 0; long frames = 0;
+        for (int b = 0; b < 400; ++b) { std::fill(L.begin(), L.end(), 0.f); std::fill(R.begin(), R.end(), 0.f); e.render(L.data(), R.data(), 441);
+            for (int i = 0; i < 441; ++i, ++frames) { if (std::fabs(L[i]) > 1e-3) last = (int) frames; if (frames < 44100 * .4 && prev < 0 && L[i] >= 0) ++cross; prev = L[i]; } }
+        seconds = last / 44100.0; crossings = cross;
+    };
+    double s1, s2; int c1, c2; run(103, s1, c1); run(110, s2, c2);
+    CHECK(s1 > .9 && s1 < 1.1, "keep-speed at 50%% plays twice as long (%.2f s for a 0.5 s sample)", s1);
+    CHECK(std::fabs(s2 - s1) < .1, "a higher note keeps the length (%.2f s vs %.2f s)", s2, s1);
+    const double ratio = (double) c2 / std::max(1, c1);
+    CHECK(ratio > 1.4 && ratio < 1.6, "a fifth up raises the pitch by about 1.5x (%.2f)", ratio);
+}
+
 static void testDemo() {
     std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
     CHECK(lib != nullptr, "demo library loads %s", err.c_str());
@@ -120,7 +137,7 @@ static void testFx() {
 }
 
 int main() {
-    testJson(); testGolden(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

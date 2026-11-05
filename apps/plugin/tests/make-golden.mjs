@@ -6,7 +6,7 @@ const SR=44100,out=new URL('./golden/',import.meta.url);
 const sine=(f,sec,a=.5)=>{const d=new Float32Array(Math.round(SR*sec));for(let i=0;i<d.length;i++)d[i]=Math.sin(2*Math.PI*f*i/SR)*a+Math.sin(2*Math.PI*f*3.01*i/SR)*a*.2;return d;};
 const mk=o=>Object.assign({id:'z',group:'G',lo:0,hi:127,vlo:1,vhi:127,root:57,tune:0,vol:0,pan:0,start:0,end:0,vstart:0,rev:false,keytrack:true,oneshot:false,attack:0,release:80,
   fadeLo:0,fadeHi:0,vfadeLo:0,vfadeHi:0,curve:'power',seq:0,loop:{on:false,s:0,e:0,xf:0,xcurve:'power',pp:false}},o);
-const samples=[{id:'m',name:'mono',sr:SR,chn:1,frames:0,root:57,fine:0,ch:[sine(220,.5)]},{id:'st',name:'stereo',sr:SR,chn:2,frames:0,root:57,fine:0,ch:[sine(220,.5),sine(330,.5,.4)]}];
+const samples=[{id:'sk',name:'keep',sr:SR,chn:1,frames:0,root:57,fine:0,ch:[sine(220,.5)],sm:{mode:'speedkeep',sk:{speed:50,grain:50,quality:'wsola',sync:false,bars:2}}},{id:'m',name:'mono',sr:SR,chn:1,frames:0,root:57,fine:0,ch:[sine(220,.5)]},{id:'st',name:'stereo',sr:SR,chn:2,frames:0,root:57,fine:0,ch:[sine(220,.5),sine(330,.5,.4)]}];
 samples.forEach(s=>s.frames=s.ch[0].length);
 const zones=[
   mk({id:'lin',sample:'m',lo:40,hi:49,interp:'linear'}),
@@ -15,10 +15,11 @@ const zones=[
   mk({id:'loop',sample:'m',lo:70,hi:79,interp:'cubic',loop:{on:true,s:4000,e:15000,xf:1500,xcurve:'power',pp:false}}),
   mk({id:'ster',sample:'st',lo:80,hi:89,interp:'linear'}),
   mk({id:'start',sample:'m',lo:90,hi:99,interp:'linear',start:50,end:300,tune:37}),
+  mk({id:'keep',sample:'sk',lo:100,hi:115,root:103,interp:'cubic',release:5}),
 ];
 const ctx={buffer:id=>{const s=samples.find(x=>x.id===id);return{ch:s.ch,sr:SR};},sample:id=>samples.find(s=>s.id===id),group:()=>({tune:0,interp:'inherit'}),defaultInterp:'linear',bpm:120,sig:{n:4,d:4},tagValue:()=>null};
 const pack=new Pack(),smeta=[];
-for(const s of samples){smeta.push({id:s.id,name:s.name,sr:SR,chn:s.chn,frames:s.frames,root:s.root,fine:0,loop:null,bits:32,data:await pack.add(encodePCM(s.ch,32),{compress:true})});}
+for(const s of samples){smeta.push({id:s.id,name:s.name,sr:SR,chn:s.chn,frames:s.frames,root:s.root,fine:0,loop:null,sm:s.sm,bits:32,data:await pack.add(encodePCM(s.ch,32),{compress:true})});}
 const manifest={format:'vsamp',formatVersion:1,lib:{id:'golden',name:'Golden é中',version:'1.0.0',accent:'#123456'},banner:{images:{}},project:{gset:{G:{mode:'normal',interp:'inherit',velcurve:1}},bpm:120},samples:smeta,zones};
 writeFileSync(new URL('golden.vsamp',out),writeVsamp(manifest,pack));
 const N=3000,cases=[],r6=v=>Math.round(v*1e6)/1e6;

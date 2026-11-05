@@ -38,6 +38,8 @@ private:
         double pos = 0, ratio = 1; Interp interp = Interp::Linear;
         float gain = 1, gl = 1, gr = 1, pan = 0, env = 1, envInc = 0, relInc = 0, attackInc = 0; bool stereoIn = false;
         int note = 0, group = -1, choke = 0; unsigned long age = 0; long maxLife = -1;
+        // speed-keeping: two overlapping grains read at the pitch while the position moves at the speed (from EmulonX)
+        bool keepSpeed = false, wsola = true; double k = 1, read0 = 0, read1 = 0; int grain = 2048, grainCounter = 0;
     };
     void adopt();
     int renderVoices(float* L, float* R, int n, float gainScale);

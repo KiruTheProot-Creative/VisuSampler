@@ -67,6 +67,13 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease) {
         v->ratio = std::pow(2.0, semis / 12.0) * s.sr / sr_;
         double st = z.rev ? 0.0 : std::min((double) (s.frames - 2), std::max(0.0, std::round((startMsBase + u.startMs) / 1000.0 * s.sr)));
         v->pos = st; v->stereoIn = s.chn > 1;
+        v->keepSpeed = s.mode == "speedkeep";
+        if (v->keepSpeed) {
+            double speed = std::max(.05, s.skSpeed / 100.0);
+            if (s.skSync && s.frames > 0) { const double barBeats = 4.0, origBpm = s.bars * barBeats * 60.0 / ((double) s.frames / s.sr); if (origBpm > 0) speed *= lib_->bpm / origBpm; }
+            v->k = speed * s.sr / sr_; v->wsola = s.skWsola;
+            v->grain = std::max(256, (int) std::lround(s.skGrainMs / 1000.0 * s.sr)) & ~1; v->grainCounter = 0; v->read0 = v->read1 = st;
+        }
         v->gain = amp * u.gain;
         v->pan = std::min(1.f, std::max(-1.f, z.pan / 100.f + g.pan / 100.f + u.pan));
         v->attackInc = z.attack > 0 ? 1.f / (float) (z.attack / 1000.0 * sr_) : 0; v->env = z.attack > 0 ? 0.f : 1.f;
@@ -181,11 +188,32 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
             if (v.maxLife >= 0 && --v.maxLife < 0) kill(v, false);
             if (v.attackInc > 0 && v.env < 1.f && !v.releasing) { v.env += v.attackInc; if (v.env > 1.f) v.env = 1.f; }
             if (v.releasing) { v.env -= v.relInc; if (v.env <= 0) { v.on = false; break; } }
-            float l = r0.read(v.pos, v.interp, v.ratio), rr = v.stereoIn ? r1.read(v.pos, v.interp, v.ratio) : l, oL, oR;
+            float l, rr, oL, oR;
+            if (!v.keepSpeed) { l = r0.read(v.pos, v.interp, v.ratio); rr = v.stereoIn ? r1.read(v.pos, v.interp, v.ratio) : l; }
+            else {
+                /* keep-speed (port of EmulonX's grain reader): WSOLA picks each new grain start where the waveform lines up */
+                const int G = v.grain, h = G >> 1; const double step = v.ratio, k = v.k;
+                auto align = [&](double target, double otherX) {
+                    if (!v.wsola || std::abs(step - k) < 1e-9) return target;
+                    constexpr int M = 32; float ref[M];
+                    for (int j = 0; j < M; ++j) ref[j] = r0.read(otherX + 3.0 * j * step, Interp::Linear, 1);
+                    const int range = std::max(8, (int) std::lround(std::min(.012 * v.sample->sr, .25 * G * k)));
+                    auto score = [&](int d) { float ab = 0, bb = 1e-9f; for (int j = 0; j < M; ++j) { const float cnd = r0.read(target + d + 3.0 * j * step, Interp::Linear, 1); ab += ref[j] * cnd; bb += cnd * cnd; } return ab / std::sqrt(bb); };
+                    int best = 0; float bs = -1e30f;
+                    for (int d = -range; d <= range; d += 6) { const float s = score(d); if (s > bs) { bs = s; best = d; } }
+                    const int coarse = best; for (int d = coarse - 5; d <= coarse + 5; ++d) { const float s = score(d); if (s > bs) { bs = s; best = d; } }
+                    return target + best;
+                };
+                if (v.grainCounter == 0) v.read0 = align(v.pos, v.read1); else if (v.grainCounter == h) v.read1 = align(v.pos, v.read0);
+                const double p0 = (double) v.grainCounter / G; const float sn = (float) std::sin(kPi * p0), w0 = sn * sn, w1 = 1 - w0;
+                l = w0 * r0.read(v.read0, v.interp, step) + w1 * r0.read(v.read1, v.interp, step);
+                rr = v.stereoIn ? w0 * r1.read(v.read0, v.interp, step) + w1 * r1.read(v.read1, v.interp, step) : l;
+                v.read0 += step; v.read1 += step; if (++v.grainCounter >= G) v.grainCounter = 0;
+            }
             if (!v.stereoIn) { const float m = std::cos((v.pan + 1) * (float) kPi / 4), m2 = std::sin((v.pan + 1) * (float) kPi / 4); oL = l * m; oR = l * m2; }
             else if (v.pan <= 0) { oL = l + rr * gL; oR = rr * gR; } else { oL = l * gL; oR = rr + l * gR; }
             const float e = g * v.env; dL[i] += oL * e; dR[i] += oR * e;
-            v.pos += v.ratio;
+            v.pos += v.keepSpeed ? v.k : v.ratio;
             if (a.loop && v.pos >= (double) a.loopE) v.pos -= (double) (a.loopE - a.loopS);
         }
         if (v.on) ++active;

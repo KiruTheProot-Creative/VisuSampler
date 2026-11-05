@@ -20,7 +20,9 @@ struct Sample {
     std::vector<float> ch[2];
     std::string mode = "sampler";      // sampler, slicer play here; speedkeep, granular, wavetable are not supported yet
     std::vector<UnisonVoice> unison;   // one entry when unison is off
-    bool supported() const { return mode == "sampler" || mode == "slicer"; }
+    // speed-keeping (time machine): pitch without changing the length
+    float skSpeed = 100, skGrainMs = 50; bool skWsola = true, skSync = false; float bars = 2;
+    bool supported() const { return mode == "sampler" || mode == "slicer" || mode == "speedkeep"; }
 };
 
 struct GroupCfg {

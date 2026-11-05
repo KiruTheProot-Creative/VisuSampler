@@ -94,7 +94,7 @@ bool Library::readInfo(const std::string& path, LibraryInfo& info, std::string& 
 
 const std::vector<std::string>& supportedFeatures() {
     static const std::vector<std::string> s = { "sampler", "slicer", "loop", "pingpong", "reverse", "unison", "rr", "release", "choke",
-        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui" };
+        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep" };
     return s;
 }
 
@@ -137,6 +137,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         const Json& sj = m["samples"][i]; Sample s;
         s.id = sj["id"].str(); s.name = sj["name"].str(); s.sr = sj["sr"].integer(44100); s.chn = std::min(2, std::max(1, sj["chn"].integer(1)));
         s.mode = sj["sm"]["mode"].str("sampler"); s.unison = unisonVoices(sj["sm"]["uni"]);
+        { const Json& sk = sj["sm"]["sk"]; s.skSpeed = (float) sk["speed"].num(100); s.skGrainMs = (float) sk["grain"].num(50); s.skWsola = sk["quality"].str("wsola") != "ola"; s.skSync = sk["sync"].boolean(); s.bars = (float) sj["sm"]["bars"].num(2); }
         std::vector<uint8_t> raw; if (!f.blob(VsampFile::ref(sj["data"]), raw, error)) return nullptr;
         std::vector<float> tmp[2]; int fch = std::max(1, sj["chn"].integer(1));
         std::vector<float> all[8]; if (fch > 8) { error = "Too many channels."; return nullptr; }
