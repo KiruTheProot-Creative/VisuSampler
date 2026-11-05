@@ -1,5 +1,5 @@
 /* ---------- events: rules engine and form ---------- */
-const EVENTS={button:['press','release','hold','doubleclick'],knob:['change'],fader:['change'],list:['change','load']};
+const EVENTS={button:['press','release','hold','doubleclick'],knob:['change'],fader:['change'],list:['change','load'],dropdown:['change']};
 const VERBS=[['set','set'],['add','add'],['sub','subtract'],['toggle','toggle'],['next','next'],['prev','previous'],['reset','reset'],['random','random']];
 const NOVAL=['toggle','next','prev','reset','random'];
 let evDepth=0;

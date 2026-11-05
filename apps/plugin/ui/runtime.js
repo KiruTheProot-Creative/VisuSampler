@@ -192,7 +192,7 @@ function addTexAssets(){
 
 
 /* ---------- element factories ---------- */
-const TYPE_NAMES={panel:'Panel',knob:'Knob',fader:'Fader',text:'Text',button:'Button',lcd:'Text panel',list:'List selector'};
+const TYPE_NAMES={panel:'Panel',knob:'Knob',fader:'Fader',text:'Text',button:'Button',lcd:'Text panel',list:'List selector',dropdown:'Dropdown',image:'Image'};
 const DEF={
   panel:()=>({w:240,h:160,fillMode:'solid',fill2:'#1f1b26',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',fill:'#3a3445',round:true,radius:14,bevel:true,bevelSize:3,bevelDir:'out',shadow:true,shadowDist:6,shadowBlur:18,mat:null,matBlend:'overlay',matOpacity:.5,matMode:'tile',matScale:1}),
   knob:()=>({w:110,h:110,tag:'',lower:null,upper:null,ringMode:'auto',ringImg:null,ringColor:'#ff7eb6',ringFrom:'start',ringWidth:.09,start:-135,end:135,px:.5,py:.5,baseColor:'#4a4357',capColor:'#e9e4f2',ptrColor:'#ff7eb6',ptrStyle:'line',rules:[]}),
@@ -200,6 +200,9 @@ const DEF={
   text:()=>({w:200,h:36,text:'Label',font:'Figtree',size:18,weight:'600',color:'#f3e9ff',align:'center',spacing:0,bevel:'none',shadow:false,glow:false,glowColor:'#ff7eb6'}),
   button:()=>({w:72,h:44,label:'Button',font:'Figtree',size:15,weight:'700',textColor:'#1c1d21',tag:'',mode:'momentary',value:0,color:'#b4bac4',radius:8,bevelSize:3,led:false,ledColor:'#ff9d2e',auto:true,hover:8,press:14,travel:1,preview:'auto',rules:[]}),
   lcd:()=>({w:320,h:84,text:'{list.id}  {list.name}',font:'Figtree',size:26,align:'left',fg:'#f2f2f2',bg:'#1d1d22',glow:0,screen:false,grid:true,gridAmt:.16,scan:false,radius:6,pad:12,fillMode:'solid',fill2:'#0e0e12',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover'}),
+  dropdown:()=>({w:200,h:34,tag:'',font:'Figtree',size:15,weight:'600',fg:'#f2f2f2',bg:'#2a2730',fillMode:'solid',fill2:'#141218',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',
+    radius:6,pad:10,bevel:true,arrowColor:'#ff7eb6',menuBg:'#1d1b22',menuFg:'#f2f2f2',menuHi:'#ff7eb6',menuRows:8,prefix:'',rules:[]}),
+  image:()=>({w:200,h:150,img:null,fit:'contain',opacity:1,radius:0,shadow:false,flipX:false,flipY:false}),
   list:()=>({w:360,h:200,rows:6,font:'VT323',size:0,fg:'#1f2a0f',bg:'#a3b865',selStyle:'invert',numbers:true,screen:true,grid:true,gridAmt:.16,radius:6,pad:10,glow:0,fillMode:'solid',fill2:'#6f8a3c',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',rules:[]})
 };
 function mk(type,over){
@@ -366,6 +369,8 @@ function renderEl(el){
   else if(el.type==='button'){const st=btnState(el);n.style.cssText=css+btnFace(el,st);n.innerHTML=buttonHTML(el,st);}
   else if(el.type==='lcd'){n.style.cssText=css+lcdCss(el);n.innerHTML=lcdHTML(el);}
   else if(el.type==='list'){n.style.cssText=css+lcdCss(el);n.innerHTML=listHTML(el);}
+  else if(el.type==='dropdown'){n.style.cssText=css+dropdownCss(el);n.innerHTML=dropdownHTML(el);}
+  else if(el.type==='image'){n.style.cssText=css+imageCss(el);n.innerHTML='';}
   else{
     const j={left:'flex-start',center:'center',right:'flex-end'}[el.align]||'center';
     n.style.cssText=css+'justify-content:'+j+';';
@@ -472,13 +477,33 @@ function listHTML(el){
   }
   return h+'</div>'+lcdOverlay(el,Math.max(2,Math.round(fs/9)));
 }
+/* ---- dropdown: shows the chosen step of its tag; opens a menu in Test mode and in the player ---- */
+function ddSteps(el){const t=tagById(el.tag);if(!t||t.kind==='number')return{t,steps:[],i:-1};const steps=stepsOf(t);return{t,steps,i:stepIdx(t)};}
+function dropdownCss(el){
+  const {lx,ly}=lightVec(),sh=el.bevel===false?'':'box-shadow:inset '+f1(-lx*2)+'px '+f1(-ly*2)+'px 2px rgba(255,255,255,.1),inset '+f1(lx*2)+'px '+f1(ly*2)+'px 3px rgba(0,0,0,.4),'+f1(-lx*2)+'px '+f1(-ly*2)+'px 5px rgba(0,0,0,.45);';
+  return fillCss(el,'bg')+'border-radius:'+el.radius+'px;'+sh+'overflow:hidden;';
+}
+function dropdownHTML(el){
+  const d=ddSteps(el),label=d.i>=0?d.steps[d.i]:(d.t?'—':'no tag');
+  return '<div class="dd" style="padding:0 '+el.pad+'px;font-family:\''+el.font+'\',Figtree,sans-serif;font-size:'+el.size+'px;font-weight:'+(el.weight||'600')+';color:'+el.fg+'">'
+    +'<span class="ddv">'+esc((el.prefix||'')+label)+'</span><i class="dda" style="border-top-color:'+el.arrowColor+'"></i></div>';
+}
+/* ---- image: a picture of your own on the interface ---- */
+function imageCss(el){
+  const a=el.img&&S.assets[el.img];let css='opacity:'+(el.opacity==null?1:el.opacity)+';border-radius:'+(el.radius||0)+'px;overflow:hidden;';
+  if(a){const fit=el.fit||'contain',url=imgSrc(el.img,Math.ceil(Math.max(el.w,el.h)*(S.z||1)*2));css+='background:url(\''+url+'\') center/'+(fit==='stretch'?'100% 100%':fit)+' no-repeat;';}
+  else css+='background:repeating-linear-gradient(45deg,rgba(255,255,255,.06) 0 8px,transparent 8px 16px);outline:1px dashed rgba(255,255,255,.35);';
+  const fl=(el.flipX?-1:1)+','+(el.flipY?-1:1);if(el.flipX||el.flipY)css+='transform:scale('+fl+');';
+  if(el.shadow){const {lx,ly}=lightVec();css+='filter:drop-shadow('+f1(-lx*4)+'px '+f1(-ly*4)+'px 6px rgba(0,0,0,.55));overflow:visible;';}
+  return css;
+}
 function valLcd(el){const n=nodes.get(el.id);if(!n)return;const s=n.querySelector('.lt span');if(s)s.innerHTML=expand(el.text);}
 function valDisplay(el){
   if(el.type==='text') valText(el);
   else if(el.type==='lcd') valLcd(el);
-  else if(el.type==='list'||el.type==='button') renderEl(el);
+  else if(el.type==='list'||el.type==='button'||el.type==='dropdown') renderEl(el);
 }
-const refreshDisplays=()=>S.els.forEach(el=>{if(el.type==='text'||el.type==='lcd')valDisplay(el);else if(el.type==='list')renderEl(el);});
+const refreshDisplays=()=>S.els.forEach(el=>{if(el.type==='text'||el.type==='lcd')valDisplay(el);else if(el.type==='list'||el.type==='dropdown')renderEl(el);});
 
 /* ---------- tags: change / audio ---------- */
 function setTag(t,v){
@@ -592,6 +617,7 @@ function startTest(e){
   const n=e.target.closest('.el'); if(!n) return;
   const el=S.els.find(x=>x.id===n.dataset.id); if(!el) return;
   if(el.type==='button'){btnDown(el,e);return;}
+  if(el.type==='dropdown'){e.preventDefault();ddOpen(el);return;}
   if(el.type==='list'){
     const r=e.target.closest('.lrow');
     if(r&&r.dataset.i!==undefined){e.preventDefault();const lt=listTag();if(lt)setStep(lt,+r.dataset.i);}
@@ -629,6 +655,7 @@ canvas.addEventListener('wheel',e=>{
   if(S.mode!=='test') return;
   const el=elOf(e); if(!el) return;
   if(el.type==='list'){e.preventDefault();const lt=listTag();if(lt)stepBy(lt,Math.sign(e.deltaY));return;}
+  if(el.type==='dropdown'){e.preventDefault();const t=tagById(el.tag);if(t&&stepCount(t)>1)stepBy(t,Math.sign(e.deltaY));return;}
   const t=tagById(el.tag);
   if(!t||(el.type!=='knob'&&el.type!=='fader')) return;
   e.preventDefault(); const c=stepCount(t);
@@ -645,8 +672,27 @@ canvas.addEventListener('pointerleave',()=>{
   const el=S.els.find(x=>x.id===RT.hover); RT.hover=null; if(el)renderEl(el);
 });
 
+/* ---- dropdown menu (Test mode and the player) ---- */
+let DDM=null;
+function ddClose(){if(DDM){DDM.box.remove();document.removeEventListener('pointerdown',DDM.out,true);document.removeEventListener('keydown',DDM.key,true);DDM=null;}}
+function ddOpen(el){
+  const was=DDM&&DDM.id===el.id;ddClose();if(was)return;
+  const d=ddSteps(el);if(!d.t||!d.steps.length)return;
+  const rows=Math.max(2,Math.min(d.steps.length,el.menuRows||8)),rh=Math.max(18,Math.round(el.size*1.6)),mh=rows*rh+6;
+  const below=el.y+el.h+mh<=S.canvas.h||el.y-mh<0,top=below?el.y+el.h+2:el.y-mh-2;
+  const box=document.createElement('div');box.className='ddmenu';
+  box.style.cssText='left:'+el.x+'px;top:'+top+'px;width:'+Math.max(el.w,80)+'px;max-height:'+mh+'px;background:'+el.menuBg+';color:'+el.menuFg+';border-radius:'+Math.min(10,el.radius)+'px;font-family:\''+el.font+'\',Figtree,sans-serif;font-size:'+el.size+'px;--hi:'+el.menuHi;
+  box.innerHTML=d.steps.map((s,i)=>'<div class="ddi'+(i===d.i?' on':'')+'" data-i="'+i+'" style="height:'+rh+'px;padding:0 '+el.pad+'px">'+esc((el.prefix||'')+s)+'</div>').join('');
+  canvas.appendChild(box);
+  const cur=box.querySelector('.ddi.on');if(cur)box.scrollTop=Math.max(0,cur.offsetTop-rh*2);
+  box.addEventListener('pointerdown',ev=>{ev.stopPropagation();const r=ev.target.closest('.ddi');if(!r)return;ev.preventDefault();setStep(d.t,+r.dataset.i);ddClose();});
+  const out=ev=>{if(!box.contains(ev.target)&&!(ev.target.closest&&ev.target.closest('.el[data-id="'+el.id+'"]')))ddClose();};
+  const key=ev=>{if(ev.key==='Escape'){ev.preventDefault();ddClose();}};
+  DDM={id:el.id,box,out,key};document.addEventListener('pointerdown',out,true);document.addEventListener('keydown',key,true);
+}
+
 /* ---------- events: rules engine and form ---------- */
-const EVENTS={button:['press','release','hold','doubleclick'],knob:['change'],fader:['change'],list:['change','load']};
+const EVENTS={button:['press','release','hold','doubleclick'],knob:['change'],fader:['change'],list:['change','load'],dropdown:['change']};
 const VERBS=[['set','set'],['add','add'],['sub','subtract'],['toggle','toggle'],['next','next'],['prev','previous'],['reset','reset'],['random','random']];
 const NOVAL=['toggle','next','prev','reset','random'];
 let evDepth=0;

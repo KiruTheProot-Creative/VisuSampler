@@ -10,5 +10,5 @@ export async function openApp(viewport){
   p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error'&&!/ERR_TUNNEL|fonts\.g/.test(m.text()))errs.push(m.text());});
   await p.addInitScript(()=>{window.__VSTEST=1;});
   await p.goto('http://localhost:'+port+'/apps/maker/');await p.waitForTimeout(700);
-  return{p,errs,close:async()=>{await b.close();server.close();}};
+  return{p,b,errs,close:async()=>{await b.close();server.close();}};
 }

@@ -87,6 +87,8 @@ function renderEl(el){
   else if(el.type==='button'){const st=btnState(el);n.style.cssText=css+btnFace(el,st);n.innerHTML=buttonHTML(el,st);}
   else if(el.type==='lcd'){n.style.cssText=css+lcdCss(el);n.innerHTML=lcdHTML(el);}
   else if(el.type==='list'){n.style.cssText=css+lcdCss(el);n.innerHTML=listHTML(el);}
+  else if(el.type==='dropdown'){n.style.cssText=css+dropdownCss(el);n.innerHTML=dropdownHTML(el);}
+  else if(el.type==='image'){n.style.cssText=css+imageCss(el);n.innerHTML='';}
   else{
     const j={left:'flex-start',center:'center',right:'flex-end'}[el.align]||'center';
     n.style.cssText=css+'justify-content:'+j+';';

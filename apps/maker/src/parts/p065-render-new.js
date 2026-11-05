@@ -72,10 +72,30 @@ function listHTML(el){
   }
   return h+'</div>'+lcdOverlay(el,Math.max(2,Math.round(fs/9)));
 }
+/* ---- dropdown: shows the chosen step of its tag; opens a menu in Test mode and in the player ---- */
+function ddSteps(el){const t=tagById(el.tag);if(!t||t.kind==='number')return{t,steps:[],i:-1};const steps=stepsOf(t);return{t,steps,i:stepIdx(t)};}
+function dropdownCss(el){
+  const {lx,ly}=lightVec(),sh=el.bevel===false?'':'box-shadow:inset '+f1(-lx*2)+'px '+f1(-ly*2)+'px 2px rgba(255,255,255,.1),inset '+f1(lx*2)+'px '+f1(ly*2)+'px 3px rgba(0,0,0,.4),'+f1(-lx*2)+'px '+f1(-ly*2)+'px 5px rgba(0,0,0,.45);';
+  return fillCss(el,'bg')+'border-radius:'+el.radius+'px;'+sh+'overflow:hidden;';
+}
+function dropdownHTML(el){
+  const d=ddSteps(el),label=d.i>=0?d.steps[d.i]:(d.t?'—':'no tag');
+  return '<div class="dd" style="padding:0 '+el.pad+'px;font-family:\''+el.font+'\',Figtree,sans-serif;font-size:'+el.size+'px;font-weight:'+(el.weight||'600')+';color:'+el.fg+'">'
+    +'<span class="ddv">'+esc((el.prefix||'')+label)+'</span><i class="dda" style="border-top-color:'+el.arrowColor+'"></i></div>';
+}
+/* ---- image: a picture of your own on the interface ---- */
+function imageCss(el){
+  const a=el.img&&S.assets[el.img];let css='opacity:'+(el.opacity==null?1:el.opacity)+';border-radius:'+(el.radius||0)+'px;overflow:hidden;';
+  if(a){const fit=el.fit||'contain',url=imgSrc(el.img,Math.ceil(Math.max(el.w,el.h)*(S.z||1)*2));css+='background:url(\''+url+'\') center/'+(fit==='stretch'?'100% 100%':fit)+' no-repeat;';}
+  else css+='background:repeating-linear-gradient(45deg,rgba(255,255,255,.06) 0 8px,transparent 8px 16px);outline:1px dashed rgba(255,255,255,.35);';
+  const fl=(el.flipX?-1:1)+','+(el.flipY?-1:1);if(el.flipX||el.flipY)css+='transform:scale('+fl+');';
+  if(el.shadow){const {lx,ly}=lightVec();css+='filter:drop-shadow('+f1(-lx*4)+'px '+f1(-ly*4)+'px 6px rgba(0,0,0,.55));overflow:visible;';}
+  return css;
+}
 function valLcd(el){const n=nodes.get(el.id);if(!n)return;const s=n.querySelector('.lt span');if(s)s.innerHTML=expand(el.text);}
 function valDisplay(el){
   if(el.type==='text') valText(el);
   else if(el.type==='lcd') valLcd(el);
-  else if(el.type==='list'||el.type==='button') renderEl(el);
+  else if(el.type==='list'||el.type==='button'||el.type==='dropdown') renderEl(el);
 }
-const refreshDisplays=()=>S.els.forEach(el=>{if(el.type==='text'||el.type==='lcd')valDisplay(el);else if(el.type==='list')renderEl(el);});
+const refreshDisplays=()=>S.els.forEach(el=>{if(el.type==='text'||el.type==='lcd')valDisplay(el);else if(el.type==='list'||el.type==='dropdown')renderEl(el);});
