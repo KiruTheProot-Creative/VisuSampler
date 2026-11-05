@@ -56,9 +56,10 @@ void VisuProcessor::loadLibrary(const juce::String& id)
     if (!e) { pendingId_ = id; return; }   // the scan has not finished yet
     auto alive = alive_; const int ticket = ++loadTicket_; const juce::File file = e->file;
     loading_ = true; currentId_ = id; status_ = "Loading…"; sendChangeMessage();
-    juce::Thread::launch([this, alive, file, ticket, id] {
+    const double sr = sampleRate_ > 0 ? sampleRate_ : 48000.0;
+    juce::Thread::launch([this, alive, file, ticket, id, sr] {
         std::string err;
-        std::shared_ptr<const visu::Library> lib = visu::Library::load(file.getFullPathName().toStdString(), err);
+        std::shared_ptr<const visu::Library> lib = visu::Library::load(file.getFullPathName().toStdString(), err, sr);
         juce::MessageManager::callAsync([this, alive, file, ticket, lib, err, id] {
             if (!*alive || ticket != loadTicket_.load()) return;
             loading_ = false;
@@ -132,7 +133,19 @@ juce::var VisuProcessor::statusVar() const
     return juce::var(o);
 }
 
-void VisuProcessor::prepareToPlay(double sampleRate, int) { engine_.prepare(sampleRate); }
+void VisuProcessor::prepareToPlay(double sampleRate, int)
+{
+    engine_.prepare(sampleRate);
+    const bool changed = std::abs(sampleRate - sampleRate_) > 1;
+    sampleRate_ = sampleRate;
+    // the effects are built for one sample rate: reload the library if the host changed it
+    if (changed && current_ && currentId_.isNotEmpty()) { const auto id = currentId_; juce::MessageManager::callAsync([this, id, alive = alive_] { if (*alive) loadLibrary(id); }); }
+}
+
+void VisuProcessor::setTag(const juce::String& name, float value)
+{
+    if (current_) current_->setTag(name.toStdString(), value);
+}
 
 bool VisuProcessor::isBusesLayoutSupported(const BusesLayout& l) const
 {
@@ -157,7 +170,10 @@ void VisuProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuf
         const auto m = meta.getMessage();
         if (m.isNoteOn()) engine_.noteOn(m.getNoteNumber(), m.getVelocity());
         else if (m.isNoteOff()) engine_.noteOff(m.getNoteNumber());
-        else if (m.isController() && m.getControllerNumber() == 64) engine_.sustain(m.getControllerValue() >= 64);
+        else if (m.isController()) engine_.controller(m.getControllerNumber(), m.getControllerValue());
+        else if (m.isPitchWheel()) engine_.pitchBend(m.getPitchWheelValue() / 16383.0f);
+        else if (m.isChannelPressure()) engine_.aftertouch(m.getChannelPressureValue() / 127.0f);
+        else if (m.isAftertouch()) engine_.aftertouch(m.getAfterTouchValue() / 127.0f);
         else if (m.isAllNotesOff() || m.isAllSoundOff()) engine_.allNotesOff();
     }
     if (pos < n) engine_.render(L + pos, R + pos, n - pos);

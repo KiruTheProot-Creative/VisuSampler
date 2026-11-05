@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(VISU_BUILD_PLUGIN "Build the VST3/AU plugin (needs JUCE, fetched automatically)" OFF)
 option(VISU_BUILD_TESTS "Build the engine tests" ON)
 
-add_library(visu_engine STATIC engine/Vsamp.cpp engine/Inflate.cpp engine/Library.cpp engine/Engine.cpp)
+add_library(visu_engine STATIC engine/Vsamp.cpp engine/Inflate.cpp engine/Library.cpp engine/Engine.cpp engine/Fx.cpp)
 target_include_directories(visu_engine PUBLIC engine)
 set_target_properties(visu_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

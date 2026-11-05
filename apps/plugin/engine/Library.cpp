@@ -94,23 +94,23 @@ bool Library::readInfo(const std::string& path, LibraryInfo& info, std::string& 
 
 const std::vector<std::string>& supportedFeatures() {
     static const std::vector<std::string> s = { "sampler", "slicer", "loop", "pingpong", "reverse", "unison", "rr", "release", "choke",
-        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp" };
+        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui" };
     return s;
 }
 
 #ifndef VISU_NO_FILES
-std::shared_ptr<Library> Library::load(const std::string& path, std::string& error) {
+std::shared_ptr<Library> Library::load(const std::string& path, std::string& error, double sampleRate) {
     VsampFile f; if (!f.openFile(path, error)) return nullptr;
-    return fromFile(f, error);
+    return fromFile(f, error, sampleRate);
 }
 #endif
 
-std::shared_ptr<Library> Library::loadBytes(std::vector<uint8_t> bytes, std::string& error) {
+std::shared_ptr<Library> Library::loadBytes(std::vector<uint8_t> bytes, std::string& error, double sampleRate) {
     VsampFile f; if (!f.openBytes(std::move(bytes), error)) return nullptr;
-    return fromFile(f, error);
+    return fromFile(f, error, sampleRate);
 }
 
-std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& error) {
+std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& error, double sampleRate) {
     const Json& m = f.manifest();
     if (m["format"].str() != "vsamp") { error = "Not a library file."; return nullptr; }
     auto L = std::make_shared<Library>();
@@ -129,7 +129,8 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
     blobs(m["assets"], L->assets); blobs(m["fonts"], L->fonts);
     for (size_t i = 0; i < m["features"].size(); ++i) {
         std::string ft = m["features"][i].str(); L->features.push_back(ft);
-        if (std::find(supportedFeatures().begin(), supportedFeatures().end(), ft) == supportedFeatures().end()) L->unsupported.push_back(ft);
+        const bool fxOk = ft.rfind("fx:", 0) == 0 && std::find(fx::supportedModules().begin(), fx::supportedModules().end(), ft.substr(3)) != fx::supportedModules().end();
+        if (!fxOk && std::find(supportedFeatures().begin(), supportedFeatures().end(), ft) == supportedFeatures().end()) L->unsupported.push_back(ft);
     }
     std::map<std::string, int> sidx;
     for (size_t i = 0; i < m["samples"].size(); ++i) {
@@ -180,7 +181,24 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         L->lists.push_back(std::move(d));
     }
     if (!L->lists.empty()) L->defaultList = std::min((int) L->lists.size() - 1, std::max(0, m["project"]["currentList"].integer(0)));
+    /* tags (knob values) and effect chains */
+    const Json& tj = m["project"]["tags"];
+    for (size_t i = 0; i < tj.size(); ++i) { fx::TagDef d; d.id = tj[i]["id"].str(); d.name = tj[i]["name"].str(); d.kind = tj[i]["kind"].str("number"); d.basis = tj[i]["basis"].str("note");
+        d.steps = (int) tj[i]["steps"].size(); d.def = (float) tj[i]["value"].num(tj[i]["def"].num(0)); L->tags.push_back(d); }
+    L->tagValues.reset(new std::atomic<float>[std::max<size_t>(1, L->tags.size())]);
+    for (size_t i = 0; i < L->tags.size(); ++i) L->tagValues[i].store(L->tags[i].def);
+    L->sampleRate = sampleRate;
+    std::vector<std::string> gnames; for (auto& g : L->groups) gnames.push_back(g.name);
+    std::vector<std::string> fxBad;
+    L->fx = fx::System::build(m, *L, L->tags, gnames, fxBad);
+    L->fx->prepare(sampleRate);
+    for (auto& b : fxBad) if (std::find(L->unsupported.begin(), L->unsupported.end(), b) == L->unsupported.end()) L->unsupported.push_back(b);
     return L;
+}
+
+bool Library::setTag(const std::string& name, float value) const {
+    for (size_t i = 0; i < tags.size(); ++i) if (tags[i].name == name) { tagValues[i].store(std::min(1.f, std::max(0.f, value))); return true; }
+    return false;
 }
 
 } // namespace visu

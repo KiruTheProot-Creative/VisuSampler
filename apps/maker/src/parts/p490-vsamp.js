@@ -9,6 +9,17 @@ function dataUrlBytes(url){
   const bin=m[2]?atob(m[3]):decodeURIComponent(m[3]),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
   return{mime:m[1],bytes:u};
 }
+/* what this library uses; the player warns about anything it cannot play yet */
+function libraryFeatures(set){
+  const f=new Set(),add=x=>f.add(x);
+  S.samples.forEach(s=>{const sm=smOf(s);if(S.zones.some(z=>z.sample===s.id)){add(sm.mode);if(sm.uni.on)add('unison');}});
+  set.zones.forEach(z=>{const g=gcfg(z.group);if(z.loop&&z.loop.on){add('loop');if(z.loop.pp)add('pingpong');}if(z.rev)add('reverse');if(z.vstart)add('velstart');
+    if(z.fadeLo||z.fadeHi||z.vfadeLo||z.vfadeHi)add('crossfade');if(z.hum&&(z.hum.tune||z.hum.vol||z.hum.start))add('humanize');
+    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.voices)add('voicelimit');});
+  if(S.lists.length)add('lists');if(S.els.length)add('ui');
+  Object.values(S.fx.graphs).forEach(g=>g.nodes.forEach(n=>{if(FXT[n.type]&&FXT[n.type].kind!=='io')add('fx:'+n.type);}));
+  return [...f].sort();
+}
 async function buildVsamp(progress){
   const t0=performance.now(),L=S.lib,o=L.export,say=progress||(()=>{});
   say('Planning…');await tick();
@@ -39,12 +50,15 @@ async function buildVsamp(progress){
     fonts[fam]={lic:f.lic,data:await pack.add(new Uint8Array(f.buf),{compress:true})};
   }
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
+  sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;}
+  /* parameter ranges of every FX module, so the player can apply knobs and modulation exactly like the Maker */
+  const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0];});});
   const est=estimate(o),dropped=set.stats.unusedSkipped;
   const lib={id:L.id,name:L.name,author:L.author,version:L.version,desc:L.desc,tags:L.tags,category:L.category,web:L.web,licence:L.licence,changelog:L.changelog,accent:L.accent};
   delete banner.bgImg;delete banner.logoImg;delete banner.iconImg;
   const manifest={format:'vsamp',formatVersion:1,created:new Date().toISOString(),app:'VisuMaker prototype 4',lib,
     banner:{settings:banner,images:bi,layers},
-    project:sn,assets,fonts,samples:smeta,zones:set.zones,
+    project:sn,fxRanges,features:libraryFeatures(set),assets,fonts,samples:smeta,zones:set.zones,
     bake:{enabled:o.bake,mode:o.mode,step:set.stats.step,quality:o.quality,unison:o.bakeUni,keptOriginals:o.includeOrig,chunks:set.stats.chunks,zonesBaked:set.stats.zonesBaked,zonesLeftLive:set.stats.skipped},
     export:{bits:o.bits,compress:o.compress}};
   say('Writing file…');await tick();

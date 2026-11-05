@@ -119,10 +119,12 @@ void Engine::noteOn(int note, int vel) {
         startZone(z, note, vel, false);
     }
     heldNotes_[note] = true;
+    ctl_.vel = (float) vel; ctl_.key = (float) note; ctl_.gate = true; ctl_.tOn = ctl_.time;
 }
 
 void Engine::noteOff(int note) {
     adopt();
+    if (ctl_.gate) { ctl_.gate = false; ctl_.tOff = ctl_.time; }
     if (!lib_ || note < 0 || note > 127) return;
     heldNotes_[note] = false;
     if (sustain_) { for (auto& v : voices_) if (v.on && !v.fromRelease && v.note == note) v.held = true; return; }
@@ -164,15 +166,16 @@ struct Reader {
     }
 };
 
-void Engine::render(float* L, float* R, int n) {
-    adopt();
-    if (!lib_) { active_.store(0); return; }
-    const float master = master_.load(); int active = 0;
+int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
+    fx::System* fx = (lib_->fx && lib_->fx->hasAny()) ? lib_->fx.get() : nullptr;
+    int active = 0;
     for (auto& v : voices_) {
         if (!v.on) continue;
+        float* dL = L; float* dR = R;
+        if (fx) { fx::Stereo& s = fx->groupIn(v.group); dL = s.l; dR = s.r; }
         const ZoneAudio& a = *v.audio;
         Reader r0{ a.ch[0], a.len, a.loop, a.loopS, a.loopE }, r1{ a.ch[1] ? a.ch[1] : a.ch[0], a.len, a.loop, a.loopS, a.loopE };
-        const float x = v.pan <= 0 ? v.pan + 1 : v.pan, gL = std::cos(x * (float) kPi / 2), gR = std::sin(x * (float) kPi / 2), g = v.gain * master;
+        const float x = v.pan <= 0 ? v.pan + 1 : v.pan, gL = std::cos(x * (float) kPi / 2), gR = std::sin(x * (float) kPi / 2), g = v.gain * gainScale;
         for (int i = 0; i < n; ++i) {
             if (!a.loop && v.pos >= (double) a.len) { v.on = false; break; }
             if (v.maxLife >= 0 && --v.maxLife < 0) kill(v, false);
@@ -181,13 +184,38 @@ void Engine::render(float* L, float* R, int n) {
             float l = r0.read(v.pos, v.interp, v.ratio), rr = v.stereoIn ? r1.read(v.pos, v.interp, v.ratio) : l, oL, oR;
             if (!v.stereoIn) { const float m = std::cos((v.pan + 1) * (float) kPi / 4), m2 = std::sin((v.pan + 1) * (float) kPi / 4); oL = l * m; oR = l * m2; }
             else if (v.pan <= 0) { oL = l + rr * gL; oR = rr * gR; } else { oL = l * gL; oR = rr + l * gR; }
-            const float e = g * v.env; L[i] += oL * e; R[i] += oR * e;
+            const float e = g * v.env; dL[i] += oL * e; dR[i] += oR * e;
             v.pos += v.ratio;
             if (a.loop && v.pos >= (double) a.loopE) v.pos -= (double) (a.loopE - a.loopS);
         }
         if (v.on) ++active;
     }
+    return active;
+}
+
+void Engine::render(float* L, float* R, int n) {
+    adopt();
+    if (!lib_) { active_.store(0); return; }
+    const float master = master_.load();
+    fx::System* fx = (lib_->fx && lib_->fx->hasAny()) ? lib_->fx.get() : nullptr;
+    ctl_.bpm = lib_->bpm; ctl_.tags = lib_->tagValues.get(); ctl_.numTags = (int) lib_->tags.size(); ctl_.sampleRate = sr_;
+    if (!fx) { active_.store(renderVoices(L, R, n, master)); ctl_.time += n / sr_; return; }
+    int done = 0, active = 0;
+    while (done < n) {
+        const int m = std::min(fx::kBlock, n - done);
+        active = renderVoices(nullptr, nullptr, m, 1.f);
+        fx->process(m, ctl_);
+        const fx::Stereo& o = fx->out();
+        for (int i = 0; i < m; ++i) { L[done + i] += o.l[i] * master; R[done + i] += o.r[i] * master; }
+        ctl_.time += m / sr_; done += m;
+    }
     active_.store(active);
 }
+
+void Engine::controller(int cc, int value) {
+    if (cc == 1) ctl_.mod = value / 127.f; else if (cc == 11) ctl_.expr = value / 127.f; else if (cc == 64) sustain(value >= 64);
+}
+void Engine::pitchBend(float v01) { ctl_.bend = v01; }
+void Engine::aftertouch(float v01) { ctl_.at = v01; }
 
 } // namespace visu

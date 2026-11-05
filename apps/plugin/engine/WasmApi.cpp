@@ -11,7 +11,7 @@ namespace {
 Engine* g_engine = nullptr;
 std::shared_ptr<Library> g_lib;
 std::string g_error;
-std::vector<float> g_left, g_right;
+std::vector<float> g_left, g_right; double g_sr = 48000;
 Engine& eng() { if (!g_engine) g_engine = new Engine(); return *g_engine; }
 }
 
@@ -21,14 +21,14 @@ void* visu_alloc(int bytes) { return std::malloc((size_t) bytes); }
 void visu_free(void* p) { std::free(p); }
 
 void visu_prepare(double sampleRate, int maxFrames) {
-    eng().prepare(sampleRate);
+    eng().prepare(sampleRate); g_sr = sampleRate;
     g_left.assign((size_t) maxFrames, 0.f); g_right.assign((size_t) maxFrames, 0.f);
 }
 
 // Takes ownership of the bytes (they are freed). Returns 1 on success.
 int visu_load(uint8_t* bytes, int length) {
     std::vector<uint8_t> v(bytes, bytes + length); std::free(bytes);
-    std::string err; auto lib = Library::loadBytes(std::move(v), err);
+    std::string err; auto lib = Library::loadBytes(std::move(v), err, g_sr);
     if (!lib) { g_error = err; return 0; }
     g_lib = lib; eng().setLibrary(lib); g_error.clear();
     return 1;
@@ -42,6 +42,10 @@ void visu_sustain(int down) { eng().sustain(down != 0); }
 void visu_all_off() { eng().allNotesOff(); }
 void visu_set_list(int index) { eng().setList(index); }
 void visu_set_gain(float g) { eng().setMasterGain(g); }
+// name is a NUL-terminated string allocated with visu_alloc (freed here)
+int visu_set_tag(char* name, float value) { int ok = g_lib && g_lib->setTag(name, value) ? 1 : 0; std::free(name); return ok; }
+void visu_controller(int cc, int value) { eng().controller(cc, value); }
+void visu_pitch_bend(float v01) { eng().pitchBend(v01); }
 
 // Renders `frames` (at most maxFrames) into the output buffers below.
 void visu_render(int frames) {

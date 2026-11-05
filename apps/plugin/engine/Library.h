@@ -1,6 +1,7 @@
 // An opened .vsamp: decoded audio plus zones, groups and the library info, ready for the Engine.
 #pragma once
 #include "Vsamp.h"
+#include "Fx.h"
 #include <array>
 #include <memory>
 #include <string>
@@ -56,8 +57,9 @@ struct LibraryInfo {
 class Library {
 public:
     // Reads and fully decodes a library. Returns null and sets `error` on failure.
-    static std::shared_ptr<Library> load(const std::string& path, std::string& error);
-    static std::shared_ptr<Library> loadBytes(std::vector<uint8_t> bytes, std::string& error);
+    // sampleRate: the effects are prepared for it (reload the library if the host rate changes)
+    static std::shared_ptr<Library> load(const std::string& path, std::string& error, double sampleRate = 48000);
+    static std::shared_ptr<Library> loadBytes(std::vector<uint8_t> bytes, std::string& error, double sampleRate = 48000);
     // Reads only the header info and banner images (fast, for the browser).
     static bool readInfo(const std::string& path, LibraryInfo& info, std::string& error);
 
@@ -76,8 +78,14 @@ public:
     std::vector<std::pair<std::string, Blob>> assets, fonts;
     std::vector<std::string> unsupported; // the ones this engine cannot play yet
     bool anySolo = false, anyZoneSolo = false; int unsupportedZones = 0; double bpm = 120;
+    // knobs, buttons and other tags of the library's interface: effects follow them
+    std::vector<fx::TagDef> tags;
+    std::unique_ptr<std::atomic<float>[]> tagValues;
+    bool setTag(const std::string& name, float value) const;
+    std::unique_ptr<fx::System> fx;       // the library's effect chains (state changes while playing)
+    double sampleRate = 48000;
 private:
-    static std::shared_ptr<Library> fromFile(const VsampFile& f, std::string& error);
+    static std::shared_ptr<Library> fromFile(const VsampFile& f, std::string& error, double sampleRate);
 };
 
 } // namespace visu

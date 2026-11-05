@@ -9,7 +9,7 @@ class VisuEngine extends AudioWorkletProcessor{
     this.port.onmessage=({data:m})=>{const e=this.e;
       if(m.t==='load'){const err=e.load(new Uint8Array(m.bytes));this.port.postMessage({t:'loaded',error:err,zones:e.zones,unsupportedZones:e.unsupportedZones});}
       else if(m.t==='on')e.noteOn(m.n,m.v);else if(m.t==='off')e.noteOff(m.n);else if(m.t==='sustain')e.sustain(m.d);
-      else if(m.t==='alloff')e.allOff();else if(m.t==='list')e.setList(m.i);else if(m.t==='gain')e.setGain(m.g);else if(m.t==='unload')e.unload();};
+      else if(m.t==='alloff')e.allOff();else if(m.t==='list')e.setList(m.i);else if(m.t==='gain')e.setGain(m.g);else if(m.t==='tag')e.setTag(m.name,m.v);else if(m.t==='cc')e.controller(m.cc,m.v);else if(m.t==='bend')e.pitchBend(m.v);else if(m.t==='unload')e.unload();};
   }
   process(_,outputs){
     const out=outputs[0],n=out[0].length,[l,r]=this.e.render(n);out[0].set(l);if(out[1])out[1].set(r);

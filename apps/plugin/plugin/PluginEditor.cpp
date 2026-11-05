@@ -58,6 +58,7 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
             o->setProperty("manifest", juce::String::fromUTF8(lib->manifestText.data(), (int) lib->manifestText.size()));
             o->setProperty("id", proc_.currentId()); o->setProperty("list", proc_.currentList());
             reply(done, juce::var(o)); })
+        .withNativeFunction("setTag", [this, reply](const juce::Array<juce::var>& a, auto done) { if (a.size() >= 2) proc_.setTag(a[0].toString(), (float) (double) a[1]); reply(done, juce::var(true)); })
         .withNativeFunction("unload", [this, reply](const juce::Array<juce::var>&, auto done) { proc_.unloadLibrary(); reply(done, juce::var(true)); })
         .withNativeFunction("setList", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setList((int) a[0]); reply(done, juce::var(true)); })
         .withNativeFunction("setVolume", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setVolume((float) (double) a[0]); reply(done, juce::var(true)); })

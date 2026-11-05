@@ -24,6 +24,7 @@ public:
     int addLibraryFiles(const juce::Array<juce::File>& files);
     void setList(int index);
     void panic() { panicRequest_ = true; }
+    void setTag(const juce::String& name, float value);   // a knob in the library's interface moved
     void setVolume(float v) { volume_->setValueNotifyingHost(volume_->convertTo0to1(v)); }
     float volume() const { return volume_->get(); }
 
@@ -63,7 +64,7 @@ private:
     std::shared_ptr<const visu::Library> current_;
     juce::String currentId_, status_ = "No library loaded", pendingId_;
     juce::File currentFile_;
-    int list_ = -2;
+    int list_ = -2; double sampleRate_ = 0;
     std::atomic<bool> loading_{ false }, panicRequest_{ false };
     std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
     std::atomic<int> loadTicket_{ 0 };

@@ -27,6 +27,8 @@ const rows=fr.locator('.el.list .lrow[data-i]');
 ok(await rows.count()>2,'list selector rows drawn');
 await rows.nth(2).dispatchEvent('pointerdown');await p.waitForTimeout(200);
 ok(await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='setList'&&c[1]>0)),'choosing a list in the instrument UI tells the plugin');
+const kb0=await fr.locator('.el.knob').first().boundingBox();if(kb0){await p.mouse.move(kb0.x+kb0.width/2,kb0.y+kb0.height/2);await p.mouse.down();await p.mouse.move(kb0.x+kb0.width/2,kb0.y+kb0.height/2-50,{steps:4});await p.mouse.up();}
+ok(await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='setTag')),'turning a knob in the instrument tells the plugin');
 /* a knob drag changes its tag */
 const knob=fr.locator('.el.knob').first();const kb=await knob.boundingBox();
 if(kb){await p.mouse.move(kb.x+kb.width/2,kb.y+kb.height/2);await p.mouse.down();await p.mouse.move(kb.x+kb.width/2,kb.y+kb.height/2-60,{steps:5});await p.mouse.up();}

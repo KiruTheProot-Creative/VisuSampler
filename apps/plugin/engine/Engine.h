@@ -26,6 +26,9 @@ public:
     void sustain(bool down);
     void allNotesOff();
     void render(float* left, float* right, int numFrames);   // adds into the buffers
+    void controller(int cc, int value);    // mod wheel (1), expression (11), sustain (64)
+    void pitchBend(float v01);
+    void aftertouch(float v01);
     int activeVoices() const { return active_.load(); }
 
 private:
@@ -37,6 +40,8 @@ private:
         int note = 0, group = -1, choke = 0; unsigned long age = 0; long maxLife = -1;
     };
     void adopt();
+    int renderVoices(float* L, float* R, int n, float gainScale);
+    fx::Control ctl_;
     void kill(Voice& v, bool fast);
     void startZone(const Zone& z, int note, int vel, bool fromRelease);
     Interp interpFor(const Zone& z) const;

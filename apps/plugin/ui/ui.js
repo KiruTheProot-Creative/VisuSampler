@@ -144,6 +144,7 @@ addEventListener('message',e=>{
   if(e.source!==frame.contentWindow)return;const m=e.data||{};
   if(m.t==='ready'){uiReady=true;if(uiMsg)frame.contentWindow.postMessage(uiMsg,'*');}
   else if(m.t==='list'&&m.index>=0){if(st.list!==m.index){st.list=m.index;call('setList',m.index);}}
+  else if(m.t==='tag'){call('setTag',m.name,m.value);}
 });
 $('#btnAbout').onclick=()=>{const on=!$('#stage').classList.contains('about');$('#stage').classList.toggle('about',on);$('#btnAbout').setAttribute('aria-pressed',String(on));};
 buildPiano();

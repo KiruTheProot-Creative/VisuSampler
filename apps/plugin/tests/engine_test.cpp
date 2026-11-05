@@ -5,6 +5,8 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <tuple>
+#include <algorithm>
 
 using namespace visu;
 static int failures = 0, checks = 0;
@@ -87,8 +89,38 @@ static void testLibrarySwap() {
     CHECK(true, "libraries can be swapped and unloaded while playing");
 }
 
+static void testFx() {
+    const std::string dir = TEST_DATA_DIR; std::string txt = readText(dir + "/fx-cases.json"), err;
+    Json cases = Json::parse(txt.data(), txt.size());
+    auto lib = Library::load(dir + "/fx.vsamp", err, 48000);
+    CHECK(lib != nullptr && lib->fx && lib->fx->hasAny(), "fx test library loads with its chains %s", err.c_str());
+    if (!lib) return;
+    CHECK(lib->unsupported.empty(), "every module in the catalog is supported (%zu missing%s%s)", lib->unsupported.size(), lib->unsupported.empty() ? "" : ": ", lib->unsupported.empty() ? "" : lib->unsupported[0].c_str());
+    auto renderKey = [&](int key, double secs, float tagCut, std::vector<float>* env) {
+        auto L = Library::load(dir + "/fx.vsamp", err, 48000); if (tagCut >= 0) L->setTag("cut", tagCut);
+        Engine e; e.prepare(48000); e.setMasterGain(1.f); e.setLibrary(L); e.noteOn(key, 110);
+        std::vector<float> l(480), r(480); double peak = 0, sum = 0; bool fin = true; const int blocks = (int) (secs * 100);
+        for (int b = 0; b < blocks; ++b) { std::fill(l.begin(), l.end(), 0.f); std::fill(r.begin(), r.end(), 0.f); e.render(l.data(), r.data(), 480);
+            double bs = 0; for (int i = 0; i < 480; ++i) { if (!std::isfinite(l[i]) || !std::isfinite(r[i])) fin = false; peak = std::max(peak, (double) std::max(std::fabs(l[i]), std::fabs(r[i]))); bs += l[i] * l[i] + r[i] * r[i]; }
+            sum += bs; if (env) env->push_back((float) std::sqrt(bs / 960)); if (b == blocks / 2) e.noteOff(key); }
+        return std::make_tuple(fin, peak, std::sqrt(sum / (blocks * 960.0)));
+    };
+    for (size_t i = 0; i < cases.size(); ++i) {
+        const std::string mod = cases[i]["module"].str(); const int key = cases[i]["key"].integer();
+        if (mod == "lfo-mod" || mod == "tag") continue;
+        const double secs = mod == "feedback" ? 3 : 1;
+        auto [fin, peak, rms] = renderKey(key, secs, -1, nullptr);
+        CHECK(fin && peak > 1e-3 && peak < 8, "%s: finite and audible (peak %.3f, rms %.4f)", mod.c_str(), peak, rms);
+    }
+    int lfoKey = 0, tagKey = 0; for (size_t i = 0; i < cases.size(); ++i) { if (cases[i]["module"].str() == "lfo-mod") lfoKey = cases[i]["key"].integer(); if (cases[i]["module"].str() == "tag") tagKey = cases[i]["key"].integer(); }
+    { std::vector<float> env; renderKey(lfoKey, 1, -1, &env); double ripple = 0; for (size_t i = 2; i + 2 < env.size() / 2; ++i) { const double sm = (env[i - 1] + env[i + 1]) / 2; ripple += std::fabs(env[i] - sm); }
+      CHECK(ripple > .002, "an LFO on the filter cutoff makes the sound move (ripple %.4f)", ripple); }
+    { auto open_ = renderKey(tagKey, .6, .95f, nullptr), shut = renderKey(tagKey, .6, 0.f, nullptr);
+      CHECK(std::get<2>(open_) > std::get<2>(shut) * 1.5, "a knob (tag) linked to the cutoff changes the sound (%.4f vs %.4f)", std::get<2>(open_), std::get<2>(shut)); }
+}
+
 int main() {
-    testJson(); testGolden(); testDemo(); testLibrarySwap();
+    testJson(); testGolden(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

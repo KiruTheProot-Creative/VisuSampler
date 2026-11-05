@@ -20,7 +20,7 @@ const fns={
   getInterface:()=>{const L=libs.find(l=>l.id===state.status.currentId);return L?{manifest:JSON.stringify(L._m),id:L.id,list:0}:null;},
   unload:()=>{state.status={text:'No library loaded'};return true;},
   setList:i=>{state.status.list=i;return true;},setVolume:v=>{state.volume=v;return true;},
-  noteOn:(n,v)=>true,noteOff:n=>true,panic:()=>true,openFolder:()=>true,addLibrary:()=>({added:0})
+  noteOn:(n,v)=>true,noteOff:n=>true,panic:()=>true,setTag:(n,v)=>true,openFolder:()=>true,addLibrary:()=>({added:0})
 };
 window.__JUCE__={initialisationData:{__juce__functions:Object.keys(fns)},backend:{
   addEventListener(ev,fn){if(!listeners.has(ev))listeners.set(ev,[]);listeners.get(ev).push(fn);},
