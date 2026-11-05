@@ -70,6 +70,10 @@ public:
     int defaultList = -1;                 // the list the library was saved with
     Interp projectInterp = Interp::Linear;
     std::vector<std::string> features;    // what the file says it uses
+    // for drawing the library's own interface in the plugin window
+    struct Blob { std::string mime, name; int w = 0, h = 0; std::string data; };
+    std::string manifestText;
+    std::vector<std::pair<std::string, Blob>> assets, fonts;
     std::vector<std::string> unsupported; // the ones this engine cannot play yet
     bool anySolo = false, anyZoneSolo = false; int unsupportedZones = 0; double bpm = 120;
 private:

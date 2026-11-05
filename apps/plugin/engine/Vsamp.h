@@ -18,6 +18,7 @@ public:
     bool openBytes(std::vector<uint8_t> bytes, std::string& error);
 
     const Json& manifest() const { return manifest_; }
+    std::string manifestText() const { return std::string((const char*) bytes_.data() + 16, base_ > 16 ? base_ - 16 : 0); }
     static BlobRef ref(const Json& j);
     // Checks the blob CRC, unpacks if compressed. Returns false with `error` set on failure.
     bool blob(const BlobRef& r, std::vector<uint8_t>& out, std::string& error) const;

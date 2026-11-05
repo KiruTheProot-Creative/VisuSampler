@@ -71,3 +71,9 @@ pre.lic{white-space:pre-wrap;margin:0;font:11px/1.5 var(--f);color:var(--muted)}
 .status{color:var(--muted);margin:4px 0 8px}
 .status.warn{color:#e0c264}
 .loading{opacity:.6}
+
+.stage.hasui{padding:0;overflow:hidden;position:relative}
+#uiFrame{width:100%;height:100%;border:0;display:block;background:#1c1c1e}
+.stage.hasui #detail{display:none}
+.stage.hasui.about #uiFrame{display:none}
+.stage.hasui.about #detail{display:block;padding:14px;height:100%;overflow:auto}

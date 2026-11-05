@@ -9,6 +9,8 @@ juce::String mimeFor(const juce::String& path)
     if (path.endsWithIgnoreCase(".js")) return "text/javascript";
     if (path.endsWithIgnoreCase(".css")) return "text/css";
     if (path.endsWithIgnoreCase(".png")) return "image/png";
+    if (path.endsWithIgnoreCase(".ttf")) return "font/ttf";
+    if (path.endsWithIgnoreCase(".svg")) return "image/svg+xml";
     return "application/octet-stream";
 }
 std::vector<std::byte> bytesOf(const void* d, size_t n)
@@ -48,6 +50,14 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
             const auto id = a.isEmpty() ? juce::String() : a[0].toString();
             if (!proc_.entryById(id)) { auto* o = new juce::DynamicObject(); o->setProperty("error", "library not found"); reply(done, juce::var(o)); return; }
             proc_.loadLibrary(id); reply(done, juce::var(true)); })
+        .withNativeFunction("getInterface", [this, reply](const juce::Array<juce::var>&, auto done) {
+            /* the library's own interface: the page passes it to runtime.html, which draws it with the Designer's code */
+            auto lib = proc_.currentLibrary();
+            if (!lib) { reply(done, juce::var()); return; }
+            auto* o = new juce::DynamicObject();
+            o->setProperty("manifest", juce::String::fromUTF8(lib->manifestText.data(), (int) lib->manifestText.size()));
+            o->setProperty("id", proc_.currentId()); o->setProperty("list", proc_.currentList());
+            reply(done, juce::var(o)); })
         .withNativeFunction("unload", [this, reply](const juce::Array<juce::var>&, auto done) { proc_.unloadLibrary(); reply(done, juce::var(true)); })
         .withNativeFunction("setList", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setList((int) a[0]); reply(done, juce::var(true)); })
         .withNativeFunction("setVolume", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setVolume((float) (double) a[0]); reply(done, juce::var(true)); })
@@ -82,6 +92,17 @@ std::optional<juce::WebBrowserComponent::Resource> VisuEditor::resource(const ju
         }
         return std::nullopt;
     }
+    if (path.startsWith("cur/"))   // images and fonts of the loaded library's interface: cur/asset/<id>, cur/font/<family>
+    {
+        auto lib = proc_.currentLibrary();
+        if (!lib) return std::nullopt;
+        const auto kind = path.fromFirstOccurrenceOf("cur/", false, false).upToFirstOccurrenceOf("/", false, false);
+        const auto key = juce::URL::removeEscapeChars(path.fromLastOccurrenceOf("/", false, false)).toStdString();
+        for (auto& kv : (kind == "font" ? lib->fonts : lib->assets))
+            if (kv.first == key) return juce::WebBrowserComponent::Resource{ bytesOf(kv.second.data.data(), kv.second.data.size()), kind == "font" ? juce::String("font/ttf") : juce::String(kv.second.mime) };
+        return std::nullopt;
+    }
+    if (path.startsWith("fonts/")) path = path.fromFirstOccurrenceOf("fonts/", false, false);
     for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
     {
         if (path == BinaryData::originalFilenames[i])

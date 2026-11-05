@@ -29,6 +29,9 @@ public:
 
     juce::var librariesVar() const;   // what the browser shows
     juce::var statusVar() const;      // what play mode shows
+    std::shared_ptr<const visu::Library> currentLibrary() const { return current_; }
+    const juce::String& currentId() const { return currentId_; }
+    int currentList() const { return list_ == -2 && current_ ? current_->defaultList : list_; }
 
     juce::MidiKeyboardState keyboardState;
     int activeVoices() const { return engine_.activeVoices(); }

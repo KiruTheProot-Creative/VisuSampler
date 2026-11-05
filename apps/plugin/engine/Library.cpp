@@ -117,6 +117,16 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
     fillInfo(m["lib"], L->info);
     L->bpm = m["project"]["bpm"].num(120);
     { bool known; L->projectInterp = parseInterp(m["project"]["interp"].str("linear"), known); }
+    L->manifestText = f.manifestText();
+    auto blobs = [&](const Json& obj, std::vector<std::pair<std::string, Blob>>& out) {
+        for (auto& kv : obj.o) {
+            Blob b; b.mime = kv.second["mime"].str("application/octet-stream"); b.name = kv.second["name"].str(kv.first);
+            b.w = kv.second["w"].integer(); b.h = kv.second["h"].integer();
+            std::vector<uint8_t> d; std::string e;
+            if (f.blob(VsampFile::ref(kv.second["data"]), d, e)) { b.data.assign(d.begin(), d.end()); out.emplace_back(kv.first, std::move(b)); }
+        }
+    };
+    blobs(m["assets"], L->assets); blobs(m["fonts"], L->fonts);
     for (size_t i = 0; i < m["features"].size(); ++i) {
         std::string ft = m["features"][i].str(); L->features.push_back(ft);
         if (std::find(supportedFeatures().begin(), supportedFeatures().end(), ft) == supportedFeatures().end()) L->unsupported.push_back(ft);

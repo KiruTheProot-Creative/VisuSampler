@@ -4,7 +4,7 @@ const calls=[];const listeners=new Map();let state={volume:.8,status:{text:'No l
 const emit=(ev,data)=>(listeners.get(ev)||[]).forEach(fn=>fn(data));
 async function loadLibs(urls){
   for(const u of urls){
-    const bytes=new Uint8Array(await (await fetch(u)).arrayBuffer()),{manifest:m,blob}=readVsamp(bytes),L=m.lib;
+    const bytes=new Uint8Array(await (await fetch(new URL(u,import.meta.url))).arrayBuffer()),{manifest:m,blob}=readVsamp(bytes),L=m.lib;
     const id=L.id+'~'+libs.length;
     for(const k of ['tile','wide']){const r=m.banner.images[k];if(r)imgs[id+'/'+k]=URL.createObjectURL(new Blob([await blob(r)],{type:'image/png'}));}
     libs.push({id,name:L.name+(libs.length?' '+libs.length:''),author:L.author,version:L.version,category:libs.length%2?'Keys':L.category,tags:L.tags,desc:L.desc,licence:L.licence,changelog:L.changelog,accent:L.accent,hasTile:!!imgs[id+'/tile'],hasWide:!!imgs[id+'/wide'],size:bytes.length,_m:m});
@@ -17,6 +17,7 @@ const fns={
     const m=L._m;state.status={text:'Loading…',loading:true,currentId:id};emit('status',state.status);
     setTimeout(()=>{state.status={text:m.zones.length+' zones ready',loading:false,currentId:id,zones:m.zones.length,groups:new Set(m.zones.map(z=>z.group)).size,
       lists:(m.project.lists||[]).map(l=>({name:l.name,bank:l.bank})),list:0,unsupported:id.endsWith('~1')?['granular']:[]};emit('status',state.status);},50);return true;},
+  getInterface:()=>{const L=libs.find(l=>l.id===state.status.currentId);return L?{manifest:JSON.stringify(L._m),id:L.id,list:0}:null;},
   unload:()=>{state.status={text:'No library loaded'};return true;},
   setList:i=>{state.status.list=i;return true;},setVolume:v=>{state.volume=v;return true;},
   noteOn:(n,v)=>true,noteOff:n=>true,panic:()=>true,openFolder:()=>true,addLibrary:()=>({added:0})
@@ -28,5 +29,6 @@ window.__JUCE__={initialisationData:{__juce__functions:Object.keys(fns)},backend
 }};
 window.__mock={calls,emit,libs,state};
 window.__visuImageUrl=(id,k)=>imgs[id+'/'+k]||'';
+window.__visuAssetUrl=(kind,key)=>'about:blank#'+kind+'/'+key;
 await loadLibs(['../../../../examples/rompler-demo.vsamp','../../../../examples/rompler-demo.vsamp','../../../../examples/rompler-demo.vsamp']);
 await import('../ui.js');

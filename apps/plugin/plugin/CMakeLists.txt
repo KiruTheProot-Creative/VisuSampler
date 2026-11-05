@@ -21,7 +21,9 @@ juce_add_plugin(VisuPlayer
   FORMATS ${VISU_FORMATS}
   PRODUCT_NAME "VisuPlayer")
 
-juce_add_binary_data(VisuPlayerUI SOURCES ../ui/index.html ../ui/ui.css ../ui/ui.js ../ui/bridge.js)
+juce_add_binary_data(VisuPlayerUI SOURCES ../ui/index.html ../ui/ui.css ../ui/ui.js ../ui/bridge.js
+  ../ui/runtime.html ../ui/runtime.js ../ui/runtime.css
+  ../../../assets/fonts/Figtree.ttf ../../../assets/fonts/Unbounded.ttf ../../../assets/fonts/JetBrainsMono.ttf ../../../assets/fonts/Pacifico.ttf ../../../assets/fonts/VT323.ttf)
 target_sources(VisuPlayer PRIVATE PluginProcessor.cpp PluginEditor.cpp)
 target_compile_definitions(VisuPlayer PUBLIC
   JUCE_WEB_BROWSER=1 JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0)

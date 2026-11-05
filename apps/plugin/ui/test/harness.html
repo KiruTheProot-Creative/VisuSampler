@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><base href="../"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VisuPlayer</title>
-<link rel="stylesheet" href="../ui.css">
+<link rel="stylesheet" href="ui.css">
 </head><body data-mode="browse">
 <header class="top">
   <button class="btn back" id="btnBack" type="button" hidden>&#9664; Libraries</button>
@@ -9,6 +9,7 @@
   <div class="title" id="curTitle"></div>
   <div class="grow"></div>
   <span class="muted" id="voices" hidden>0 voices</span>
+  <button class="btn" id="btnAbout" type="button" aria-pressed="false" hidden>About</button>
   <button class="btn" id="btnFolder" type="button" title="Open the folder VisuPlayer reads libraries from">Library folder</button>
   <button class="btn" id="btnAdd" type="button">Add library</button>
 </header>
@@ -21,12 +22,12 @@
   <footer class="bfoot"><label class="vol">Volume <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8"></label><span class="grow"></span><span id="count" class="muted"></span></footer>
 </section>
 <section class="play" id="play" aria-label="Play" hidden>
-  <div class="stage" id="stage"><div id="detail"></div></div>
+  <div class="stage" id="stage"><iframe id="uiFrame" title="Instrument" hidden></iframe><div id="detail"></div></div>
   <footer class="keys" id="keysBar">
     <div class="kbar"><label>Volume <input type="range" id="vol2" min="0" max="1" step="0.01" value="0.8"></label><span class="muted" id="oct">Octave C2</span><span class="grow"></span><button class="btn" id="btnPanic" type="button">Panic</button></div>
     <div class="piano" id="piano" aria-label="Piano keyboard"></div>
   </footer>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script type="module" src="mock-host.js"></script>
+<script type="module" src="test/mock-host.js"></script>
 </body></html>

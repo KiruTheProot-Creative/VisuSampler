@@ -57,9 +57,11 @@ async function addLibrary(){const r=await call('addLibrary');if(r&&r.added)toast
 $('#btnAdd').onclick=addLibrary;$('#btnAdd2').onclick=addLibrary;
 $('#btnFolder').onclick=()=>call('openFolder');
 /* ---------- play mode ---------- */
+function setModeTitle(){}
 function setMode(m){
   document.body.dataset.mode=m;const p=m==='play';
-  $('#browse').hidden=p;$('#play').hidden=!p;$('#btnBack').hidden=!p;$('#voices').hidden=!p;$('#btnAdd').hidden=p;$('#btnFolder').hidden=p;
+  if(!p)hideUI();
+  $('#browse').hidden=p;$('#play').hidden=!p;$('#btnBack').hidden=!p;$('#voices').hidden=!p;$('#btnAdd').hidden=p;$('#btnFolder').hidden=p;if(!p)$('#btnAbout').hidden=true;
   $('#curTitle').textContent=p&&cur?cur.name:'';
 }
 async function open(id){
@@ -68,7 +70,7 @@ async function open(id){
   const r=await call('loadLibrary',id);
   if(r&&r.error){toast('Could not load '+L.name+': '+r.error);}
 }
-async function leave(){releaseAll();await call('unload');cur=null;st={};setMode('browse');}
+async function leave(){releaseAll();hideUI();await call('unload');cur=null;st={};setMode('browse');}
 $('#btnBack').onclick=leave;
 addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.dataset.mode==='play')leave();});
 function renderDetail(){
@@ -84,7 +86,7 @@ function renderDetail(){
     +'<div><div class="card"><h3>Contents</h3><dl><dt>File size</dt><dd>'+fmtBytes(m.size||0)+'</dd>'+(st.zones!=null?'<dt>Zones</dt><dd>'+st.zones+'</dd><dt>Groups</dt><dd>'+st.groups+'</dd>':'')+'</dl></div></div></div>';
   $('#detail').classList.toggle('loading',!!st.loading);
 }
-$('#detail').addEventListener('click',e=>{const b=e.target.closest('[data-list]');if(b){call('setList',+b.dataset.list);st.list=+b.dataset.list;renderDetail();}});
+$('#detail').addEventListener('click',e=>{const b=e.target.closest('[data-list]');if(b){call('setList',+b.dataset.list);st.list=+b.dataset.list;renderDetail();if(uiReady)frame.contentWindow.postMessage({t:'list',index:st.list},'*');}});
 /* ---------- keyboard ---------- */
 const LO=36,HI=96,isBlack=n=>[1,3,6,8,10].includes(n%12),down=new Set(),keyNote=new Map();
 function buildPiano(){
@@ -116,14 +118,37 @@ $('#vol').oninput=e=>setVol(+e.target.value);$('#vol2').oninput=e=>setVol(+e.tar
 $('#btnPanic').onclick=()=>{releaseAll();call('panic');};
 /* ---------- events from the plugin ---------- */
 on('libraries',d=>setLibs(d));
-on('status',d=>{st=d||{};
+on('status',d=>{const was=st;st=d||{};
+  if(st.currentId&&!st.loading&&(was.loading||was.currentId!==st.currentId||!uiFor))showUI();
   if(st.currentId&&(!cur||cur.id!==st.currentId)){const L=libs.find(x=>x.id===st.currentId);if(L){cur=L;setMode('play');}}
   if(cur&&document.body.dataset.mode==='play')renderDetail();});
 on('meter',d=>{$('#voices').textContent=(d&&d.voices||0)+' voices';});
 on('volume',v=>{$('#vol').value=v;$('#vol2').value=v;});
+/* ---------- the library's own interface (drawn by runtime.html with the Designer's code) ---------- */
+let uiFor=null,uiReady=false,uiMsg=null;
+const frame=$('#uiFrame');
+function hideUI(){uiFor=null;uiReady=false;uiMsg=null;frame.hidden=true;frame.removeAttribute('src');$('#stage').classList.remove('hasui','about');$('#btnAbout').hidden=true;}
+async function showUI(){
+  const r=await call('getInterface');if(!r||!r.manifest)return;
+  let m;try{m=JSON.parse(r.manifest);}catch(e){return;}
+  const p=m.project||{};if(!p.els||!p.els.length){hideUI();return;}
+  const url=window.__visuAssetUrl||((kind,key)=>'cur/'+kind+'/'+encodeURIComponent(key));
+  const assets={},fonts={};
+  Object.keys(m.assets||{}).forEach(id=>{const a=m.assets[id];assets[id]={name:a.name,w:a.w,h:a.h,mime:a.mime,url:url('asset',id)};});
+  Object.keys(m.fonts||{}).forEach(f=>{fonts[f]=url('font',f);});
+  uiFor=r.id;uiMsg={t:'load',project:p,assets,fonts,list:r.list};
+  $('#stage').classList.add('hasui');$('#btnAbout').hidden=false;frame.hidden=false;
+  uiReady=false;frame.src='runtime.html?'+Date.now();
+}
+addEventListener('message',e=>{
+  if(e.source!==frame.contentWindow)return;const m=e.data||{};
+  if(m.t==='ready'){uiReady=true;if(uiMsg)frame.contentWindow.postMessage(uiMsg,'*');}
+  else if(m.t==='list'&&m.index>=0){if(st.list!==m.index){st.list=m.index;call('setList',m.index);}}
+});
+$('#btnAbout').onclick=()=>{const on=!$('#stage').classList.contains('about');$('#stage').classList.toggle('about',on);$('#btnAbout').setAttribute('aria-pressed',String(on));};
 buildPiano();
 (async()=>{
   setLibs(await call('getLibraries'));
-  const s=await call('getState');if(s){$('#vol').value=s.volume;$('#vol2').value=s.volume;st=s.status||{};if(s.status&&s.status.currentId){const L=libs.find(x=>x.id===s.status.currentId);if(L){cur=L;renderDetail();setMode('play');}}}
+  const s=await call('getState');if(s){$('#vol').value=s.volume;$('#vol2').value=s.volume;st=s.status||{};if(s.status&&s.status.currentId){const L=libs.find(x=>x.id===s.status.currentId);if(L){cur=L;renderDetail();setMode('play');if(!st.loading)showUI();}}}
 })().catch(e=>{console.warn(e);renderBrowse();});
 window.__ui={get libs(){return libs;},open,leave};
