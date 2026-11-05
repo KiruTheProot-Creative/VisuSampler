@@ -6,13 +6,14 @@
 - Designer: pages (tabs), layer groups, multi selection, dropdowns, images, text panels, list selectors, rules.
 
 ## Next, one by one (the Kontakt essentials)
-1. **Undo / redo** in the Maker (Designer, Sound tab, Effects).
-2. **Streaming samples from disk**: keep only the start of each sample in memory, read the rest while playing; 16-bit in memory where the source is 16-bit.
-3. **DAW automation and MIDI learn** for library knobs.
-4. **User presets in the player** (save and load your own knob settings).
-5. **Keyswitches / articulations** (notes that switch lists).
-6. **Per-note filter and modulation** (a filter with its own envelope per note, velocity to brightness, per-note LFO).
-7. **Real DAW testing and an installer** for the player.
+1–6 are built and tested (engine tests listen to the sound; Windows CI builds the VST3). None of them has been tried in a real DAW yet, that is item 7.
+1. ✅ **Undo / redo** in the Maker (Designer, Sound tab, Effects).
+2. ✅ **Streaming samples from disk**: keep only the start of each sample in memory, read the rest while playing; 16-bit in memory where the source is 16-bit.
+3. ✅ **DAW automation and MIDI learn** for library knobs.
+4. ✅ **User presets in the player** (save and load your own knob settings).
+5. ✅ **Keyswitches / articulations** (notes that switch lists).
+6. ✅ **Per-note filter and modulation** (a filter with its own envelope per note, velocity to brightness, per-note LFO).
+7. **(next)** **Real DAW testing and an installer** for the player.
 - Also: lists and banks for the base library; button actions for next/previous list and bank.
 
 ## Later
