@@ -80,7 +80,9 @@ function exRightHTML(){
   h+=sec('Checks','<ul class="checks">'+exChecks().map(c=>'<li class="'+c[0]+'">'+esc(c[1])+'</li>').join('')+'</ul>');
   h+='<div class="buildbar"><button type="button" class="btn primary" data-xa="build"'+(b.busy?' disabled':'')+'>'+(b.busy?'Building…':'Build .vsamp')+'</button>'
     +'<button type="button" class="btn" data-xa="verify"'+(b.last&&!b.busy?'':' disabled')+'>Verify</button>'
-    +'<button type="button" class="btn" data-xa="download"'+(b.last&&!b.busy?'':' disabled')+'>Download</button></div>';
+    +(window.visuDesktop?'<button type="button" class="btn primary" data-xa="tovst"'+(b.last&&!b.busy?'':' disabled')+'>Send to VisuPlayer</button>'
+      :'<button type="button" class="btn" data-xa="download"'+(b.last&&!b.busy?'':' disabled')+'>Download</button>')+'</div>'
+    +(window.visuDesktop?'<p class="hint keep">Send to VisuPlayer saves the library into Documents\\VisuSampler\\Libraries, where the VST finds it. <button type="button" class="btn ghost" data-xa="folder">Open folder</button></p>':'');
   h+='<div class="buildlog" id="exLog" role="status">'+(b.progress?esc(b.progress):'')+'</div>'+exReportHTML();
   return h+'</div>';
 }
@@ -139,5 +141,10 @@ $('#rightX').addEventListener('click',async e=>{
   const b=e.target.closest('[data-xa]');if(!b)return;const a=b.dataset.xa;
   if(a==='build')exBuild();
   else if(a==='verify'&&S.build.last){S.build.verify=await parseVsamp(S.build.last.bytes);exRightRefresh();}
+  else if(a==='tovst'&&S.build.last&&window.visuDesktop){
+    try{const file=await window.visuDesktop.saveLibrary(S.lib.name.trim()||'library',S.build.last.bytes);flash('Sent to VisuPlayer: '+file+'. Open the library browser in the VST to play it.');}
+    catch(err){flash('Could not save: '+(err&&err.message||err));}
+  }
+  else if(a==='folder'&&window.visuDesktop){window.visuDesktop.openLibraryFolder();}
   else if(a==='download'&&S.build.last){downloadBytes(S.build.last.bytes,(S.lib.name.trim().replace(/[^\w\-. ]+/g,'')||'library')+'.vsamp');}
 });

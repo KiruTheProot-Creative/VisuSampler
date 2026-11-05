@@ -1,6 +1,8 @@
 # VisuSampler
 
-A lighter, friendlier Kontakt alternative.
+A lighter, friendlier Kontakt alternative, for Windows.
+
+Nothing here plays on the web: VisuMaker is a Windows desktop app (`.exe`) and VisuPlayer is a VST3. The Maker exports a library straight into the VST's library folder (`Documents\\VisuSampler\\Libraries`).
 
 - **VisuMaker** builds libraries: Samples, Mapping, Designer, FX Designer, Export.
 - **VisuPlayer** plays them. A library is one `.vsamp` file. No scripting.
