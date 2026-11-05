@@ -94,7 +94,7 @@ bool Library::readInfo(const std::string& path, LibraryInfo& info, std::string& 
 
 const std::vector<std::string>& supportedFeatures() {
     static const std::vector<std::string> s = { "sampler", "slicer", "loop", "pingpong", "reverse", "unison", "rr", "release", "choke",
-        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep" };
+        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep", "granular", "wavetable" };
     return s;
 }
 
@@ -141,11 +141,19 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         s.id = sj["id"].str(); s.name = sj["name"].str(); s.sr = sj["sr"].integer(44100); s.chn = std::min(2, std::max(1, sj["chn"].integer(1)));
         s.mode = sj["sm"]["mode"].str("sampler"); s.unison = unisonVoices(sj["sm"]["uni"]);
         { const Json& sk = sj["sm"]["sk"]; s.skSpeed = (float) sk["speed"].num(100); s.skGrainMs = (float) sk["grain"].num(50); s.skWsola = sk["quality"].str("wsola") != "ola"; s.skSync = sk["sync"].boolean(); s.bars = (float) sj["sm"]["bars"].num(2); }
+        { const Json& g = sj["sm"]["gr"]; s.grSize = (float) g["size"].num(90); s.grDensity = (float) g["density"].num(28); s.grPos = (float) g["pos"].num(45); s.grSpread = (float) g["spread"].num(15);
+          s.grJitter = (float) g["jitter"].num(0); const std::string sh = g["shape"].str("hann"); s.grShape = sh == "tri" ? 1 : sh == "rect" ? 2 : 0; }
+        { const Json& w = sj["sm"]["wt"]; s.wtFrame = std::max(32, w["frame"].integer(2048)); s.wtPos = (float) w["pos"].num(0); s.wtPos2 = (float) w["pos2"].num(-1); s.wtSweep = (float) w["sweep"].num(2500); s.wtTagId = w["tag"].str(""); }
         std::vector<uint8_t> raw; if (!f.blob(VsampFile::ref(sj["data"]), raw, error)) return nullptr;
         std::vector<float> tmp[2]; int fch = std::max(1, sj["chn"].integer(1));
         std::vector<float> all[8]; if (fch > 8) { error = "Too many channels."; return nullptr; }
         decodePCM(raw.data(), raw.size(), fch, sj["bits"].integer(16), all);
         s.frames = all[0].size(); s.ch[0] = std::move(all[0]); if (s.chn > 1) s.ch[1] = std::move(all[1]);
+        if (s.mode == "wavetable") {   // level like the JS core: the loudest frame peaks at 0.8
+            s.wtFrames = std::max(1, (int) (s.frames / (size_t) s.wtFrame)); float pk = 0;
+            for (size_t i = 0; i < std::min(s.frames, (size_t) s.wtFrames * s.wtFrame); ++i) pk = std::max(pk, std::fabs(s.ch[0][i]));
+            s.wtGain = pk > 0 ? .8f / pk : 1.f;
+        }
         sidx[s.id] = (int) L->samples.size(); L->samples.push_back(std::move(s));
     }
     std::map<std::string, int> gidx; const Json& gset = m["project"]["gset"];
@@ -172,6 +180,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         z.interp = parseInterp(zj["interp"].str("inherit"), z.hasInterp);
         const Sample& s = L->samples[(size_t) z.sample];
         if (!s.supported()) L->unsupportedZones++;
+        else if (s.mode == "granular" || s.mode == "wavetable") { z.audio.ch[0] = s.ch[0].data(); z.audio.ch[1] = s.chn > 1 ? s.ch[1].data() : nullptr; z.audio.len = (long) s.frames; z.audio.loop = true; z.audio.loopS = 0; z.audio.loopE = (long) s.frames; }   // played live, never runs out
         else prepareAudio(z, s, zj);
         int idx = (int) L->zones.size(); L->zones.push_back(std::move(z));
         const Zone& zz = L->zones.back();
@@ -191,6 +200,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         d.steps = (int) tj[i]["steps"].size(); d.def = (float) tj[i]["value"].num(tj[i]["def"].num(0)); L->tags.push_back(d); }
     L->tagValues.reset(new std::atomic<float>[std::max<size_t>(1, L->tags.size())]);
     for (size_t i = 0; i < L->tags.size(); ++i) L->tagValues[i].store(L->tags[i].def);
+    for (auto& s : L->samples) if (!s.wtTagId.empty()) for (size_t i = 0; i < L->tags.size(); ++i) if (L->tags[i].id == s.wtTagId) s.wtTag = (int) i;
     L->sampleRate = sampleRate;
     std::vector<std::string> gnames; for (auto& g : L->groups) gnames.push_back(g.name);
     std::vector<std::string> fxBad;

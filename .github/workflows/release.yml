@@ -1,0 +1,77 @@
+name: release
+# Builds the Windows downloads and puts them on a GitHub release:
+#   VisuMaker setup (.exe installer), VisuPlayer VST3 and VisuPlayer standalone (.exe).
+# Runs when a tag like v0.2.0 is pushed, or by hand from the Actions tab.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  player:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: WebView2 package
+        shell: pwsh
+        run: nuget install Microsoft.Web.WebView2 -Version 1.0.1901.177 -OutputDirectory "${{ github.workspace }}/nuget"
+      - name: Configure
+        shell: bash
+        run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
+      - name: Build
+        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone --parallel 4
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          $vst = Get-ChildItem build -Recurse -Directory -Filter "VisuPlayer.vst3" | Select-Object -First 1
+          Compress-Archive -Path $vst.FullName -DestinationPath out/VisuPlayer-VST3-Windows.zip
+          $exe = Get-ChildItem build -Recurse -Filter "VisuPlayer.exe" | Where-Object { $_.FullName -match "Standalone" } | Select-Object -First 1
+          Copy-Item $exe.FullName out/VisuPlayer-Standalone.exe
+          Get-ChildItem out
+      - uses: actions/upload-artifact@v4
+        with: { name: player, path: out }
+  maker:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-audit --no-fund
+        working-directory: apps/maker-desktop
+      - run: npm run dist
+        working-directory: apps/maker-desktop
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          $exe = Get-ChildItem apps/maker-desktop/dist -Filter "*.exe" | Select-Object -First 1
+          Copy-Item $exe.FullName out/VisuMaker-Setup.exe
+      - uses: actions/upload-artifact@v4
+        with: { name: maker, path: out }
+  publish:
+    needs: [player, maker]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dl }
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          case "$TAG" in v*) ;; *) TAG="build-$(date -u +%Y%m%d-%H%M)";; esac
+          cat > notes.md <<'MD'
+          Windows builds of VisuSampler.
+
+          - **VisuMaker-Setup.exe**: installs VisuMaker, the library designer.
+          - **VisuPlayer-VST3-Windows.zip**: unzip and put `VisuPlayer.vst3` into `C:\Program Files\Common Files\VST3`.
+          - **VisuPlayer-Standalone.exe**: VisuPlayer without a DAW (pick your audio and MIDI device in its settings).
+
+          Libraries exported from VisuMaker go to `Documents\VisuSampler\Libraries`, where VisuPlayer finds them.
+          The builds are not code-signed, so Windows SmartScreen may ask before the first start ("More info", then "Run anyway").
+          MD
+          gh release create "$TAG" dl/player/* dl/maker/* --repo "$REPO" --target "${GITHUB_SHA}" --title "VisuSampler ${TAG}" --notes-file notes.md --prerelease

@@ -103,6 +103,32 @@ static void testPlay() {
     lib->play = {};
 }
 
+// granular and wavetable, played live by the engine
+static void testLiveModes() {
+    std::string err; auto lib = Library::load(std::string(TEST_DATA_DIR) + "/golden.vsamp", err, 44100);
+    if (!lib) { CHECK(false, "golden loads"); return; }
+    CHECK(lib->unsupportedZones == 0, "granular and wavetable zones are supported (%d unsupported)", lib->unsupportedZones);
+    auto run = [&](int note, double secs, double& hz, double& rms, bool& fin) {
+        Engine e; e.prepare(44100); e.setMasterGain(1); e.setLibrary(lib); e.noteOn(note, 127);
+        const int n = (int) (secs * 44100); std::vector<float> L((size_t) n, 0.f), R((size_t) n, 0.f);
+        for (int o = 0; o < n; o += 441) e.render(L.data() + o, R.data() + o, std::min(441, n - o));
+        int c = 0; double sq = 0; fin = true; const int from = n / 2;
+        for (int i = from; i < n; ++i) { if (!std::isfinite(L[(size_t) i])) fin = false; if (L[(size_t) i - 1] < 0 && L[(size_t) i] >= 0) ++c; sq += (double) L[(size_t) i] * L[(size_t) i]; }
+        hz = c / (secs - from / 44100.0); rms = std::sqrt(sq / (n - from));
+    };
+    double hz, rms, hz2, rms2; bool fin, fin2;
+    run(117, 3, hz, rms, fin);
+    CHECK(fin && rms > .05, "granular keeps sounding while held, no loop end (rms %.3f after 1.5 s)", rms);
+    run(120, 3, hz2, rms2, fin2);
+    CHECK(hz2 / hz > 1.1 && hz2 / hz < 1.3, "granular follows the keyboard (x%.2f for 3 semitones)", hz2 / hz);
+    run(9, 1, hz, rms, fin);
+    CHECK(fin && std::fabs(hz / 440 - 1) < .01, "wavetable plays the exact pitch (%.1f Hz for A 440)", hz);
+    run(16, 1, hz2, rms, fin);
+    CHECK(std::fabs(hz2 / hz - std::pow(2.0, 7 / 12.0)) < .01, "wavetable follows the keyboard (x%.3f for a fifth)", hz2 / hz);
+    lib->setTag("wtpos", 1.f); run(9, 1, hz2, rms, fin); lib->setTag("wtpos", 0.f);
+    CHECK(std::fabs(hz2 / hz - 3) < .05, "a knob moves the wavetable position live (frame 2 is the third harmonic: x%.2f)", hz2 / hz);
+}
+
 static void testDemo() {
     std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
     CHECK(lib != nullptr, "demo library loads %s", err.c_str());
@@ -173,7 +199,7 @@ static void testFx() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

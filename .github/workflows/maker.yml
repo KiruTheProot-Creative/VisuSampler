@@ -5,6 +5,7 @@ on:
       - "apps/maker/**"
       - "apps/maker-desktop/**"
       - "packages/core/**"
+      - "packages/engine-wasm/**"
       - ".github/workflows/maker.yml"
   pull_request:
     paths:

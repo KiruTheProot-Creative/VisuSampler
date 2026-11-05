@@ -82,6 +82,13 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
         v->releasing = false; v->relInc = 0; v->on = true; v->note = note; v->group = z.group; v->choke = g.choke;
         v->oneshot = z.oneshot && !z.audio.loop; v->fromRelease = fromRelease; v->held = false; v->age = ++clock_;
         v->maxLife = fromRelease ? (long) (4 * sr_) : -1;
+        v->kind = s.mode == "granular" ? 2 : s.mode == "wavetable" ? 3 : 0;
+        if (v->kind == 3) v->stereoIn = false;   // wavetables read the first channel, like the JS core
+        if (v->kind) {
+            v->pitch = std::pow(2.0, semis / 12.0);
+            if (v->kind == 2) { const double gl = std::max(64.0, std::round(s.grSize / 1000.0 * s.sr)); v->ngr = 0; v->gk = 0; v->gt = 0; v->nextSpawn = -gl; v->seed = (z.root * 31 + note) | 0; }
+            else { v->wph = 0; v->wms = 0; v->wfade = 0; v->wf = 440.0 * std::pow(2.0, (z.root - 69) / 12.0) * v->pitch; }
+        }
         v->stolen = false; v->vel = vel; v->glide = z.keytrack ? glideFrom : 0.f; v->glideStep = glideStepFor(v->glide);
     }
 }
@@ -221,6 +228,14 @@ void Engine::sustain(bool down) {
 }
 void Engine::allNotesOff() { adopt(); for (auto& v : voices_) if (v.on) kill(v, true); for (auto& h : heldNotes_) h = false; sustain_ = false; stackSize_ = 0; monoNote_ = -1; }
 
+static inline double hash01(double n) { const double x = std::sin(n * 127.1 + 311.7) * 43758.5453; return x - std::floor(x); }
+static inline float cubicAt(const float* src, int base, int fl, double ph) {   // one cycle of a wavetable frame, wrapping
+    const double x = ph * fl; const int i = (int) std::floor(x); const float t = (float) (x - i);
+    auto g = [&](int k) { return src[base + (((i + k) % fl) + fl) % fl]; };
+    const float a = g(-1), b = g(0), c = g(1), d = g(2);
+    return b + .5f * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a)));
+}
+
 // ---- interpolation, same formulas as the JS core ----
 static inline double lanczos(double x, double a) { if (x == 0) return 1; if (x <= -a || x >= a) return 0; double px = kPi * x; return a * std::sin(px) * std::sin(px / a) / (px * px); }
 
@@ -267,7 +282,47 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
             if (v.attackInc > 0 && v.env < 1.f && !v.releasing) { v.env += v.attackInc; if (v.env > 1.f) v.env = 1.f; }
             if (v.releasing) { v.env -= v.relInc; if (v.env <= 0) { v.on = false; break; } }
             float l, rr, oL, oR;
-            if (!v.keepSpeed) { l = r0.read(v.pos, v.interp, ratio); rr = v.stereoIn ? r1.read(v.pos, v.interp, ratio) : l; }
+            if (v.kind == 2) {
+                /* granular (same grains as the JS core's cloud, but played live, so it never loops) */
+                const Sample& s = *v.sample; const long N = (long) s.frames;
+                const double gl = std::max(64.0, std::round(s.grSize / 1000.0 * s.sr)), step = std::max(1.0, std::round((double) s.sr / std::max(1.0, (double) s.grDensity)));
+                while (v.gt >= v.nextSpawn) {
+                    const int k = v.gk++; const double r1 = hash01(v.seed * 977 + k), r2 = hash01(v.seed * 313 + k * 7);
+                    if (v.ngr < Voice::kMaxGrains) {
+                        const double jit = std::pow(2.0, ((r2 * 2 - 1) * s.grJitter) / 1200);
+                        const double p0 = std::min((double) std::max(0L, N - 2), std::max(0.0, s.grPos / 100.0 * N + (r1 * 2 - 1) * s.grSpread / 100.0 * N));
+                        v.grains[v.ngr++] = { v.nextSpawn, p0, jit };
+                    }
+                    v.nextSpawn += step;
+                }
+                const double rate = v.pitch * pm; float gsL = 0, gsR = 0;
+                for (int q = 0; q < v.ngr;) {
+                    Voice::Grain& gr = v.grains[q]; const double i0 = v.gt - gr.o;
+                    if (i0 >= gl) { gr = v.grains[--v.ngr]; continue; }
+                    const double p = gr.p0 + i0 * rate * gr.rate; const long ip = (long) p;
+                    if (i0 >= 0 && ip < N - 1) {
+                        const float f = (float) (p - ip), t = (float) (i0 / gl);
+                        const float w = s.grShape == 1 ? 1 - std::fabs(2 * t - 1) : s.grShape == 2 ? (t < .1f ? t * 10 : t > .9f ? (1 - t) * 10 : 1.f) : (float) (.5 - .5 * std::cos(2 * kPi * t));
+                        gsL += (a.ch[0][ip] * (1 - f) + a.ch[0][ip + 1] * f) * w;
+                        if (v.stereoIn) gsR += (a.ch[1][ip] * (1 - f) + a.ch[1][ip + 1] * f) * w;
+                    }
+                    ++q;
+                }
+                const float norm = (float) (std::sqrt(step / gl) * 1.4);
+                l = gsL * norm; rr = v.stereoIn ? gsR * norm : l;
+                v.gt += (double) s.sr / sr_;
+            } else if (v.kind == 3) {
+                /* wavetable oscillator: the frame position follows its knob live */
+                const Sample& s = *v.sample; const int fl = s.wtFrame, nf = s.wtFrames;
+                const float tv = s.wtTag >= 0 && lib_->tagValues ? lib_->tagValues[(size_t) s.wtTag].load() : s.wtPos / 100.f;
+                const bool sweep = s.wtPos2 >= 0 && s.wtSweep > 0;
+                const float tt = sweep ? (float) std::min(1.0, v.wms / s.wtSweep) : 0.f, pp = std::min(1.f, std::max(0.f, tv + (s.wtPos2 / 100.f - tv) * tt));
+                const float x = pp * (nf - 1); const int f0 = std::min(nf - 1, (int) x), f1 = std::min(nf - 1, f0 + 1); const float fr = x - (float) f0;
+                const float val = (cubicAt(a.ch[0], f0 * fl, fl, v.wph) * (1 - fr) + cubicAt(a.ch[0], f1 * fl, fl, v.wph) * fr) * s.wtGain * (v.wfade < 64 ? v.wfade / 64.f : 1.f);
+                if (v.wfade < 64) ++v.wfade;
+                l = rr = val;
+                v.wph += v.wf * pm / sr_; v.wph -= std::floor(v.wph); v.wms += 1000.0 / sr_;
+            } else if (!v.keepSpeed) { l = r0.read(v.pos, v.interp, ratio); rr = v.stereoIn ? r1.read(v.pos, v.interp, ratio) : l; }
             else {
                 /* keep-speed (port of EmulonX's grain reader): WSOLA picks each new grain start where the waveform lines up */
                 const int G = v.grain, h = G >> 1; const double step = ratio, k = v.k;

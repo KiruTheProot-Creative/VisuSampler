@@ -7,6 +7,10 @@ const sine=(f,sec,a=.5)=>{const d=new Float32Array(Math.round(SR*sec));for(let i
 const mk=o=>Object.assign({id:'z',group:'G',lo:0,hi:127,vlo:1,vhi:127,root:57,tune:0,vol:0,pan:0,start:0,end:0,vstart:0,rev:false,keytrack:true,oneshot:false,attack:0,release:80,
   fadeLo:0,fadeHi:0,vfadeLo:0,vfadeHi:0,curve:'power',seq:0,loop:{on:false,s:0,e:0,xf:0,xcurve:'power',pp:false}},o);
 const samples=[{id:'sk',name:'keep',sr:SR,chn:1,frames:0,root:57,fine:0,ch:[sine(220,.5)],sm:{mode:'speedkeep',sk:{speed:50,grain:50,quality:'wsola',sync:false,bars:2}}},{id:'m',name:'mono',sr:SR,chn:1,frames:0,root:57,fine:0,ch:[sine(220,.5)]},{id:'st',name:'stereo',sr:SR,chn:2,frames:0,root:57,fine:0,ch:[sine(220,.5),sine(330,.5,.4)]}];
+/* granular cloud of the sine, and a two-frame wavetable: frame 0 a sine, frame 1 its third harmonic */
+samples.push({id:'gr',name:'grains',sr:SR,chn:1,frames:0,root:57,fine:0,ch:[sine(220,.5)],sm:{mode:'granular',gr:{size:90,density:28,pos:45,spread:15,jitter:0,shape:'hann'}}});
+{const fl=2048,w=new Float32Array(fl*2);for(let i=0;i<fl;i++){w[i]=Math.sin(2*Math.PI*i/fl)*.5;w[fl+i]=Math.sin(6*Math.PI*i/fl)*.5;}
+ samples.push({id:'wt',name:'table',sr:SR,chn:1,frames:0,root:9,fine:0,ch:[w],sm:{mode:'wavetable',wt:{frame:fl,pos:0,pos2:-1,sweep:0,tag:'t_wt'}}});}
 samples.forEach(s=>s.frames=s.ch[0].length);
 const zones=[
   mk({id:'lin',sample:'m',lo:40,hi:49,interp:'linear'}),
@@ -17,10 +21,11 @@ const zones=[
   mk({id:'start',sample:'m',lo:90,hi:99,interp:'linear',start:50,end:300,tune:37}),
   mk({id:'keep',sample:'sk',lo:100,hi:115,root:103,interp:'cubic',release:5}),
 ];
+zones.push(mk({id:'gran',sample:'gr',lo:116,hi:120,root:117,interp:'linear'}),mk({id:'wtab',sample:'wt',lo:0,hi:19,root:9,tune:6000,interp:'linear'}));
 const ctx={buffer:id=>{const s=samples.find(x=>x.id===id);return{ch:s.ch,sr:SR};},sample:id=>samples.find(s=>s.id===id),group:()=>({tune:0,interp:'inherit'}),defaultInterp:'linear',bpm:120,sig:{n:4,d:4},tagValue:()=>null};
 const pack=new Pack(),smeta=[];
 for(const s of samples){smeta.push({id:s.id,name:s.name,sr:SR,chn:s.chn,frames:s.frames,root:s.root,fine:0,loop:null,sm:s.sm,bits:32,data:await pack.add(encodePCM(s.ch,32),{compress:true})});}
-const manifest={format:'vsamp',formatVersion:1,lib:{id:'golden',name:'Golden é中',version:'1.0.0',accent:'#123456'},banner:{images:{}},project:{gset:{G:{mode:'normal',interp:'inherit',velcurve:1}},bpm:120},samples:smeta,zones};
+const manifest={format:'vsamp',formatVersion:1,lib:{id:'golden',name:'Golden é中',version:'1.0.0',accent:'#123456'},banner:{images:{}},project:{gset:{G:{mode:'normal',interp:'inherit',velcurve:1}},bpm:120,tags:[{id:'t_wt',name:'wtpos',kind:'number',value:0,def:0,steps:[]}]},samples:smeta,zones};
 writeFileSync(new URL('golden.vsamp',out),writeVsamp(manifest,pack));
 const N=3000,cases=[],r6=v=>Math.round(v*1e6)/1e6;
 for(const [zid,note] of [['lin',45],['lin',40],['cub',55],['cub',59],['sinc',65],['sinc',60],['loop',75],['ster',85],['start',95]]){

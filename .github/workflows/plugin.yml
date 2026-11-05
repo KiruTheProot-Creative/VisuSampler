@@ -30,14 +30,15 @@ jobs:
         shell: bash
         run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
       - name: Build
-        run: cmake --build build --config Release --target VisuPlayer_VST3 --parallel 4
-      - name: Collect VST3
+        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone --parallel 4
+      - name: Collect VST3 and standalone
         shell: bash
         run: |
           mkdir -p out
           find build -name "*.vst3" -maxdepth 6 -exec cp -R {} out/ \;
+          find build -path "*Standalone*" -name "VisuPlayer.exe" -exec cp {} out/ \;
           ls -la out
       - uses: actions/upload-artifact@v4
         with:
-          name: VisuPlayer-VST3-${{ runner.os }}
+          name: VisuPlayer-${{ runner.os }}
           path: out

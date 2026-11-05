@@ -18,11 +18,15 @@ std::vector<UnisonVoice> unisonVoices(const Json& uni);   // same offsets as the
 struct Sample {
     std::string id, name; int sr = 44100, chn = 1; size_t frames = 0;
     std::vector<float> ch[2];
-    std::string mode = "sampler";      // sampler, slicer play here; speedkeep, granular, wavetable are not supported yet
+    std::string mode = "sampler";      // sampler, slicer, speedkeep, granular, wavetable
     std::vector<UnisonVoice> unison;   // one entry when unison is off
     // speed-keeping (time machine): pitch without changing the length
     float skSpeed = 100, skGrainMs = 50; bool skWsola = true, skSync = false; float bars = 2;
-    bool supported() const { return mode == "sampler" || mode == "slicer" || mode == "speedkeep"; }
+    // granular: a cloud of grains read from the sample, played live
+    float grSize = 90, grDensity = 28, grPos = 45, grSpread = 15, grJitter = 0; int grShape = 0;   // shape: 0 hann, 1 triangle, 2 rectangle
+    // wavetable: single-cycle frames, the position can follow a knob (tag) or sweep
+    int wtFrame = 2048, wtFrames = 1, wtTag = -1; float wtPos = 0, wtPos2 = -1, wtSweep = 2500, wtGain = 1; std::string wtTagId;
+    bool supported() const { return mode == "sampler" || mode == "slicer" || mode == "speedkeep" || mode == "granular" || mode == "wavetable"; }
 };
 
 struct GroupCfg {

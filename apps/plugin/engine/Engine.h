@@ -44,6 +44,11 @@ private:
         int note = 0, group = -1, choke = 0; unsigned long age = 0; long maxLife = -1;
         // speed-keeping: two overlapping grains read at the pitch while the position moves at the speed (from EmulonX)
         bool stolen = false; float glide = 0, glideStep = 0; int vel = 100;   // glide: semitones still to slide (from EmulonX)
+        int kind = 0;   // 0 sample, 2 granular, 3 wavetable
+        struct Grain { double o, p0, rate; };
+        static constexpr int kMaxGrains = 64;
+        Grain grains[kMaxGrains]; int ngr = 0, gk = 0, seed = 0; double gt = 0, nextSpawn = 0, pitch = 1;
+        double wph = 0, wf = 440, wms = 0; int wfade = 0;
         bool keepSpeed = false, wsola = true; double k = 1, read0 = 0, read1 = 0; int grain = 2048, grainCounter = 0;
     };
     void adopt();

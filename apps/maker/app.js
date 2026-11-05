@@ -2625,9 +2625,9 @@ if(navigator.requestMIDIAccess){
 /* ---------- the shared engine: the Maker plays through the same C++ engine as the VST (compiled to WebAssembly) ----------
    apps/plugin/engine is the only engine source. GitHub builds it natively for the VST and as engine.wasm for this app.
    The project is handed to the engine as an in-memory .vsamp whenever it changes; notes, knobs and lists go over the worklet port.
-   Zones in modes the engine does not play yet (granular, wavetable) and the sample editor's previews still use the old path. */
+   Only the sample editor's previews (and a fallback if engine.wasm cannot load) still use the old JS path. */
 const ENG={node:null,out:null,starting:false,failed:'',loaded:false,sig:'',pendingSig:'',timer:0,voices:0,zones:0,lastList:-2};
-const ENGINE_MODES=['sampler','slicer','speedkeep'];
+const ENGINE_MODES=['sampler','slicer','speedkeep','granular','wavetable'];
 const engineZone=z=>{const s=sampleById(z.sample);return !!s&&ENGINE_MODES.indexOf(smOf(s).mode)>=0;};
 const engineOn=()=>!!(ENG.node&&ENG.loaded);
 async function engineStart(){
