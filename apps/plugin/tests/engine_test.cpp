@@ -298,6 +298,51 @@ static void testLayers() {
     lib->layers[1] = GroupCfg(); lib->layerB = false;
 }
 
+// patch mode "group": a list is a folder and each of its groups is one patch; samples can play on the key's release
+static void testGroupPatches() {
+    auto blk = [](Engine& e) { std::vector<float> L(480), R(480); e.render(L.data(), R.data(), 480); };
+    std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
+    if (!lib || lib->lists.empty()) { CHECK(false, "demo with lists"); return; }
+    // a folder of the groups that play on key press
+    std::vector<int> folder; for (size_t g = 0; g < lib->groups.size(); ++g) if (lib->groups[g].mode != GroupMode::Release) folder.push_back((int) g);
+    if (folder.size() < 2) { CHECK(false, "two normal groups"); return; }
+    const int li = 0; lib->lists[0].groups = folder; lib->lists[0].slots = folder;
+    // count voices per group of the folder, list mode (only that group in the list) against group-patch mode
+    bool same = true; std::string log; std::vector<int> per(folder.size(), 0);
+    for (size_t p = 0; p < folder.size(); ++p) for (int note = 24; note <= 100; note += 4) {
+        lib->groupPatches = false; lib->lists[(size_t) li].groups = { folder[p] }; lib->lists[(size_t) li].slots = { folder[p] };
+        int want, got;
+        { auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setLibrary(lib); e.setList(li); e.noteOn(note, 100); blk(e); want = e.activeVoices(); }
+        lib->groupPatches = true; lib->lists[(size_t) li].groups = folder; lib->lists[(size_t) li].slots = folder;
+        { auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setLibrary(lib); e.setList(li); e.setPatch(0, (int) p); e.noteOn(note, 100); blk(e); got = e.activeVoices(); }
+        if (want != got) same = false; per[p] += got;
+    }
+    for (int x : per) { log += std::to_string(x) + " "; if (x == 0) same = false; }
+    CHECK(same, "each group of a list plays on its own as a patch, exactly as if it were alone in the list (voices per group: %s)", log.c_str());
+    {   auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setLibrary(lib); e.setList(li); e.setPatch(0, 99); e.noteOn(60, 100); blk(e);
+        CHECK(e.activeVoices() == 0, "a patch number past the folder plays nothing (%d)", e.activeVoices()); }
+    lib->layerB = true;
+    int nB = 60; for (auto& z : lib->zones) if (z.group == folder[1] && !z.mute) { nB = (z.lo + z.hi) / 2; break; }
+    {   auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setLibrary(lib); e.setList(li); e.setListB(li); e.setPatch(0, 0); e.setPatch(1, 1);
+        e.noteOn(nB, 100); blk(e); const int both = e.activeVoices();
+        auto e2p = std::make_unique<Engine>(); Engine& e2 = *e2p; e2.prepare(48000); e2.setLibrary(lib); e2.setList(li); e2.setListB(-3); e2.setPatch(0, 0); e2.noteOn(nB, 100); blk(e2);
+        auto e3p = std::make_unique<Engine>(); Engine& e3 = *e3p; e3.prepare(48000); e3.setLibrary(lib); e3.setList(li); e3.setListB(-3); e3.setPatch(0, 1); e3.noteOn(nB, 100); blk(e3);
+        CHECK(both == e2.activeVoices() + e3.activeVoices() && both > 0, "layer A and B play two patches of the same folder together (%d = %d + %d)", both, e2.activeVoices(), e3.activeVoices());
+        CHECK(e3.activeVoices() > 0, "patch 2 sounds on its own key (%d voices)", e3.activeVoices()); }
+    lib->layerB = false; lib->groupPatches = false;
+    // a sample set to play on release
+    Zone* rz = nullptr; for (auto& z : lib->zones) if (60 >= z.lo && 60 <= z.hi && !z.audio.loop) { rz = &z; break; }
+    if (!rz) { CHECK(false, "a zone on C4"); return; }
+    lib->lists.clear();
+    int on0; { auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setLibrary(lib); e.noteOn(60, 100); blk(e); on0 = e.activeVoices(); }
+    rz->onRelease = true;
+    {   auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setLibrary(lib); e.noteOn(60, 90); std::vector<float> L(480), R(480); e.render(L.data(), R.data(), 480);
+        const int atPress = e.activeVoices();
+        e.noteOff(60); int fresh = 0; e.render(L.data(), R.data(), 480); fresh = e.activeVoices();
+        CHECK(atPress == on0 - 1 && fresh >= 1, "a sample set to 'release' waits for the key to be let go (%d of %d at the press, %d voices after)", atPress, on0, fresh); }
+    rz->onRelease = false;
+}
+
 static void testDemo() {
     std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
     CHECK(lib != nullptr, "demo library loads %s", err.c_str());
@@ -395,7 +440,7 @@ static void testFx() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testStreaming(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

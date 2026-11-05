@@ -21,7 +21,7 @@ jobs:
           emcc -O3 -std=c++17 -DVISU_NO_FILES \
             $E/WasmApi.cpp $E/Engine.cpp $E/Library.cpp $E/Vsamp.cpp $E/Inflate.cpp $E/Fx.cpp \
             -sSTANDALONE_WASM=1 --no-entry -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=33554432 -sFILESYSTEM=0 \
-            -sEXPORTED_FUNCTIONS=_visu_alloc,_visu_free,_visu_prepare,_visu_load,_visu_unload,_visu_error,_visu_note_on,_visu_note_off,_visu_sustain,_visu_all_off,_visu_set_list,_visu_set_list_b,_visu_set_gain,_visu_render,_visu_left,_visu_right,_visu_voices,_visu_zones,_visu_unsupported_zones,_visu_set_tag,_visu_controller,_visu_pitch_bend,_malloc,_free \
+            -sEXPORTED_FUNCTIONS=_visu_alloc,_visu_free,_visu_prepare,_visu_load,_visu_unload,_visu_error,_visu_note_on,_visu_note_off,_visu_sustain,_visu_all_off,_visu_set_list,_visu_set_list_b,_visu_set_patch,_visu_set_gain,_visu_render,_visu_left,_visu_right,_visu_voices,_visu_zones,_visu_unsupported_zones,_visu_set_tag,_visu_controller,_visu_pitch_bend,_malloc,_free \
             -o out/engine.wasm
           ls -la out
           wasm-objdump -x -j Import out/engine.wasm 2>/dev/null | head -30 || true

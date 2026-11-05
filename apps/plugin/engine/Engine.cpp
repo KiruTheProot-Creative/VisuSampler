@@ -174,9 +174,18 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
 
 int Engine::layerCount() const {
     if (!lib_ || !lib_->layerB) return 1;
+    if (lib_->groupPatches && lib_->lists.empty()) return 2;
     const int b = listB_.load(); return b == -3 ? 1 : 2;
 }
 bool Engine::groupAllowed(int g, int layer) const {
+    if (lib_->groupPatches) {   // one group of the chosen list (or of all groups when there are no lists)
+        int p = patch_[layer & 1].load(); if (p == -2) p = lib_->defaultPatch[layer & 1];
+        if (lib_->lists.empty()) return p >= 0 && p < (int) lib_->allSlots.size() && lib_->allSlots[(size_t) p] == g;
+        int l = layer ? listB_.load() : list_.load(); if (l == -2) l = layer ? lib_->defaultListB : lib_->defaultList;
+        if (l < 0 || l >= (int) lib_->lists.size()) return false;
+        const auto& gs = lib_->lists[(size_t) l].slots;
+        return p >= 0 && p < (int) gs.size() && gs[(size_t) p] == g;
+    }
     if (lib_->lists.empty()) return true;
     int l = layer ? listB_.load() : list_.load(); if (l == -2) l = layer ? lib_->defaultListB : lib_->defaultList;
     if (layer && l < 0) return false;
@@ -217,7 +226,7 @@ void Engine::noteOn(int note, int vel) {
     if (!lib_ || note < 0 || note > 127) return;
     { const int k = keyswitchList(note); if (k >= 0) { list_.store(k); ksChanged_.store(true); return; } }   // a keyswitch: picks a list, makes no sound
     vel = std::min(127, std::max(1, vel));
-    heldNotes_[note] = true;
+    heldNotes_[note] = true; noteVel_[note] = vel;
     ctl_.vel = (float) vel; ctl_.key = (float) note; ctl_.gate = true; ctl_.tOn = ctl_.time;
     if (!lib_->play.mono) { startNote(note, vel, 0, nullptr, 0); return; }
     // mono: remember the order of held keys, so letting go returns to the previous one
@@ -262,7 +271,7 @@ void Engine::startNoteLayer(int note, int vel, float glideFrom, const Zone* cons
     int hits[64]; int nh = 0;
     for (int zi : list) {
         const Zone& z = lib_->zones[(size_t) zi]; const GroupCfg& g = lib_->groups[(size_t) z.group];
-        if (z.mute || g.mute || g.mode == GroupMode::Release || vel < z.vlo || vel > z.vhi || (lib_->anySolo && !g.solo) || (lib_->anyZoneSolo && !z.solo) || !groupAllowed(z.group, layer)) continue;
+        if (z.mute || g.mute || g.mode == GroupMode::Release || z.onRelease || vel < z.vlo || vel > z.vhi || (lib_->anySolo && !g.solo) || (lib_->anyZoneSolo && !z.solo) || !groupAllowed(z.group, layer)) continue;
         if (nh < 64) hits[nh++] = zi;
     }
     // round robin: one sequence per group per hit
@@ -310,9 +319,10 @@ void Engine::noteOff(int note) {
     }
     if (sustain_) { for (auto& v : voices_) if (v.on && !v.fromRelease && v.note == note) v.held = true; return; }
     for (auto& v : voices_) if (v.on && !v.releasing && !v.fromRelease && v.note == note && !v.oneshot) kill(v, false);
+    const int rv = noteVel_[note] > 0 ? noteVel_[note] : 100;   // release samples follow how hard the key was played
     for (int l = 0, nl = layerCount(); l < nl; ++l) for (int zi : lib_->byNote[(size_t) note]) {
         const Zone& z = lib_->zones[(size_t) zi];
-        if (lib_->groups[(size_t) z.group].mode == GroupMode::Release && !z.mute && 100 >= z.vlo && 100 <= z.vhi && !lib_->groups[(size_t) z.group].mute && groupAllowed(z.group, l)) startZone(z, note, 100, true, 0, l);
+        if ((lib_->groups[(size_t) z.group].mode == GroupMode::Release || z.onRelease) && !z.mute && rv >= z.vlo && rv <= z.vhi && !lib_->groups[(size_t) z.group].mute && groupAllowed(z.group, l)) startZone(z, note, rv, true, 0, l);
     }
 }
 

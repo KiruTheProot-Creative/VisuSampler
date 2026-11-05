@@ -61,11 +61,12 @@ struct Zone {
     float tune = 0, vol = 0, pan = 0, start = 0, vstart = 0, attack = 0, release = 80;
     int fadeLo = 0, fadeHi = 0, vfadeLo = 0, vfadeHi = 0; std::string curve = "power";
     bool rev = false, keytrack = true, oneshot = false, mute = false, solo = false, hasInterp = false; Interp interp = Interp::Linear;
+    bool onRelease = false;   // plays when the key is let go (release noises), not when it is pressed
     float humTune = 0, humVol = 0, humStart = 0;   // random variation per note (cents, dB, ms)
     ZoneAudio audio; std::string id;
 };
 
-struct ListDef { std::string name; int bank = 0; std::vector<int> groups; int ks = -1; };   // ks: keyswitch note that picks this list (silent)
+struct ListDef { std::string name; int bank = 0; std::vector<int> groups; int ks = -1; std::vector<int> slots; };   // slots: every group named in the list, in order, -1 for one without zones (patch numbers count them)   // ks: keyswitch note that picks this list (silent)
 
 // Features this engine can play (see docs/vsamp-format.md).
 const std::vector<std::string>& supportedFeatures();
@@ -97,6 +98,10 @@ public:
     // layers: A is the list chosen above; B (when the library has it) is a second list that plays at the same time.
     // Each layer has its own envelope and knob links (same fields as a group: env*, lVol/lPan/lTune/lFine), applied on top of the groups.
     bool layerB = false; int defaultListB = -1;
+    // patch mode "group": a list is a folder of groups and each group in it is one patch (one plays per layer).
+    // "list" (older libraries): a list is the patch and all its groups play together.
+    bool groupPatches = false; int defaultPatch[2] = { 0, 1 };
+    std::vector<int> allSlots;            // patch numbers when there are no lists: the project's groups in order
     GroupCfg layers[2];
     Interp projectInterp = Interp::Linear;
     // how the library plays (project.play): mono / legato / glide, pitch-bend range, voice limit and stealing

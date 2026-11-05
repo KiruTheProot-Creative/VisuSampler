@@ -26,6 +26,9 @@ public:
     int list() const { return list_.load(); }
     // layer B: a second list that plays at the same time (-2 = the one the library was saved with, -3 = off)
     void setListB(int index) { listB_.store(index); }
+    // patch mode "group": which group of the chosen list plays on each layer (-2 = the one the library was saved with)
+    void setPatch(int layer, int index) { patch_[layer & 1].store(index); }
+    int patch(int layer) const { return patch_[layer & 1].load(); }
     int listB() const { return listB_.load(); }
 
     // audio thread
@@ -97,14 +100,14 @@ private:
     std::atomic<const Library*> inUse_{nullptr};        // audio thread -> message thread (hazard pointer)
     std::vector<std::shared_ptr<const Library>> owners_; std::mutex ownersMutex_;
     std::atomic<float> master_{0.8f};
-    std::atomic<int> list_{-2}, listB_{-2};
+    std::atomic<int> list_{-2}, listB_{-2}; std::atomic<int> patch_[2] = { {-2}, {-2} };
     bool groupAllowed(int g, int layer = 0) const;
     int keyswitchList(int note) const;
     std::atomic<bool> ksChanged_{ false };
     float rnd() { rng_ = rng_ * 1664525u + 1013904223u; return (float) ((rng_ >> 8) & 0xFFFF) / 65535.f; }
     std::atomic<int> active_{0};
     Voice voices_[kMaxVoices];
-    unsigned long clock_ = 0; bool sustain_ = false; bool heldNotes_[128] = {};
+    unsigned long clock_ = 0; bool sustain_ = false; bool heldNotes_[128] = {}; int noteVel_[128] = {};
     int rr_[256] = {}; uint32_t rng_ = 12345;
 #ifndef VISU_NO_FILES
     std::unique_ptr<Streamer> streamer_;   // made on the message thread by the first library that streams, kept from then on

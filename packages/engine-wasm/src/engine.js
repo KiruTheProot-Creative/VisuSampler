@@ -40,7 +40,7 @@ function wrap(inst){
     load(bytes){const p=x.visu_alloc(bytes.length);new Uint8Array(x.memory.buffer,p,bytes.length).set(bytes);return x.visu_load(p,bytes.length)?null:str(x.visu_error());},
     unload(){x.visu_unload();},
     noteOn(n,v){x.visu_note_on(n,v);},noteOff(n){x.visu_note_off(n);},sustain(d){x.visu_sustain(d?1:0);},allOff(){x.visu_all_off();},
-    setList(i){x.visu_set_list(i);},setListB(i){if(x.visu_set_list_b)x.visu_set_list_b(i);},setGain(g){x.visu_set_gain(g);},
+    setList(i){x.visu_set_list(i);},setListB(i){if(x.visu_set_list_b)x.visu_set_list_b(i);},setPatch(l,i){if(x.visu_set_patch)x.visu_set_patch(l,i);},setGain(g){x.visu_set_gain(g);},
     setTag(name,v){const b=utf8(name+'\0'),p=x.visu_alloc(b.length);new Uint8Array(x.memory.buffer,p,b.length).set(b);return !!x.visu_set_tag(p,v);},
     controller(cc,v){x.visu_controller(cc,v);},pitchBend(v){x.visu_pitch_bend(v);},
     /** Renders n frames (n <= the frames given to prepare). The returned arrays are views and are only valid until the next call. */

@@ -104,7 +104,7 @@ bool Library::readInfo(const std::string& path, LibraryInfo& info, std::string& 
 
 const std::vector<std::string>& supportedFeatures() {
     static const std::vector<std::string> s = { "sampler", "slicer", "loop", "pingpong", "reverse", "unison", "rr", "release", "choke",
-        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep", "granular", "wavetable", "envelope", "grouplinks", "vfilter", "layers" };
+        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep", "granular", "wavetable", "envelope", "grouplinks", "vfilter", "layers", "grouppatches", "releasetrigger" };
     return s;
 }
 
@@ -232,7 +232,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         z.tune = (float) zj["tune"].num(); z.vol = (float) zj["vol"].num(); z.pan = (float) zj["pan"].num(); z.start = (float) zj["start"].num(); z.vstart = (float) zj["vstart"].num();
         z.attack = (float) zj["attack"].num(0); z.release = zj.has("release") ? (float) zj["release"].num(80) : 80.f;
         z.fadeLo = zj["fadeLo"].integer(); z.fadeHi = zj["fadeHi"].integer(); z.vfadeLo = zj["vfadeLo"].integer(); z.vfadeHi = zj["vfadeHi"].integer(); z.curve = zj["curve"].str("power");
-        z.rev = zj["rev"].boolean(); z.keytrack = zj.has("keytrack") ? zj["keytrack"].boolean(true) : true; z.oneshot = zj["oneshot"].boolean(); z.mute = zj["mute"].boolean(); z.solo = zj["solo"].boolean(); if (z.solo) L->anyZoneSolo = true; z.id = zj["id"].str();
+        z.rev = zj["rev"].boolean(); z.keytrack = zj.has("keytrack") ? zj["keytrack"].boolean(true) : true; z.oneshot = zj["oneshot"].boolean(); z.onRelease = zj["trig"].str("start") == "release"; z.mute = zj["mute"].boolean(); z.solo = zj["solo"].boolean(); if (z.solo) L->anyZoneSolo = true; z.id = zj["id"].str();
         z.humTune = (float) zj["hum"]["tune"].num(); z.humVol = (float) zj["hum"]["vol"].num(); z.humStart = (float) zj["hum"]["start"].num();
         z.interp = parseInterp(zj["interp"].str("inherit"), z.hasInterp);
         const Sample& s = L->samples[(size_t) z.sample];
@@ -247,11 +247,14 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
     const Json& lj = m["project"]["lists"];
     for (size_t i = 0; i < lj.size(); ++i) {
         ListDef d; d.name = lj[i]["name"].str(); d.bank = lj[i]["bank"].integer(0); d.ks = lj[i].has("ks") && !lj[i]["ks"].isNull() ? lj[i]["ks"].integer(-1) : -1;
-        for (size_t k = 0; k < lj[i]["groups"].size(); ++k) { auto it = gidx.find(lj[i]["groups"][k].str()); if (it != gidx.end()) d.groups.push_back(it->second); }
+        for (size_t k = 0; k < lj[i]["groups"].size(); ++k) { auto it = gidx.find(lj[i]["groups"][k].str()); if (it != gidx.end()) d.groups.push_back(it->second); d.slots.push_back(it != gidx.end() ? it->second : -1); }
         L->lists.push_back(std::move(d));
     }
     if (!L->lists.empty()) L->defaultList = std::min((int) L->lists.size() - 1, std::max(0, m["project"]["currentList"].integer(0)));
-    {   const Json& pl = m["project"]["play"]; L->layerB = pl["layerB"].boolean(false) && !L->lists.empty();
+    { const Json& pg = m["project"]["groups"]; for (size_t k = 0; k < pg.size(); ++k) { auto it = gidx.find(pg[k].str()); L->allSlots.push_back(it != gidx.end() ? it->second : -1); } }
+    {   const Json& pl = m["project"]["play"]; L->groupPatches = pl["patchMode"].str("list") == "group";
+        L->defaultPatch[0] = std::max(0, m["project"]["currentPatch"].integer(0)); L->defaultPatch[1] = std::max(0, m["project"]["currentPatchB"].integer(L->defaultPatch[0]));
+        L->layerB = pl["layerB"].boolean(false) && (!L->lists.empty() || L->groupPatches);
         if (L->layerB) L->defaultListB = std::min((int) L->lists.size() - 1, std::max(0, m["project"]["currentListB"].integer(L->lists.size() > 1 ? 1 : 0)));
         for (int i = 0; i < 2; ++i) { const Json& j = pl["layers"][(size_t) i]; GroupCfg& g = L->layers[i]; g.name = i ? "B" : "A";
             const Json& e = j["env"]; g.envOn = e["on"].boolean(false); g.envA = (float) std::max(0.0, e["a"].num(5)); g.envD = (float) std::max(0.0, e["d"].num(300));
