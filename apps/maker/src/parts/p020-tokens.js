@@ -7,12 +7,16 @@ const listTag=()=>tagByName('list');
 const layerBOn=()=>!!tagByName('listB');   /* the tags exist while layer B is switched on */
 const bankTagB=()=>layerBOn()?tagByName('bankB'):null;
 const listTagB=()=>layerBOn()?tagByName('listB'):null;
+/* patch mode "group": a list is a folder of groups and each group in it is one patch (tags patch and patchB) */
+const patchModeOn=()=>!!tagByName('patch');
+const patchTag=B=>patchModeOn()?tagByName(B?'patchB':'patch'):null;
 const syncList=t=>t.basis==='bar'?SYNC_BAR:SYNC;
 function listsInBank(b){if(b===undefined)b=bankIdx();return S.lists.filter(l=>l.bank===b);}
 function stepsOf(t){
   if(t.kind==='sync') return syncList(t).map(s=>s.l);
   if(t.kind==='list'){const a=listsInBank(t.layer?bankIdxB():undefined).map(l=>l.name);return a.length?a:['-'];}
   if(t.kind==='bank') return S.banks.map(b=>b.letter);
+  if(t.kind==='patch'){const a=patchGroupsOf(t.layer);return a.length?a:['-'];}
   return t.steps;
 }
 const stepCount=t=>t.kind==='number'?0:stepsOf(t).length;
@@ -22,6 +26,16 @@ const listIdx=()=>{const t=listTag();return t?stepIdx(t):0;};
 const curList=()=>listsInBank()[listIdx()]||null;
 const bankIdxB=()=>{const t=bankTagB();return t?stepIdx(t):0;};
 const listIdxB=()=>{const t=listTagB();return t?stepIdx(t):0;};
+/* the groups a layer browses: those of its list, or every group when there are no lists */
+function patchGroupsOf(B){if(!S.lists.length)return S.groups.slice();const l=B?curListB():curList();return l?(l.groups||[]).slice():[];}
+const curPatch=B=>{const t=patchTag(B);if(!t)return null;return patchGroupsOf(B)[stepIdx(t)]||null;};
+const patchIdx=B=>{const t=patchTag(B);return t?stepIdx(t):0;};
+function patchToken(p,B){
+  const gs=patchGroupsOf(B),n=gs.length,idx=patchIdx(B);
+  let i=idx;if(p.mid.indexOf('next')>=0&&n)i=(idx+1)%n;else if(p.mid.indexOf('prev')>=0&&n)i=(idx-1+n)%n;
+  const g=gs[i],f=p.n===1?'name':p.fmt.toLowerCase();
+  switch(f){case 'name':return g||'-';case 'number':return g?pad2(i+1):'--';case 'count':return String(n);default:return '?'+p.fmt;}
+}
 const curListB=()=>layerBOn()&&listTagB()?listsInBank(bankIdxB())[listIdxB()]||null:null;
 const barBeats=sg=>sg.n*4/sg.d;
 function syncBeats(t,sg){const s=syncList(t)[stepIdx(t)];return t.basis==='bar'?s.b*barBeats(sg):s.b;}
@@ -95,6 +109,8 @@ function expand(text){
       case 'timesig': return esc(p.fmt==='bar'||p.fmt==='ms'?msStr(msOfBeats(barBeats(S.sig))):p.fmt==='num'?String(S.sig.n):p.fmt==='den'?String(S.sig.d):S.sig.n+'/'+S.sig.d);
       case 'list': return esc(listToken(p));
       case 'bank': return esc(bankToken(p));
+      case 'patch': return patchModeOn()?esc(patchToken(p,0)):'-';
+      case 'patchB': return patchModeOn()&&layerBOn()?esc(patchToken(p,1)):'-';
       case 'listB': return layerBOn()?esc(listToken(p,1)):'-';
       case 'bankB': return layerBOn()?esc(bankToken(p,1)):'-';
     }

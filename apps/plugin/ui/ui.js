@@ -165,7 +165,7 @@ async function showUI(){
   const assets={},fonts={};
   Object.keys(m.assets||{}).forEach(id=>{const a=m.assets[id];assets[id]={name:a.name,w:a.w,h:a.h,mime:a.mime,url:url('asset',id)};});
   Object.keys(m.fonts||{}).forEach(f=>{fonts[f]=url('font',f);});
-  uiFor=r.id;uiMsg={t:'load',project:p,assets,fonts,list:r.list,listB:r.listB,tags:r.tags||{}};
+  uiFor=r.id;uiMsg={t:'load',project:p,assets,fonts,list:r.list,listB:r.listB,patch:r.patch,patchB:r.patchB,tags:r.tags||{}};
   $('#stage').classList.add('hasui');$('#btnAbout').hidden=false;frame.hidden=false;$('#presetBox').hidden=false;presetsRefresh();
   uiReady=false;frame.src='runtime.html?'+Date.now();
 }
@@ -173,6 +173,7 @@ addEventListener('message',e=>{
   if(e.source!==frame.contentWindow)return;const m=e.data||{};
   if(m.t==='ready'){uiReady=true;if(uiMsg)frame.contentWindow.postMessage(uiMsg,'*');}
   else if(m.t==='list'&&m.index>=0){if(st.list!==m.index){st.list=m.index;call('setList',m.index);}}
+  else if(m.t==='patch'&&m.index>=0){call('setPatch',m.layer|0,m.index);}
   else if(m.t==='listB'&&m.index!=null){if(st.listB!==m.index){st.listB=m.index;call('setListB',m.index);}}
   else if(m.t==='tag'){call('setTag',m.name,m.value);}
   else if(m.t==='ctx'){ctxMenu(m);}
@@ -200,7 +201,7 @@ function preMenuRender(saving){
 }
 async function presetApply(name){
   const r=await call('loadPreset',name);if(!r)return;pre.current=r.name||'';$('#preName').textContent=pre.current||'Library default';
-  if(uiReady){frame.contentWindow.postMessage({t:'tags',values:r.values||{}},'*');if(r.list!=null&&r.list>=0)frame.contentWindow.postMessage({t:'list',index:r.list},'*');if(r.listB!=null&&r.listB>=0)frame.contentWindow.postMessage({t:'listB',index:r.listB},'*');}
+  if(uiReady){frame.contentWindow.postMessage({t:'tags',values:r.values||{}},'*');if(r.list!=null&&r.list>=0)frame.contentWindow.postMessage({t:'list',index:r.list},'*');if(r.listB!=null&&r.listB>=0)frame.contentWindow.postMessage({t:'listB',index:r.listB},'*');[r.patch,r.patchB].forEach((x,l)=>{if(x!=null&&x>=0)frame.contentWindow.postMessage({t:'patch',layer:l,index:x},'*');});}
   if(r.list!=null&&r.list>=0)st.list=r.list;if(r.listB!=null&&r.listB>=0)st.listB=r.listB;
 }
 $('#preBtn').addEventListener('click',async()=>{const m=$('#preMenu');if(!m.hidden){preMenuClose();return;}await presetsRefresh();preMenuRender(false);m.hidden=false;$('#preBtn').setAttribute('aria-expanded','true');});

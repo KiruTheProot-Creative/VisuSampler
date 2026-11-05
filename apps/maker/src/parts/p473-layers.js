@@ -13,10 +13,21 @@ function setLayerB(p,on){
     /* start B on the next list after A, so both are heard */
     const a=curList();if(a){const i=S.lists.indexOf(a),nx=S.lists[(i+1)%S.lists.length];b.value=0;setStep(b,nx.bank);setStep(l,listsInBank(nx.bank).indexOf(nx));}
   }else S.tags=S.tags.filter(t=>t!==b&&t!==l);
+  syncPatchTags();
   p.layers=[layerOf(p,0),layerOf(p,1)];
   if(typeof renderRight==='function'&&S.view!=='sound')renderRight();
   refreshDisplays();
 }
+/* patch mode: tags patch (and patchB with layer B) exist only in "group" mode */
+function syncPatchTags(){
+  const want=S.play&&S.play.patchMode==='group';
+  [['patch',0],['patchB',1]].forEach(([n,l])=>{
+    let t=tagByName(n);const need=want&&(l===0||!!tagByName('listB'));
+    if(need&&!t){t=mkTag(n,'patch',{sys:true,layer:l});S.tags.push(t);if(l){const g=patchGroupsOf(1);if(g.length>1)t.value=1/(g.length-1);}}
+    if(!need&&t)S.tags=S.tags.filter(x=>x!==t);
+  });
+}
+function setPatchMode(p,mode){p.patchMode=mode;S.play=p;syncPatchTags();if(typeof renderRight==='function'&&S.view!=='sound')renderRight();refreshDisplays();if(typeof engineSendState==='function')engineSendState();}
 const LYLINK=[['vol','Volume','dB',0,-60],['pan','Pan','L–R',-100,100],['tune','Semitones','st',-12,12],['fine','Fine tune','cents',-100,100]];
 function layersHTML(){
   const p=playOf(),on=layerBOn();

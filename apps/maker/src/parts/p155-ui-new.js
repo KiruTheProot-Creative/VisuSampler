@@ -49,7 +49,7 @@ function tagRow(t){
   const opt=(arr,v)=>arr.map(a=>'<option value="'+a[0]+'"'+(a[0]===v?' selected':'')+'>'+a[1]+'</option>').join('');
   if(t.sys){
     return '<section class="tag sys" data-tid="'+t.id+'"><div class="t1"><span class="tname lock">'+t.name+'</span><span class="badge">built-in</span></div>'
-      +'<p class="hint" style="margin:0 0 6px">'+(t.kind==='bank'?'The selected bank. Bank buttons and MIDI can drive it.':'The selected list in the current bank. The list selector, an encoder knob, and program change can drive it.')+'</p>'
+      +'<p class="hint" style="margin:0 0 6px">'+(t.kind==='patch'?'The selected patch: one group of the current list'+(t.layer?' (layer B)':'')+'. Buttons with next/previous drive it; texts show it with {'+t.name+'.name}.':t.kind==='bank'?'The selected bank. Bank buttons and MIDI can drive it.':'The selected list in the current bank. The list selector, an encoder knob, and program change can drive it.')+'</p>'
       +'<div class="tprev"><input type="range" class="tv" min="0" max="1" step="0.001" value="'+t.value+'" aria-label="Test value"><output class="tr">'+esc(fmtTag(t,'name'))+'</output></div>'
       +'<div class="tuse"><span>Used by '+(S.els.filter(e=>e.tag===t.id||(t.kind==='list'&&e.type==='list')).length)+' elements</span></div></section>';
   }

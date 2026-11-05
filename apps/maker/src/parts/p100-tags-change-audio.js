@@ -5,7 +5,9 @@ function setTag(t,v){
   if(v===t.value) return;
   t.value=v;
   if(t.kind==='bank'){const lt=t.layer?tagByName('listB'):listTag();if(lt)lt.value=0;}
+  if(t.kind==='bank'||t.kind==='list'){const pt=tagByName(t.layer?'patchB':'patch');if(pt)pt.value=0;}   /* a new folder starts on its first patch */
   onTag(t);
+  if(t.kind==='patch'){patchChanged();fireChange(t);return;}
   if((t.kind==='bank'||t.kind==='list')&&t.layer){listChangedB();}
   else if(t.kind==='bank'||t.kind==='list') listChanged();
   fireChange(t);
@@ -45,8 +47,11 @@ function listChanged(){
   S.els.forEach(el=>{if(el.type==='list'&&el.rules&&el.rules.length)fireEvent(el,'change');});
 }
 /* layer B changed: displays update and the engine hears about it; the list's stored knob values belong to layer A */
+function patchChanged(){
+  refreshDisplays();scheduleLoad();if(typeof engineSendState==='function')engineSendState();if(typeof reportPatch==='function')reportPatch();
+}
 function listChangedB(){
-  refreshDisplays();if(typeof engineSendState==='function')engineSendState();if(typeof reportListB==='function')reportListB();
+  refreshDisplays();if(typeof engineSendState==='function')engineSendState();if(typeof reportListB==='function')reportListB();if(typeof reportPatch==='function')reportPatch();
   S.els.forEach(el=>{if(el.type==='list'&&el.layer&&el.rules&&el.rules.length)fireEvent(el,'change');});
 }
 function updateTagUI(t){

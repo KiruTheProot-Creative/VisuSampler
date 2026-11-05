@@ -2,7 +2,7 @@
    apps/plugin/engine is the only engine source. GitHub builds it natively for the VST and as engine.wasm for this app.
    The project is handed to the engine as an in-memory .vsamp whenever it changes; notes, knobs and lists go over the worklet port.
    Only the sample editor's previews (and a fallback if engine.wasm cannot load) still use the old JS path. */
-const ENG={node:null,out:null,starting:false,failed:'',loaded:false,sig:'',pendingSig:'',timer:0,voices:0,zones:0,lastList:-2,lastListB:-9};
+const ENG={node:null,out:null,starting:false,failed:'',loaded:false,sig:'',pendingSig:'',timer:0,voices:0,zones:0,lastList:-2,lastListB:-9,lastPatch:[-9,-9]};
 const ENGINE_MODES=['sampler','slicer','speedkeep','granular','wavetable'];
 const engineZone=z=>{const s=sampleById(z.sample);return !!s&&ENGINE_MODES.indexOf(smOf(s).mode)>=0;};
 const engineOn=()=>!!(ENG.node&&ENG.loaded);
@@ -26,7 +26,7 @@ async function engineStart(){
     const node=new AudioWorkletNode(AU.ctx,'visu-engine',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}});
     const out=AU.ctx.createGain();out.gain.value=2.4;node.connect(out);out.connect(AU.master);
     node.port.onmessage=({data:m})=>{
-      if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;ENG.lastListB=-9;engineSendState();updVoices();}
+      if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;ENG.lastListB=-9;ENG.lastPatch=[-9,-9];engineSendState();updVoices();}
       else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
       else if(m.t==='error'){if(ENG.lastErr!==m.error){ENG.lastErr=m.error;flash('Engine error: '+m.error);console.warn('engine worklet',m.error);}}
     };
@@ -49,7 +49,7 @@ async function engineBytes(){
     smeta.push({id:s.id,name:s.name,sr:b.sr,chn:b.ch.length,frames:b.ch[0].length,root:s.root,fine:s.fine||0,loop:s.loop||null,sm:s.sm,bits:32,data:await pack.add(encodePCM(b.ch,32),{})});
   }
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
-  sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;const cb=curListB();sn.currentListB=cb?S.lists.indexOf(cb):-1;}
+  sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;const cb=curListB();sn.currentListB=cb?S.lists.indexOf(cb):-1;sn.currentPatch=patchIdx(0);sn.currentPatchB=patchIdx(1);if(sn.play)sn.play.patchMode=patchModeOn()?'group':'list';}
   const fxRanges={};Object.keys(FXT).forEach(k=>{fxRanges[k]={};FXT[k].params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0];});});
   const zones=JSON.parse(JSON.stringify(S.zones));
   const manifest={format:'vsamp',formatVersion:1,lib:{id:'maker-live',name:S.lib.name},banner:{images:{}},project:sn,fxRanges,features:[],samples:smeta,zones};
@@ -74,6 +74,7 @@ function engineSendState(){
   if(i!==ENG.lastList){ENG.lastList=i;ENG.node.port.postMessage({t:'list',i});}
   const lb=curListB(),ib=lb?S.lists.indexOf(lb):-3;   /* -3: layer B off */
   if(ib!==ENG.lastListB){ENG.lastListB=ib;ENG.node.port.postMessage({t:'listB',i:ib});}
+  if(patchModeOn())[0,1].forEach(l=>{const i=patchIdx(l);if(i!==ENG.lastPatch[l]){ENG.lastPatch[l]=i;ENG.node.port.postMessage({t:'patch',l,i});}});
 }
 setInterval(()=>{if(AU.ctx&&!ENG.node&&!ENG.starting&&!ENG.failed)engineStart();if(ENG.node)engineSync(false);},250);
 const setTagE=setTag;

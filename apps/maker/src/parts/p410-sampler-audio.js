@@ -25,13 +25,14 @@ const groupActive=g=>{
   const cfg=gcfg(g); if(cfg.mute) return false;
   const anySolo=S.groups.some(n=>gcfg(n).solo); if(anySolo&&!cfg.solo) return false;
   if(!S.map.follow) return true;
+  if(patchModeOn())return g===curPatch(0)||(layerBOn()&&g===curPatch(1));
   const l=curList(); if(!l||!l.groups||!l.groups.length) return true;
   return l.groups.indexOf(g)>=0;
 };
 function matching(note,vel,release){
   const anySolo=S.zones.some(z=>z.solo);
   return S.zones.filter(z=>!z.mute&&(!anySolo||z.solo)&&BUF.has(z.sample)&&groupActive(z.group)&&
-    note>=z.lo&&note<=z.hi&&vel>=z.vlo&&vel<=z.vhi&&((gcfg(z.group).mode==='release')===!!release)&&(!engineOn()||!engineZone(z)));
+    note>=z.lo&&note<=z.hi&&vel>=z.vlo&&vel<=z.vhi&&((gcfg(z.group).mode==='release'||z.trig==='release')===!!release)&&(!engineOn()||!engineZone(z)));
 }
 function pickRR(zs,release){
   const out=[],byG={};

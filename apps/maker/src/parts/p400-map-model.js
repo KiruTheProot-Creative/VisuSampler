@@ -27,7 +27,7 @@ function touchMap(){S.map.ver++;RENDER_CACHE.clear();}
 const RENDER_CACHE=new Map();
 function mkZone(o){
   return Object.assign({id:nid('z'),sample:null,group:S.map.group||S.groups[0]||'Group 1',lo:48,hi:60,vlo:0,vhi:127,root:60,tune:0,vol:0,pan:0,
-    start:0,end:0,vstart:0,rev:false,keytrack:true,oneshot:false,attack:2,release:150,
+    start:0,end:0,vstart:0,rev:false,keytrack:true,oneshot:false,trig:'start',attack:2,release:150,
     fadeLo:0,fadeHi:0,vfadeLo:0,vfadeHi:0,curve:'power',interp:'inherit',seq:1,mute:false,solo:false,hum:{tune:0,vol:0,start:0},
     loop:{on:false,s:0,e:0,xf:0,xcurve:'power',pp:false}},o||{});
 }

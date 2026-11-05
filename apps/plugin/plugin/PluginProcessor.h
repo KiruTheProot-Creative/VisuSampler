@@ -36,6 +36,8 @@ public:
     int addLibraryFiles(const juce::Array<juce::File>& files);
     void setList(int index);
     void setListB(int index);   // layer B (-3 = off)
+    void setPatch(int layer, int index);   // patch mode "group": which group of the list plays on a layer
+    int currentPatch(int layer) const { const int p = patch_[layer & 1]; return p == -2 && current_ ? current_->defaultPatch[layer & 1] : p; }
     bool pollKeyswitch() { if (!engine_.takeKeyswitchChange()) return false; list_ = engine_.list(); sendChangeMessage(); return true; }
     void panic() { panicRequest_ = true; }
     void setTag(const juce::String& name, float value);   // a knob in the library's interface moved
@@ -111,7 +113,7 @@ private:
     juce::String currentId_, status_ = "No library loaded", pendingId_; bool pendingKeep_ = false;
     std::map<juce::String, float> tagState_; juce::CriticalSection tagLock_;   // saved with the DAW project
     juce::File currentFile_;
-    int list_ = -2, listB_ = -2; double sampleRate_ = 0;
+    int list_ = -2, listB_ = -2, patch_[2] = { -2, -2 }; double sampleRate_ = 0;
     std::atomic<bool> loading_{ false }, panicRequest_{ false };
     std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
     std::atomic<int> loadTicket_{ 0 };

@@ -56,7 +56,7 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
             if (!lib) { reply(done, juce::var()); return; }
             auto* o = new juce::DynamicObject();
             o->setProperty("manifest", juce::String::fromUTF8(lib->manifestText.data(), (int) lib->manifestText.size()));
-            o->setProperty("id", proc_.currentId()); o->setProperty("list", proc_.currentList()); o->setProperty("listB", proc_.currentListB()); o->setProperty("tags", proc_.tagsVar());
+            o->setProperty("id", proc_.currentId()); o->setProperty("list", proc_.currentList()); o->setProperty("listB", proc_.currentListB()); o->setProperty("patch", proc_.currentPatch(0)); o->setProperty("patchB", proc_.currentPatch(1)); o->setProperty("tags", proc_.tagsVar());
             reply(done, juce::var(o)); })
         .withNativeFunction("setTag", [this, reply](const juce::Array<juce::var>& a, auto done) { if (a.size() >= 2) proc_.setTag(a[0].toString(), (float) (double) a[1]); reply(done, juce::var(true)); })
         .withNativeFunction("getMappings", [this, reply](const juce::Array<juce::var>&, auto done) { reply(done, proc_.mappingsVar()); })
@@ -68,6 +68,7 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
         .withNativeFunction("loadPreset", [this, reply](const juce::Array<juce::var>& a, auto done) { reply(done, proc_.loadPreset(a.isEmpty() ? juce::String() : a[0].toString())); })
         .withNativeFunction("deletePreset", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.deletePreset(a[0].toString()); reply(done, proc_.presetsVar()); })
         .withNativeFunction("unload", [this, reply](const juce::Array<juce::var>&, auto done) { proc_.unloadLibrary(); reply(done, juce::var(true)); })
+        .withNativeFunction("setPatch", [this, reply](const juce::Array<juce::var>& a, auto done) { if (a.size() >= 2) proc_.setPatch((int) a[0], (int) a[1]); reply(done, juce::var(true)); })
         .withNativeFunction("setListB", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setListB((int) a[0]); reply(done, juce::var(true)); })
         .withNativeFunction("setList", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setList((int) a[0]); reply(done, juce::var(true)); })
         .withNativeFunction("setVolume", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setVolume((float) (double) a[0]); reply(done, juce::var(true)); })

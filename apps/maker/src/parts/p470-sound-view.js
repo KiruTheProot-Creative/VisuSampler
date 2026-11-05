@@ -132,6 +132,7 @@ mapRightHTML=function(){
     +zfield('Lowest key','lo',z.lo,{min:0,max:127,sfx:noteName(z.lo)})+zfield('Highest key','hi',z.hi,{min:0,max:127,sfx:noteName(z.hi)})
     +zfield('Softest','vlo',z.vlo,{min:0,max:127,sfx:'vel'})+zfield('Hardest','vhi',z.vhi,{min:0,max:127,sfx:'vel'})
     +zfield('Volume','vol',z.vol,{min:-60,max:24,step:.5,sfx:'dB'})+zfield('Pan','pan',z.pan,{min:-100,max:100,sfx:'L–R'})
+    +zsel('Plays on','trig',z.trig||'start',[['start','Key press (note start)'],['release','Key release (note end)']])
     +zchk('Loop','loop.on',z.loop.on);
   const more=(t,b)=>'<details class="snmore" data-sec="z:'+t+'"'+(closed.has('z:'+t)?'':' open')+'><summary>'+t+'</summary><div>'+b+'</div></details>';
   h+='<div class="snmores">';

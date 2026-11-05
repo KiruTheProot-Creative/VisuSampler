@@ -37,12 +37,16 @@ const listTag=()=>tagByName('list');
 const layerBOn=()=>!!tagByName('listB');   /* the tags exist while layer B is switched on */
 const bankTagB=()=>layerBOn()?tagByName('bankB'):null;
 const listTagB=()=>layerBOn()?tagByName('listB'):null;
+/* patch mode "group": a list is a folder of groups and each group in it is one patch (tags patch and patchB) */
+const patchModeOn=()=>!!tagByName('patch');
+const patchTag=B=>patchModeOn()?tagByName(B?'patchB':'patch'):null;
 const syncList=t=>t.basis==='bar'?SYNC_BAR:SYNC;
 function listsInBank(b){if(b===undefined)b=bankIdx();return S.lists.filter(l=>l.bank===b);}
 function stepsOf(t){
   if(t.kind==='sync') return syncList(t).map(s=>s.l);
   if(t.kind==='list'){const a=listsInBank(t.layer?bankIdxB():undefined).map(l=>l.name);return a.length?a:['-'];}
   if(t.kind==='bank') return S.banks.map(b=>b.letter);
+  if(t.kind==='patch'){const a=patchGroupsOf(t.layer);return a.length?a:['-'];}
   return t.steps;
 }
 const stepCount=t=>t.kind==='number'?0:stepsOf(t).length;
@@ -52,6 +56,16 @@ const listIdx=()=>{const t=listTag();return t?stepIdx(t):0;};
 const curList=()=>listsInBank()[listIdx()]||null;
 const bankIdxB=()=>{const t=bankTagB();return t?stepIdx(t):0;};
 const listIdxB=()=>{const t=listTagB();return t?stepIdx(t):0;};
+/* the groups a layer browses: those of its list, or every group when there are no lists */
+function patchGroupsOf(B){if(!S.lists.length)return S.groups.slice();const l=B?curListB():curList();return l?(l.groups||[]).slice():[];}
+const curPatch=B=>{const t=patchTag(B);if(!t)return null;return patchGroupsOf(B)[stepIdx(t)]||null;};
+const patchIdx=B=>{const t=patchTag(B);return t?stepIdx(t):0;};
+function patchToken(p,B){
+  const gs=patchGroupsOf(B),n=gs.length,idx=patchIdx(B);
+  let i=idx;if(p.mid.indexOf('next')>=0&&n)i=(idx+1)%n;else if(p.mid.indexOf('prev')>=0&&n)i=(idx-1+n)%n;
+  const g=gs[i],f=p.n===1?'name':p.fmt.toLowerCase();
+  switch(f){case 'name':return g||'-';case 'number':return g?pad2(i+1):'--';case 'count':return String(n);default:return '?'+p.fmt;}
+}
 const curListB=()=>layerBOn()&&listTagB()?listsInBank(bankIdxB())[listIdxB()]||null:null;
 const barBeats=sg=>sg.n*4/sg.d;
 function syncBeats(t,sg){const s=syncList(t)[stepIdx(t)];return t.basis==='bar'?s.b*barBeats(sg):s.b;}
@@ -125,6 +139,8 @@ function expand(text){
       case 'timesig': return esc(p.fmt==='bar'||p.fmt==='ms'?msStr(msOfBeats(barBeats(S.sig))):p.fmt==='num'?String(S.sig.n):p.fmt==='den'?String(S.sig.d):S.sig.n+'/'+S.sig.d);
       case 'list': return esc(listToken(p));
       case 'bank': return esc(bankToken(p));
+      case 'patch': return patchModeOn()?esc(patchToken(p,0)):'-';
+      case 'patchB': return patchModeOn()&&layerBOn()?esc(patchToken(p,1)):'-';
       case 'listB': return layerBOn()?esc(listToken(p,1)):'-';
       case 'bankB': return layerBOn()?esc(bankToken(p,1)):'-';
     }
@@ -521,7 +537,9 @@ function setTag(t,v){
   if(v===t.value) return;
   t.value=v;
   if(t.kind==='bank'){const lt=t.layer?tagByName('listB'):listTag();if(lt)lt.value=0;}
+  if(t.kind==='bank'||t.kind==='list'){const pt=tagByName(t.layer?'patchB':'patch');if(pt)pt.value=0;}   /* a new folder starts on its first patch */
   onTag(t);
+  if(t.kind==='patch'){patchChanged();fireChange(t);return;}
   if((t.kind==='bank'||t.kind==='list')&&t.layer){listChangedB();}
   else if(t.kind==='bank'||t.kind==='list') listChanged();
   fireChange(t);
@@ -561,8 +579,11 @@ function listChanged(){
   S.els.forEach(el=>{if(el.type==='list'&&el.rules&&el.rules.length)fireEvent(el,'change');});
 }
 /* layer B changed: displays update and the engine hears about it; the list's stored knob values belong to layer A */
+function patchChanged(){
+  refreshDisplays();scheduleLoad();if(typeof engineSendState==='function')engineSendState();if(typeof reportPatch==='function')reportPatch();
+}
 function listChangedB(){
-  refreshDisplays();if(typeof engineSendState==='function')engineSendState();if(typeof reportListB==='function')reportListB();
+  refreshDisplays();if(typeof engineSendState==='function')engineSendState();if(typeof reportListB==='function')reportListB();if(typeof reportPatch==='function')reportPatch();
   S.els.forEach(el=>{if(el.type==='list'&&el.layer&&el.rules&&el.rules.length)fireEvent(el,'change');});
 }
 function updateTagUI(t){
@@ -857,9 +878,12 @@ let lastList=-2;
 function reportList(){const l=curList(),i=l?S.lists.indexOf(l):-1;if(i!==lastList){lastList=i;parent.postMessage({t:'list',index:i},'*');}}
 let lastListB=-9;
 function reportListB(){const l=curListB(),i=l?S.lists.indexOf(l):-3;if(i!==lastListB){lastListB=i;parent.postMessage({t:'listB',index:i},'*');}}
+let lastPatch=[-9,-9];
+function reportPatch(){if(!patchModeOn())return;[0,1].forEach(l=>{const i=patchIdx(l);if(i!==lastPatch[l]){lastPatch[l]=i;parent.postMessage({t:'patch',layer:l,index:i},'*');}});}
+function choosePatch(l,i){const t=patchTag(l);if(t)setStep(t,i);}
 function chooseListB(i){const l=S.lists[i],bt=bankTagB(),lt=listTagB();if(!l||!bt||!lt)return;setStep(bt,l.bank);setStep(lt,listsInBank(l.bank).indexOf(l));}
 const setTag0=setTag;
-setTag=function(t,v){setTag0(t,v);reportList();reportListB();parent.postMessage({t:'tag',name:t.name,value:t.value},'*');};
+setTag=function(t,v){setTag0(t,v);reportList();reportListB();reportPatch();parent.postMessage({t:'tag',name:t.name,value:t.value},'*');};
 function chooseList(i){const l=S.lists[i];if(!l)return;const bt=bankTag(),lt=listTag();if(bt)setStep(bt,l.bank);if(lt)setStep(lt,listsInBank(l.bank).indexOf(l));}
 window.addEventListener('message',async e=>{
   const m=e.data||{};
@@ -875,10 +899,12 @@ window.addEventListener('message',async e=>{
     if(m.tags&&Object.keys(m.tags).length){rerenderAll();showPage();}
     if(m.list!=null&&m.list>=0)chooseList(m.list);else refreshDisplays();
     if(m.listB!=null&&m.listB>=0)chooseListB(m.listB);
-    lastList=-2;reportList();lastListB=-9;reportListB();
+    if(m.patch!=null&&m.patch>=0)choosePatch(0,m.patch);if(m.patchB!=null&&m.patchB>=0)choosePatch(1,m.patchB);
+    lastList=-2;reportList();lastListB=-9;reportListB();lastPatch=[-9,-9];reportPatch();
     document.fonts.ready.then(()=>rerenderAll());
   }else if(m.t==='list'){chooseList(m.index);}
   else if(m.t==='listB'){chooseListB(m.index);}
+  else if(m.t==='patch'){choosePatch(m.layer,m.index);}
   else if(m.t==='tags'){   /* moved by DAW automation or a MIDI controller: show it, do not send it back */
     Object.keys(m.values||{}).forEach(n=>{const t=tagByName(n);if(t)setTag0(t,+m.values[n]);});
   }
