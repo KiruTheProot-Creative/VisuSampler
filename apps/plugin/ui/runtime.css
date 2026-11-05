@@ -640,3 +640,7 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 .glrange input{width:56px}
 
 #mapVoices.engoff{color:#ff8a6a;font-weight:600}
+/* deleting samples */
+#leftM .snclean{margin-left:auto;margin-right:6px;background:none;border:1px solid #5a3a3a;color:#e09a8a;border-radius:3px;font:inherit;font-size:10px;text-transform:none;letter-spacing:0;padding:1px 6px;cursor:pointer}
+#leftM .snclean:hover,#leftM .snclean.armed{background:#5a2a2a;color:#fff}
+.sdel{margin:2px 0 8px}

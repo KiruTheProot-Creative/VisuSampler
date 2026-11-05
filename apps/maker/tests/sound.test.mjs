@@ -67,6 +67,21 @@ ok(['smooth','small bump','click'].includes(await p.evaluate(()=>window.__vs.S.s
 await p.click('#loopBar [data-lp=on]');await p.waitForTimeout(100);
 ok(!(await lz()).on,'the loop can be switched off from the bar');
 await p.click('#loopBar [data-lp=on]');
+/* deleting a sample: asks once more, then removes it and its zones */
+await p.evaluate(()=>{const v=window.__vs,S=v.S;const s=S.samples.find(x=>S.zones.some(z=>z.sample===x.id));S.smp.sel=s.id;S.snd.focus='sample';v.soundEnter();window.__delId=s.id;});
+await p.waitForTimeout(200);
+const delBefore=await p.evaluate(()=>({s:window.__vs.S.samples.length,z:window.__vs.S.zones.filter(z=>z.sample===window.__delId).length}));
+await p.click('#rightS [data-sdx=del]');await p.waitForTimeout(100);
+ok(await p.evaluate(()=>window.__vs.S.samples.length)===delBefore.s&&/Really delete/.test(await p.textContent('#rightS [data-sdx=del]')),'Delete sample asks once more first');
+await p.click('#rightS [data-sdx=del]');await p.waitForTimeout(200);
+ok(await p.evaluate(()=>!window.__vs.S.samples.some(s=>s.id===window.__delId)&&!window.__vs.S.zones.some(z=>z.sample===window.__delId))&&delBefore.z>0,'the second click deletes the sample and the zones that play it ('+delBefore.z+')');
+/* unused samples: one button in the Samples list */
+await p.evaluate(()=>{const v=window.__vs,S=v.S;S.zones.filter(z=>z.sample===S.samples[0].id).forEach(z=>{z.sample=S.samples[1].id;});v.touchMap();v.soundEnter();});await p.waitForTimeout(200);
+if(await p.locator('#leftM [data-sdu]').count()){
+  const n0=await p.evaluate(()=>window.__vs.S.samples.length);
+  await p.click('#leftM [data-sdu]');await p.click('#leftM [data-sdu]');await p.waitForTimeout(200);
+  ok(await p.evaluate(()=>window.__vs.S.samples.every(s=>window.__vs.S.zones.some(z=>z.sample===s.id)))&&await p.evaluate(()=>window.__vs.S.samples.length)<n0,'Remove unused deletes the samples no zone plays');
+}else ok(false,'Remove unused appears when a sample is unused');
 /* layouts and fold */
 await p.click('[data-lay=map]');await p.waitForTimeout(150);ok(!(await vis('#smCanvas'))&&await vis('#mapCanvas'),'Map layout hides the waveform');
 await p.click('[data-lay=wave]');await p.waitForTimeout(150);ok(await vis('#smCanvas')&&!(await vis('#mapCanvas')),'Wave layout hides the map');
