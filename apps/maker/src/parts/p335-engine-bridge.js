@@ -28,6 +28,7 @@ async function engineStart(){
     node.port.onmessage=({data:m})=>{
       if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;engineSendState();updVoices();}
       else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
+      else if(m.t==='error'){if(ENG.lastErr!==m.error){ENG.lastErr=m.error;flash('Engine error: '+m.error);console.warn('engine worklet',m.error);}}
     };
     ENG.node=node;ENG.out=out;ENG.sig='';engineSync(true);
   }catch(err){engineFail(String(err&&err.message||err));}
