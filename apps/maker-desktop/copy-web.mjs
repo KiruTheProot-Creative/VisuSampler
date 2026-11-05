@@ -5,4 +5,6 @@ rmSync(www,{recursive:true,force:true});mkdirSync(www,{recursive:true});
 for(const f of ['apps/maker/index.html','apps/maker/app.js'])cpSync(new URL(f,root),new URL(f,www));
 cpSync(new URL('packages/core/src/',root),new URL('packages/core/src/',www),{recursive:true});
 cpSync(new URL('assets/fonts/',root),new URL('assets/fonts/',www),{recursive:true});
+cpSync(new URL('packages/engine-wasm/engine.wasm',root),new URL('packages/engine-wasm/engine.wasm',www));
+cpSync(new URL('packages/engine-wasm/src/',root),new URL('packages/engine-wasm/src/',www),{recursive:true});
 console.log('copied web app into www/');

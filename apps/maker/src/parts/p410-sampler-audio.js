@@ -31,7 +31,7 @@ const groupActive=g=>{
 function matching(note,vel,release){
   const anySolo=S.zones.some(z=>z.solo);
   return S.zones.filter(z=>!z.mute&&(!anySolo||z.solo)&&BUF.has(z.sample)&&groupActive(z.group)&&
-    note>=z.lo&&note<=z.hi&&vel>=z.vlo&&vel<=z.vhi&&((gcfg(z.group).mode==='release')===!!release));
+    note>=z.lo&&note<=z.hi&&vel>=z.vlo&&vel<=z.vhi&&((gcfg(z.group).mode==='release')===!!release)&&(!engineOn()||!engineZone(z)));
 }
 function pickRR(zs,release){
   const out=[],byG={};
@@ -98,12 +98,17 @@ function sampNoteOff(note){
   updVoices();
 }
 function sampPanic(){SV.list.forEach(v=>stopVoice(v,40));SV.list=[];SV.held.clear();updVoices();}
-function updVoices(){const e=$('#mapVoices');if(e)e.textContent=SV.list.filter(v=>!v.dead).length+' voices · no limit';}
+function updVoices(){const e=$('#mapVoices');if(e)e.textContent=(SV.list.filter(v=>!v.dead).length+(engineOn()?ENG.voices:0))+' voices · no limit'+(engineOn()?' · shared engine':'');}
 /* dispatchers: the sampler plays when zones exist, otherwise the little synth does */
 const hasSampler=()=>S.zones.length>0&&S.zones.some(z=>BUF.has(z.sample));
 function noteOn(m,vel){
   if(!ensureAudio()) return; vel=vel||100; fxNoteOn(m,vel);
+  if(engineOn()&&hasSampler()){
+    ENG.node.port.postMessage({t:'on',n:m,v:vel});
+    const now=performance.now();S.zones.forEach(z=>{if(engineZone(z)&&m>=z.lo&&m<=z.hi&&vel>=z.vlo&&vel<=z.vhi)S.map.hot[z.id]=now;});
+    sampNoteOn(m,vel);return;
+  }
   if(hasSampler()&&sampNoteOn(m,vel)) return;
   if(!hasSampler()) synthOn(m);
 }
-function noteOff(m){fxNoteOff();sampNoteOff(m);synthOff(m);}
+function noteOff(m){fxNoteOff();if(engineOn())ENG.node.port.postMessage({t:'off',n:m});sampNoteOff(m);synthOff(m);}

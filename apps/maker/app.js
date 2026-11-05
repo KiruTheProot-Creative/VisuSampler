@@ -2607,12 +2607,78 @@ if(navigator.requestMIDIAccess){
     const hook=()=>a.inputs.forEach(i=>{i.onmidimessage=m=>{
       const [s,d1,d2]=m.data,c=s&240;ensureAudio();
       if(c===144&&d2>0)noteOn(d1,d2);else if(c===128||(c===144&&d2===0))noteOff(d1);
-      else if(c===176){if(d1===1)FXM.mod=d2/127;else if(d1===11)FXM.expr=d2/127;}
-      else if(c===208)FXM.at=d1/127;else if(c===224)FXM.bend=((d2<<7)|d1)/16383;
+      else if(c===176){if(d1===1)FXM.mod=d2/127;else if(d1===11)FXM.expr=d2/127;if(engineOn())ENG.node.port.postMessage({t:'cc',cc:d1,v:d2});}
+      else if(c===208)FXM.at=d1/127;else if(c===224){FXM.bend=((d2<<7)|d1)/16383;if(engineOn())ENG.node.port.postMessage({t:'bend',v:FXM.bend});}
     };});
     hook();a.onstatechange=hook;
   }).catch(()=>{});
 }
+
+/* ---------- the shared engine: the Maker plays through the same C++ engine as the VST (compiled to WebAssembly) ----------
+   apps/plugin/engine is the only engine source. GitHub builds it natively for the VST and as engine.wasm for this app.
+   The project is handed to the engine as an in-memory .vsamp whenever it changes; notes, knobs and lists go over the worklet port.
+   Zones in modes the engine does not play yet (speed-keeping, granular, wavetable) and the sample editor's previews still use the old path. */
+const ENG={node:null,out:null,starting:false,failed:'',loaded:false,sig:'',pendingSig:'',timer:0,voices:0,zones:0,lastList:-2};
+const ENGINE_MODES=['sampler','slicer'];
+const engineZone=z=>{const s=sampleById(z.sample);return !!s&&ENGINE_MODES.indexOf(smOf(s).mode)>=0;};
+const engineOn=()=>!!(ENG.node&&ENG.loaded);
+async function engineStart(){
+  if(ENG.node||ENG.starting||ENG.failed||!AU.ctx||!AU.ctx.audioWorklet) return;
+  ENG.starting=true;
+  try{
+    const base=new URL('../../packages/engine-wasm/',location.href);
+    const bytes=await (await fetch(new URL('engine.wasm',base))).arrayBuffer(),module=await WebAssembly.compile(bytes);
+    await AU.ctx.audioWorklet.addModule(new URL('src/worklet.js',base).href);
+    const node=new AudioWorkletNode(AU.ctx,'visu-engine',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}});
+    const out=AU.ctx.createGain();out.gain.value=2.4;node.connect(out);out.connect(AU.master);
+    node.port.onmessage=({data:m})=>{
+      if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;if(m.error)flash('Engine could not load the project: '+m.error);ENG.lastList=-2;engineSendState();}
+      else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
+    };
+    ENG.node=node;ENG.out=out;ENG.sig='';engineSync(true);
+  }catch(err){ENG.failed=String(err&&err.message||err);console.warn('engine',err);}
+  ENG.starting=false;
+}
+/* what decides that the engine needs the project again */
+function engineSig(){
+  return S.map.ver+'|'+S.samples.length+'|'+JSON.stringify([S.gset,S.fx.graphs,S.lists.map(l=>[l.bank,l.groups]),S.tags.map(t=>[t.id,t.name,t.kind,t.basis,t.steps]),S.map.interp,S.bpm,S.sig]);
+}
+/* a light .vsamp of the current project: float audio, no compression, no banner or images */
+async function engineBytes(){
+  const pack=new Pack(),keep=new Set(S.zones.map(z=>z.sample).concat(fxKeep())),smeta=[];
+  for(const s of S.samples){
+    if(!keep.has(s.id))continue;const b=BUF.get(s.id);if(!b)continue;
+    smeta.push({id:s.id,name:s.name,sr:b.sr,chn:b.ch.length,frames:b.ch[0].length,root:s.root,fine:s.fine||0,loop:s.loop||null,sm:s.sm,bits:32,data:await pack.add(encodePCM(b.ch,32),{})});
+  }
+  const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
+  sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;}
+  const fxRanges={};Object.keys(FXT).forEach(k=>{fxRanges[k]={};FXT[k].params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0];});});
+  const zones=JSON.parse(JSON.stringify(S.zones));
+  const manifest={format:'vsamp',formatVersion:1,lib:{id:'maker-live',name:S.lib.name},banner:{images:{}},project:sn,fxRanges,features:[],samples:smeta,zones};
+  return writeVsamp(manifest,pack);
+}
+let engBusy=false;
+async function engineSync(force){
+  if(!ENG.node) return;
+  const sig=engineSig();
+  if(!force&&(sig===ENG.sig||engBusy)) return;
+  engBusy=true;ENG.sig=sig;
+  try{const bytes=await engineBytes();ENG.node.port.postMessage({t:'load',bytes:bytes.buffer},[bytes.buffer]);}
+  catch(err){console.warn('engine sync',err);}
+  engBusy=false;
+}
+/* knob values and the chosen list follow what the Designer shows */
+const engineListIndex=()=>{if(!S.map.follow&&S.view==='sound')return -1;const cl=curList();return cl?S.lists.indexOf(cl):-1;};
+function engineSendState(){
+  if(!engineOn()) return;
+  S.tags.forEach(t=>{if(!t.sys)ENG.node.port.postMessage({t:'tag',name:t.name,v:t.value});});
+  const i=engineListIndex();
+  if(i!==ENG.lastList){ENG.lastList=i;ENG.node.port.postMessage({t:'list',i});}
+}
+setInterval(()=>{if(AU.ctx&&!ENG.node&&!ENG.starting&&!ENG.failed)engineStart();if(ENG.node)engineSync(false);},250);
+const setTagE=setTag;
+setTag=function(t,v){setTagE(t,v);if(engineOn()){ENG.node.port.postMessage({t:'tag',name:t.name,v:t.value});engineSendState();}};
+setInterval(()=>engineSendState(),300);
 
 /* ---------- mapper: model ---------- */
 Object.assign(S,{samples:[],zones:[],gset:{},
@@ -2833,7 +2899,7 @@ const groupActive=g=>{
 function matching(note,vel,release){
   const anySolo=S.zones.some(z=>z.solo);
   return S.zones.filter(z=>!z.mute&&(!anySolo||z.solo)&&BUF.has(z.sample)&&groupActive(z.group)&&
-    note>=z.lo&&note<=z.hi&&vel>=z.vlo&&vel<=z.vhi&&((gcfg(z.group).mode==='release')===!!release));
+    note>=z.lo&&note<=z.hi&&vel>=z.vlo&&vel<=z.vhi&&((gcfg(z.group).mode==='release')===!!release)&&(!engineOn()||!engineZone(z)));
 }
 function pickRR(zs,release){
   const out=[],byG={};
@@ -2900,15 +2966,20 @@ function sampNoteOff(note){
   updVoices();
 }
 function sampPanic(){SV.list.forEach(v=>stopVoice(v,40));SV.list=[];SV.held.clear();updVoices();}
-function updVoices(){const e=$('#mapVoices');if(e)e.textContent=SV.list.filter(v=>!v.dead).length+' voices · no limit';}
+function updVoices(){const e=$('#mapVoices');if(e)e.textContent=(SV.list.filter(v=>!v.dead).length+(engineOn()?ENG.voices:0))+' voices · no limit'+(engineOn()?' · shared engine':'');}
 /* dispatchers: the sampler plays when zones exist, otherwise the little synth does */
 const hasSampler=()=>S.zones.length>0&&S.zones.some(z=>BUF.has(z.sample));
 function noteOn(m,vel){
   if(!ensureAudio()) return; vel=vel||100; fxNoteOn(m,vel);
+  if(engineOn()&&hasSampler()){
+    ENG.node.port.postMessage({t:'on',n:m,v:vel});
+    const now=performance.now();S.zones.forEach(z=>{if(engineZone(z)&&m>=z.lo&&m<=z.hi&&vel>=z.vlo&&vel<=z.vhi)S.map.hot[z.id]=now;});
+    sampNoteOn(m,vel);return;
+  }
   if(hasSampler()&&sampNoteOn(m,vel)) return;
   if(!hasSampler()) synthOn(m);
 }
-function noteOff(m){fxNoteOff();sampNoteOff(m);synthOff(m);}
+function noteOff(m){fxNoteOff();if(engineOn())ENG.node.port.postMessage({t:'off',n:m});sampNoteOff(m);synthOff(m);}
 
 /* ---------- mapper: zone grid + piano ---------- */
 const MG={W:600,H:300,dirty:true,conf:null,confVer:-1,down:new Set(),drag:null,run:false,pian:{H:54}};
@@ -4453,6 +4524,6 @@ S.tab='props';
 syncToolbar(); layout(); mountAll(); renderLayers(); renderRight();
 new ResizeObserver(()=>{if(S.view==='design')layout();}).observe(vp);
 setView('sound');
-if(window.__VSTEST) window.__vs={S,ensureAudio,renderZone,touchMap,noteOn,noteOff,addBuffer,autoMapSamples,zoneConflicts,AU,SV,smOf,zoneData,uniVoices,BUF,sampleById,demoExtras,mapSlices,smOp,mkZone,detectTransients,smSample,previewOn,previewOff,PV,estimate,buildVsamp,parseVsamp,exRender,exBuild,bannerRedraw,crc32,fmtBytes,saveProject,openProject,restore,snapshot,FXT,FXA,graphOf,fxNode,mkCable,fxRender,sampBus,sampPanic,mapLeftRender,soundEnter};
+if(window.__VSTEST) window.__vs={S,ensureAudio,renderZone,touchMap,noteOn,noteOff,addBuffer,autoMapSamples,zoneConflicts,AU,SV,smOf,zoneData,uniVoices,BUF,sampleById,demoExtras,mapSlices,smOp,mkZone,detectTransients,smSample,previewOn,previewOff,PV,estimate,buildVsamp,parseVsamp,exRender,exBuild,bannerRedraw,crc32,fmtBytes,saveProject,openProject,restore,snapshot,FXT,FXA,graphOf,fxNode,mkCable,fxRender,sampBus,sampPanic,mapLeftRender,soundEnter,ENG};
 
 })();

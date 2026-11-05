@@ -35,7 +35,7 @@ const lib=await p.evaluate(async()=>{const r=await window.__vs.buildVsamp();retu
 await p.setInputFiles('#fileProj',{name:'lib.vmproj',mimeType:'application/octet-stream',buffer:Buffer.from(lib)});await p.waitForTimeout(300);
 ok(/finished library/.test(await p.textContent('#msg')),'a finished .vsamp is not opened as a project');
 // reopened project still exports and plays
-const ex=await p.evaluate(async()=>{const v=window.__vs;v.ensureAudio();const r=await v.buildVsamp();v.noteOn(53,100);await new Promise(r=>setTimeout(r,200));const n=v.SV.list.length;v.noteOff(53);return{ok:(await v.parseVsamp(r.bytes)).ok,voices:n};});
+const ex=await p.evaluate(async()=>{const v=window.__vs;v.ensureAudio();const r=await v.buildVsamp();await new Promise(r=>setTimeout(r,2500));v.noteOn(53,100);await new Promise(r=>setTimeout(r,300));const n=v.SV.list.length+(v.ENG?v.ENG.voices:0);v.noteOff(53);return{ok:(await v.parseVsamp(r.bytes)).ok,voices:n};});
 ok(ex.ok&&ex.voices>0,'reopened project exports and plays ('+ex.voices+' voices)');
 ok(app.errs.length===0,'no page errors '+app.errs.join('|'));
 console.log(fails.length?'FAILED':'ALL OK');await app.close();process.exit(fails.length?1:0);
