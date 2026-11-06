@@ -129,8 +129,10 @@ document.addEventListener('input',e=>{
   const t=e.target;
   if(t.classList&&t.classList.contains('pr')){
     const g=curG(),n=nodeById(g,t.dataset.n),q=n&&FXT[n.type].params.find(x=>x.k===t.dataset.pk); if(!q) return;
-    if(fxSynced(n,q)){n.ps=n.ps||{};n.ps[q.k]=t.value/1000;}
-    else{n.p[q.k]=realOfNorm(q,t.value/1000);if(q.opts)n.p[q.k]=Math.round(n.p[q.k]);}
+    engineFxParam(n,q,()=>{
+      if(fxSynced(n,q)){n.ps=n.ps||{};n.ps[q.k]=t.value/1000;}
+      else{n.p[q.k]=realOfNorm(q,t.value/1000);if(q.opts)n.p[q.k]=Math.round(n.p[q.k]);}
+    });
     const row=t.closest('.fxp');
     row.querySelector('.pv').textContent=fmtParR(q,parReal(g,n,q,fxClock()));
     S.fx.an=fxAnalyze(g); fxReport(); return;

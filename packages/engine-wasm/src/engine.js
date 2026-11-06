@@ -42,7 +42,7 @@ function wrap(inst){
     noteOn(n,v){x.visu_note_on(n,v);},noteOff(n){x.visu_note_off(n);},sustain(d){x.visu_sustain(d?1:0);},allOff(){x.visu_all_off();},
     setList(i){x.visu_set_list(i);},setListB(i){if(x.visu_set_list_b)x.visu_set_list_b(i);},setPatch(l,i){if(x.visu_set_patch)x.visu_set_patch(l,i);},setGain(g){x.visu_set_gain(g);},
     setTag(name,v){const b=utf8(name+'\0'),p=x.visu_alloc(b.length);new Uint8Array(x.memory.buffer,p,b.length).set(b);return !!x.visu_set_tag(p,v);},
-    controller(cc,v){x.visu_controller(cc,v);},pitchBend(v){x.visu_pitch_bend(v);},
+    controller(cc,v){x.visu_controller(cc,v);},setFxParam(n,k,v,ps){if(!x.visu_set_fx_param)return false;const b=utf8(n+'\n'+k+'\0'),p=x.visu_alloc(b.length);new Uint8Array(x.memory.buffer,p,b.length).set(b);return !!x.visu_set_fx_param(p,v,ps?1:0);},pitchBend(v){x.visu_pitch_bend(v);},
     /** Renders n frames (n <= the frames given to prepare). The returned arrays are views and are only valid until the next call. */
     render(n){x.visu_render(n);return[new Float32Array(x.memory.buffer,x.visu_left(),n),new Float32Array(x.memory.buffer,x.visu_right(),n)];},
     get voices(){return x.visu_voices();},get zones(){return x.visu_zones();},get unsupportedZones(){return x.visu_unsupported_zones();}

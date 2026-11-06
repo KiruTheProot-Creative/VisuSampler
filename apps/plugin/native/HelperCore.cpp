@@ -46,6 +46,7 @@ void HelperCore::command(const std::string& line) {
     else if (t == "bend") push(EvBend, 0, (float) m["v"].num(.5));
     else if (t == "tag") { if (lib_) lib_->setTag(m["name"].str(), (float) m["v"].num()); }   // knob values are atomics: safe from here
     else if (t == "scope") scopeOn_.store(m["on"].boolean());
+    else if (t == "fxp") { std::lock_guard<std::mutex> g(qm_); fxq_.push_back({ m["n"].str(), m["k"].str(), (float) m["v"].num(), m["ps"].boolean() }); }
     else if (t == "load") { path_ = m["path"].str(); reload(); }
     else if (t == "unload") { engine_.setLibrary(nullptr); lib_.reset(); path_.clear(); }
 }
@@ -67,7 +68,8 @@ void HelperCore::apply(const Ev& e) {
 }
 
 void HelperCore::render(float* L, float* R, int n) {
-    if (qm_.try_lock()) { work_.swap(queue_); qm_.unlock(); for (const Ev& e : work_) apply(e); work_.clear(); }   // never waits: a busy queue is taken next block
+    if (qm_.try_lock()) { work_.swap(queue_); fxw_.swap(fxq_); qm_.unlock(); for (const Ev& e : work_) apply(e); work_.clear();
+        for (const FxEv& f : fxw_) engine_.setFxParam(f.node, f.key, f.v, f.ps); fxw_.clear(); }   // never waits: a busy queue is taken next block
     std::memset(L, 0, sizeof(float) * (size_t) n); std::memset(R, 0, sizeof(float) * (size_t) n);
     engine_.render(L, R, n);
     voices_.store(engine_.activeVoices(), std::memory_order_relaxed);

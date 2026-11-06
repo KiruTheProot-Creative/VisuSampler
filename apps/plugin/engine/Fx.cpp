@@ -703,6 +703,22 @@ static const std::vector<std::string> kFx = { "delay", "reverb", "chorus", "phas
     "vibrato", "peq", "crush", "lofi", "transient", "morph", "vintage", "tapeecho", "bbd", "ensemble", "tapemach", "digiverb", "gatedverb", "spring", "vinyl", "radio",
     "pod", "pfuzz", "pwah", "pcomp", "pvibe" };
 
+bool System::setParam(const std::string& nodeId, const std::string& key, float value, bool syncPos) {
+    auto inGraph = [&](Graph* g) {
+        if (!g) return false;
+        for (auto& nd : g->nodes) if (nd && nd->id == nodeId) {
+            const int i = nd->idx(key.c_str()); if (i < 0) return false;
+            ParamInfo& p = nd->params[(size_t) i];
+            if (syncPos) p.ps = value; else p.raw = value;
+            return true;
+        }
+        return false;
+    };
+    if (inGraph(master_.get())) return true;
+    for (auto& g : groups_) if (inGraph(g.get())) return true;
+    return false;
+}
+
 const std::vector<std::string>& supportedModules() {
     static std::vector<std::string> s;
     if (s.empty()) { for (auto& t : types()) if (std::string(t.type) != "input" && std::string(t.type) != "output") s.push_back(t.type); for (auto& f : kFx) s.push_back(f); }

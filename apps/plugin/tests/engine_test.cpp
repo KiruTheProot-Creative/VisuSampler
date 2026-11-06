@@ -480,6 +480,18 @@ static void testFx() {
         const double a = onset(120), b = onset(60), c = onset(150);
         CHECK(std::fabs(a - 500) < 15 && std::fabs(b - 1000) < 15 && std::fabs(c - 400) < 15, "a synced 1/4-note delay follows the host tempo (%.0f ms at 120, %.0f at 60, %.0f at 150 BPM)", a, b, c);
     }
+    {   // VisuMaker moves an effect slider: the engine changes that value live (a synced 1/4 delay becomes 1/8)
+        const int k = keyOf("sync");
+        auto L = Library::load(playFile, err, 48000); L->setTag("cut", 1.f);
+        auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setMasterGain(1.f); e.setLibrary(L); e.setHostTempo(120, 4, 4);
+        std::vector<float> l(48), r(48); e.render(l.data(), r.data(), 48);
+        const bool none = !e.setFxParam("no-such-node", "time", .5f, true);
+        const bool hit = e.setFxParam("dsync", "time", 7.f / 17, true);
+        e.noteOn(k, 110); double onset = -1;
+        for (int b = 0; b < 3000 && onset < 0; ++b) { std::fill(l.begin(), l.end(), 0.f); std::fill(r.begin(), r.end(), 0.f); e.render(l.data(), r.data(), 48);
+            for (int i = 0; i < 48; ++i) if (std::fabs(l[i]) > .02f) { onset = (b * 48 + i) / 48.0 - 1; break; } }
+        CHECK(none && hit && std::fabs(onset - 250) < 15, "an effect parameter changes live without reloading (synced delay now %.0f ms, 1/8 at 120 BPM)", onset);
+    }
     {   // the knob bypasses the delay: off = only the dry note; with tails the echoes keep ringing after switching off
         const int k = keyOf("bypass"), kt = keyOf("bypass-tails");
         const double on = rmsOf(renderPlay(k, 1.6, 1.f), 95, 150), off = rmsOf(renderPlay(k, 1.6, 0.f), 95, 150);

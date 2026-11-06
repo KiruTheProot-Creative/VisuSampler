@@ -1,7 +1,7 @@
 // VisuMaker's native audio: the same engine as the VST, driven by VisuMaker over a pipe.
 // The protocol is the AudioWorklet's (packages/engine-wasm/src/worklet.js), one JSON object per line:
 //   in:  {t:'load',path} {t:'on',n,v} {t:'off',n} {t:'sustain',d} {t:'alloff'} {t:'list',i} {t:'listB',i} {t:'patch',l,i}
-//        {t:'gain',g} {t:'tag',name,v} {t:'cc',cc,v} {t:'bend',v} {t:'unload'} {t:'scope',on}
+//        {t:'gain',g} {t:'tag',name,v} {t:'cc',cc,v} {t:'bend',v} {t:'unload'} {t:'scope',on} {t:'fxp',n,k,v,ps}
 //        device commands ({t:'devices'}, {t:'setDevice',...}) go to the host (the JUCE app), not here
 //   out: {t:'loaded',error,zones,unsupportedZones} {t:'voices',n} {t:'scope',d,sr} {t:'error',error}
 // Notes and knobs are queued and applied by the audio thread at the start of each block (the engine is single-threaded);
@@ -38,6 +38,7 @@ private:
     std::shared_ptr<Library> lib_;
     std::string path_;
     std::mutex qm_; std::vector<Ev> queue_, work_;
+    struct FxEv { std::string node, key; float v; bool ps; }; std::vector<FxEv> fxq_, fxw_;   // effect parameters (same lock)
     std::atomic<double> sr_{ 48000 };
     std::atomic<int> voices_{ 0 }; int lastVoices_ = -1;
     std::atomic<bool> scopeOn_{ false };

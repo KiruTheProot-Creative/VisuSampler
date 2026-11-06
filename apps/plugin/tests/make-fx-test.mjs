@@ -42,7 +42,7 @@ for(const tails of [false,true]){const g='g_byp'+(tails?'t':'');groups.push(g);c
  graphs[g]={nodes:[i,o,d],cables:[cable(i,'out',d,'in'),cable(d,'mix',o,'in')]};
  zones.push({id:'z_byp'+(tails?'t':''),sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:tails?'bypass-tails':'bypass'});key++;}
 /* "Sync to tempo" on a delay: 1/4 note (index 10 of the 18 note values), only the echo comes out */
-{const g='g_sync';groups.push(g);const i=node('input'),o=node('output'),d=node('delay',{p:Object.assign({},cat.defs.delay.p,{time:120,fb:0,mix:100}),sync:true,ps:{time:10/17}});
+{const g='g_sync';groups.push(g);const i=node('input'),o=node('output'),d=node('delay',{id:'dsync',p:Object.assign({},cat.defs.delay.p,{time:120,fb:0,mix:100}),sync:true,ps:{time:10/17}});
  graphs[g]={nodes:[i,o,d],cables:[cable(i,'out',d,'in'),cable(d,'wet',o,'in')]};
  zones.push({id:'z_sync',sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:'sync'});key++;}
 /* feedback loop through a delay must stay stable */

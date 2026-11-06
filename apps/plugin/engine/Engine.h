@@ -26,6 +26,8 @@ public:
     int list() const { return list_.load(); }
     // layer B: a second list that plays at the same time (-2 = the one the library was saved with, -3 = off)
     void setListB(int index) { listB_.store(index); }
+    // VisuMaker: an effect parameter moved (see fx::System::setParam); call it from the thread that renders
+    bool setFxParam(const std::string& node, const std::string& key, float value, bool syncPos) { return lib_ && lib_->fx && lib_->fx->setParam(node, key, value, syncPos); }
     // the host's tempo and time signature (bpm <= 0: use the library's own tempo)
     void setHostTempo(double bpm, int sigN, int sigD) { hostBpm_.store(bpm); hostSig_.store(sigN * 100 + sigD); }
     double tempo() const { const double h = hostBpm_.load(); return h > 0 ? h : (lib_ ? lib_->bpm : 120); }

@@ -47,6 +47,11 @@ void visu_set_gain(float g) { eng().setMasterGain(g); }
 // name is a NUL-terminated string allocated with visu_alloc (freed here)
 int visu_set_tag(char* name, float value) { int ok = g_lib && g_lib->setTag(name, value) ? 1 : 0; std::free(name); return ok; }
 void visu_controller(int cc, int value) { eng().controller(cc, value); }
+// spec is "nodeId\nkey" allocated with visu_alloc (freed here); syncPos: the value is a tempo-synced note position
+int visu_set_fx_param(char* spec, float value, int syncPos) {
+    std::string s(spec); std::free(spec); const size_t nl = s.find('\n'); if (nl == std::string::npos) return 0;
+    return eng().setFxParam(s.substr(0, nl), s.substr(nl + 1), value, syncPos != 0) ? 1 : 0;
+}
 void visu_pitch_bend(float v01) { eng().pitchBend(v01); }
 
 // Renders `frames` (at most maxFrames) into the output buffers below.

@@ -74,14 +74,27 @@ async function engineStart(){
 function engineMessage(m){
   if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';ENG.memory=m.memory;ENG.streamed=m.streamed;if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;ENG.lastListB=-9;ENG.lastPatch=[-9,-9];ENG.scopeSent=null;engineSendState();updVoices();}
   else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
+  else if(m.t==='fxpMiss'){ENG.sig='';}   /* the engine could not change it live: send the whole project again */
   else if(m.t==='error'){if(ENG.lastErr!==m.error){ENG.lastErr=m.error;flash('Engine error: '+m.error);console.warn('engine',m.error);}}
 }
 /* for the desktop app's self-check (and anyone curious in the console) */
 window.__visuEngine=()=>({on:engineOn(),native:!!ENG.native,device:ENG.dev||null,failed:ENG.failed||'',loadError:ENG.loadError||'',zones:ENG.zones,voices:ENG.voices,started:!!ENG.node});
 window.__visuStartAudio=()=>{ensureAudio();return !!AU.ctx;};
 /* what decides that the engine needs the project again */
+/* (where effect modules sit and what they are called does not matter to the sound) */
+const ENGINE_SIG_SKIP={x:1,y:1,name:1,skin:1,open:1,collapsed:1};
 function engineSig(){
-  return S.map.ver+'|'+S.samples.length+'|'+JSON.stringify([S.gset,S.fx.graphs,S.lists.map(l=>[l.bank,l.groups]),S.tags.map(t=>[t.id,t.name,t.kind,t.basis,t.steps]),S.map.interp,S.bpm,S.sig]);
+  const fx=JSON.stringify(S.fx.graphs,function(k,v){return ENGINE_SIG_SKIP[k]&&this&&this.type&&this.id?undefined:v;});   /* only on effect nodes */
+  return S.map.ver+'|'+S.samples.length+'|'+fx+'|'+JSON.stringify([S.gset,S.lists.map(l=>[l.bank,l.groups]),S.tags.map(t=>[t.id,t.name,t.kind,t.basis,t.steps]),S.map.interp,S.bpm,S.sig]);
+}
+/* an effect parameter moved: the engine changes just that value, no reload (when nothing else is waiting to be sent) */
+function engineFxParam(n,q,fn){
+  const live=engineOn()&&ENG.sig===engineSig();
+  fn();
+  if(!live)return;
+  const synced=typeof fxSynced==='function'&&fxSynced(n,q);
+  ENG.node.port.postMessage({t:'fxp',n:n.id,k:q.k,v:synced?n.ps[q.k]:n.p[q.k],ps:synced});
+  ENG.sig=engineSig();
 }
 /* a light .vsamp of the current project: float audio, no compression, no banner or images */
 async function engineBytes(){

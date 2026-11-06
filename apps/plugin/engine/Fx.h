@@ -57,6 +57,9 @@ public:
     // runs every group chain, then the master chain; result in master().output
     void process(int n, Control& c);
     const Stereo& out() const { return master_->output; }
+    // a parameter moved in VisuMaker's effects view: changes it without rebuilding anything (raw value, or the note
+    // position 0..1 of a tempo-synced parameter when `syncPos`). Returns false when there is no such node or parameter.
+    bool setParam(const std::string& nodeId, const std::string& key, float value, bool syncPos);
     bool hasAny() const { return any_; }
 private:
     std::vector<std::unique_ptr<Graph>> groups_;   // index = group index; null = no chain
