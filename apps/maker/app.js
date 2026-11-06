@@ -2490,6 +2490,9 @@ Object.assign(FXT,{
     params:[FP('crackle','Crackle',0,100,'%',40),FP('rumble','Rumble',0,100,'%',20),FP('wear','Wear',0,100,'%',30),FP('wow','Wow',0,100,'%',20),FP('mix','Mix',0,100,'%',100)]},
   radio:{label:'Radio / Phone',kind:'fx',cat:'Retro',ins:['in'],outs:AO,cpu:.8,lat:0,hint:'Narrow, crunchy, a little noisy.',
     params:[OPT('band','Band',['AM radio','Telephone','Walkie-talkie'],0),FP('crunch','Crunch',0,100,'%',30),FP('noise','Noise',0,100,'%',15),FP('mix','Mix',0,100,'%',100)]},
+  amp:{label:'Amp & Mic',kind:'fx',cat:'Retro',ins:['in'],outs:AO,cpu:1.5,lat:0,fbOk:1,hint:'A guitar amp and speaker, picked up by a microphone. Cable something from further down back into it and it howls (it limits itself, so it never runs away).',
+    params:[OPT('amp','Amp',['Mini practice amp','Combo 1x12','Stack 4x12'],0),FP('gain','Gain',0,100,'%',55),FP('bass','Bass',-12,12,'dB',0),FP('mid','Mid',-12,12,'dB',0),FP('treble','Treble',-12,12,'dB',0),
+      FP('volume','Volume',-24,12,'dB',0),OPT('mic','Mic',['Close, on the cone','Close, off axis','In the room'],0),FP('mix','Mix',0,100,'%',100)]},
   /* ---- pedals (same DSP, stomp-box look; the footswitch is bypass) ---- */
   pod:{label:'Overdrive',kind:'fx',cat:'Pedals',pedal:'#3f8a4a',ins:['in'],outs:AO,cpu:1,lat:0,hint:'Mid-hump overdrive pedal.',
     params:[FP('drive','Drive',0,100,'%',45),FP('tone','Tone',0,100,'%',50),FP('level','Level',-24,12,'dB',0),FP('mix','Mix',0,100,'%',100)]},
@@ -3136,6 +3139,18 @@ const FXI={
     const M={lf:l.frequency,lg:l.gain,m1f:a.frequency,m1g:a.gain,m1q:a.Q,m2f:b.frequency,m2g:b.gain,m2q:b.Q,hf:h.frequency,hg:h.gain};
     return{in:{in:inp},wet:h,set(k,v){if(M[k])setP(M[k],v);}};},
   dist(c,n){return shaperNode(c,n,Math.round(n.p.type),'drive');},
+  /* the Maker's own preview of Amp & Mic (the engine has the full one) */
+  amp(c,n){
+    const inp=gainN(c),hp=biq(c,'highpass',120),push=biq(c,'peaking',1000,.8,6),sh=c.createWaveShaper(),bs=biq(c,'lowshelf',160),md=biq(c,'peaking',650,.7),tr=biq(c,'highshelf',2800),
+      c0=biq(c,'highpass',150,2),c1=biq(c,'peaking',1700,1.1,5),c2=biq(c,'lowpass',4200,.7),m0=biq(c,'lowshelf',220,.7,3),m1=biq(c,'highshelf',4500,.7,2),vol=gainN(c,.6);
+    sh.oversample='4x';sh.curve=shaperCurve(0,.55);chain(inp,hp,push,sh,bs,md,tr,c0,c1,c2,m0,m1,vol);
+    const CAB=[[150,1700,4200],[90,2300,5200],[75,2800,6000]],MIC=[[3,2],[2,-6],[-4,-3]];let a=0;
+    return{in:{in:inp},wet:vol,set(k,v){
+      if(k==='gain'&&Math.abs((sh._d==null?-9:sh._d)-v)>1.5){sh._d=v;sh.curve=shaperCurve(0,v/100);}
+      if(k==='bass')setP(bs.gain,v);if(k==='mid')setP(md.gain,v);if(k==='treble')setP(tr.gain,v);if(k==='volume')setP(vol.gain,dbg(v)*.6);
+      if(k==='amp'){a=Math.round(v);const cc=CAB[a]||CAB[0];setP(c0.frequency,cc[0]);setP(c1.frequency,cc[1]);setP(c2.frequency,cc[2]);}
+      if(k==='mic'){const mm=MIC[Math.round(v)]||MIC[0];setP(m0.gain,mm[0]);setP(m1.gain,mm[1]);}}};
+  },
   pod(c,n){const s=shaperNode(c,n,0,'drive'),hump=biq(c,'peaking',720,1.2,7);s.pre(hump);return s;},
   pfuzz(c,n){return shaperNode(c,n,4,'fuzz');},
   crush(c,n){
