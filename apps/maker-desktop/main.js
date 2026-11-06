@@ -8,7 +8,8 @@ const WWW=path.join(__dirname,'www');
 function createWindow(){
   const win=new BrowserWindow({width:1500,height:900,minWidth:1100,minHeight:640,backgroundColor:'#262626',title:'VisuMaker 0.0.1',
     webPreferences:{contextIsolation:true,sandbox:true,preload:path.join(__dirname,'preload.js')}});
-  win.loadURL('app://local/apps/maker/index.html'+(process.argv.includes('--worklet-file')?'?wfile=1':''));
+  const q=[process.argv.includes('--worklet-file')?'wfile=1':'',process.argv.includes('--smoke-native')?'nodev=1':''].filter(Boolean).join('&');   /* nodev: CI machines have no sound card */
+  win.loadURL('app://local/apps/maker/index.html'+(q?'?'+q:''));
   /* --smoke: start the audio, wait, and report whether the shared engine runs (used by the Windows build check) */
   if(process.argv.includes('--smoke'))win.webContents.once('did-finish-load',async()=>{
     try{

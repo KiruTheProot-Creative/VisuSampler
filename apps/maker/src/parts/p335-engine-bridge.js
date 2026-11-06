@@ -24,8 +24,14 @@ async function nativeStart(){
   if(!r||!r.ok)throw new Error(r&&r.error||'native audio did not start');
   const port={onmessage:null,postMessage:m=>window.visuNative.send(m)};
   window.visuNative.on(m=>{
-    if(m.t==='ready'){ENG.dev=m;if(AUDIO_PREF.device||AUDIO_PREF.buffer||AUDIO_PREF.type)port.postMessage({t:'setDevice',type:AUDIO_PREF.type||'',device:AUDIO_PREF.device||'',rate:AUDIO_PREF.rate||0,buffer:AUDIO_PREF.buffer||0});updVoices();return;}
-    if(m.t==='devices'){ENG.dev=Object.assign({},ENG.dev||{},m.current);ENG.devices=m;if(typeof audioSettingsRender==='function')audioSettingsRender();updVoices();return;}
+    if(m.t==='ready'){ENG.dev=m;ENG.devCheck=true;
+      if(AUDIO_PREF.device||AUDIO_PREF.buffer||AUDIO_PREF.type)port.postMessage({t:'setDevice',type:AUDIO_PREF.type||'',device:AUDIO_PREF.device||'',rate:AUDIO_PREF.rate||0,buffer:AUDIO_PREF.buffer||0});
+      else port.postMessage({t:'devices'});
+      updVoices();return;}
+    if(m.t==='devices'){ENG.dev=Object.assign({},ENG.dev||{},m.current);ENG.devices=m;
+      /* the first answer tells whether a sound card opened; without one, the browser's audio plays instead */
+      if(ENG.devCheck){ENG.devCheck=false;if(!(m.current&&m.current.rate>0)&&!/[?&]nodev/.test(location.search)){nativeFallback('no sound card could be opened'+(m.error?': '+m.error:''));return;}}
+      if(typeof audioSettingsRender==='function')audioSettingsRender();updVoices();return;}
     if(m.t==='scope'){GRAPH.time=Float32Array.from(m.d||[]);GRAPH.sr=m.sr||48000;return;}
     if(m.t==='exit'){   /* it stopped: go back to the browser engine */
       if(!ENG.native)return;ENG.node=null;ENG.native=false;ENG.loaded=false;ENG.failed='';ENG.nativeLost=true;
@@ -33,6 +39,11 @@ async function nativeStart(){
     if(port.onmessage)port.onmessage({data:m});
   });
   return{port};
+}
+function nativeFallback(why){
+  try{window.visuNative.stop();}catch(e){}
+  ENG.node=null;ENG.native=false;ENG.loaded=false;ENG.failed='';ENG.nativeLost=true;ENG.sig='';
+  flash('Native audio: '+why+'. Playing through the browser instead (Audio button to change).');updVoices();
 }
 async function engineStart(){
   if(ENG.node||ENG.starting||ENG.failed||!AU.ctx) return;
