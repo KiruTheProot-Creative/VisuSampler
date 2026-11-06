@@ -126,6 +126,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
     auto L = std::make_shared<Library>();
     fillInfo(m["lib"], L->info);
     L->bpm = m["project"]["bpm"].num(120);
+    L->sigN = std::max(1, m["project"]["sig"]["n"].integer(4)); L->sigD = std::max(1, m["project"]["sig"]["d"].integer(4));
     { const Json& pl = m["project"]["play"]; L->play.mono = pl["mono"].boolean(false); L->play.legato = pl["legato"].boolean(false);
       L->play.glideMs = (float) std::max(0.0, pl["glide"].num(0)); L->play.bend = (float) std::min(48.0, std::max(0.0, pl["bend"].num(2)));
       L->play.maxVoices = (int) std::max(0.0, pl["maxVoices"].num(0)); L->play.quietest = pl["steal"].str("oldest") == "quietest"; }
@@ -219,7 +220,8 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
           v.a = (float) std::max(0.0, f["a"].num(5)); v.d = (float) std::max(0.0, f["d"].num(300)); v.s = (float) std::min(1.0, std::max(0.0, f["s"].num(0) / 100.0)); v.r = (float) std::max(0.0, f["r"].num(300));
           v.cut.tagId = f["tags"]["cutoff"].str(""); v.reso.tagId = f["tags"]["res"].str("");
           const Json& o = j["vlfo"]; GroupCfg::VLfo& l = g.vl; l.on = o["on"].boolean(false); l.shape = o["shape"].str("sine") == "tri" ? 1 : 0;
-          l.rate = (float) std::max(.01, o["rate"].num(5)); l.cut = (float) o["cut"].num(0); l.pitch = (float) o["pitch"].num(0); l.vol = (float) std::min(1.0, std::max(0.0, o["vol"].num(0) / 100.0)); l.delay = (float) std::max(0.0, o["delay"].num(0)); }
+          l.rate = (float) std::max(.01, o["rate"].num(5)); l.cut = (float) o["cut"].num(0); l.pitch = (float) o["pitch"].num(0); l.vol = (float) std::min(1.0, std::max(0.0, o["vol"].num(0) / 100.0)); l.delay = (float) std::max(0.0, o["delay"].num(0));
+          l.sync = o["sync"].boolean(false); l.note = std::min(17, std::max(0, o["note"].integer(10))); }
         { const Json& lk = j["links"]; GroupCfg::Link* L4[4] = { &g.lVol, &g.lPan, &g.lTune, &g.lFine }; const char* K[4] = { "vol", "pan", "tune", "fine" };
           for (int k = 0; k < 4; ++k) { const Json& x = lk[K[k]]; L4[k]->tagId = x["tag"].str(""); L4[k]->from = (float) x["from"].num(0); L4[k]->to = (float) x["to"].num(0); } }
         int id = (int) L->groups.size(); gidx[name] = id; L->groups.push_back(g); return id;

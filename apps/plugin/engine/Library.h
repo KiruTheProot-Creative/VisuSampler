@@ -45,7 +45,7 @@ struct GroupCfg {
     // cutoff and resonance can follow knobs (tag 0..1 = 20 Hz..20 kHz, 0..100 %).
     struct VFilter { bool on = false; int type = 0; float cutoff = 8000, res = 0, key = 0, vel = 0, env = 0, a = 5, d = 300, s = 0, r = 300; Link cut, reso; } vf;   // type: 0 lp12, 1 lp24, 2 hp, 3 bp, 4 notch
     // an LFO per note (starts with the note): to cutoff (semitones), pitch (cents) and volume (0..1), after a delay (ms)
-    struct VLfo { bool on = false; int shape = 0; float rate = 5, cut = 0, pitch = 0, vol = 0, delay = 0; } vl;
+    struct VLfo { bool on = false, sync = false; int shape = 0, note = 10; float rate = 5, cut = 0, pitch = 0, vol = 0, delay = 0; } vl;   // sync: the rate is a note value (index into the effects' note list) at the tempo
 };
 
 // audio a zone plays: either the sample itself, or a prepared copy (loop crossfade baked in, or reversed)
@@ -112,7 +112,7 @@ public:
     std::string manifestText;
     std::vector<std::pair<std::string, Blob>> assets, fonts;
     std::vector<std::string> unsupported; // the ones this engine cannot play yet
-    bool anySolo = false, anyZoneSolo = false; int unsupportedZones = 0; double bpm = 120;
+    bool anySolo = false, anyZoneSolo = false; int unsupportedZones = 0; double bpm = 120; int sigN = 4, sigD = 4;
     // knobs, buttons and other tags of the library's interface: effects follow them
     std::vector<fx::TagDef> tags;
     std::unique_ptr<std::atomic<float>[]> tagValues;

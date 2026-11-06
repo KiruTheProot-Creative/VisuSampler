@@ -95,7 +95,7 @@ function paramNorm(n,q){
 }
 function paramReal(g,n,q,t,wantMod){
   const tg=n.tag[q.k]&&tagById(n.tag[q.k]);
-  if(tg&&q.sync&&tg.kind==='sync') return msOfBeats(syncBeats(tg,S.sig));
+  if(tg&&q.sync&&tg.kind==='sync'){const ms=msOfBeats(syncBeats(tg,S.sig));return q.unit==='Hz'?1000/Math.max(1,ms):ms;}   /* a rate gets one cycle per note value */
   let nm=paramNorm(n,q),mod=false;
   if(wantMod!==false) g.cables.forEach(c=>{
     if(c.to.n===n.id&&c.to.p==='p:'+q.k){const s=nodeById(g,c.from.n);if(s){

@@ -142,6 +142,9 @@ void VisuEditor::timerCallback()
     if (proc_.pollLearned()) browser_.emitEventIfBrowserIsVisible("mappings", proc_.mappingsVar());
     { const auto ch = proc_.takeUiChanges(); if (!ch.isVoid()) browser_.emitEventIfBrowserIsVisible("tags", ch); }
     if (proc_.scopeOn()) browser_.emitEventIfBrowserIsVisible("scope", proc_.scopeVar());
+    {   const double b = proc_.hostBpm(); const int s = proc_.hostSig();   // the DAW's tempo, for texts like {bpm} and synced readouts
+        if (b > 0 && (std::abs(b - lastBpm_) > 1e-3 || s != lastSig_)) { lastBpm_ = b; lastSig_ = s;
+            auto* o = new juce::DynamicObject(); o->setProperty("bpm", b); o->setProperty("n", s / 100); o->setProperty("d", s % 100); browser_.emitEventIfBrowserIsVisible("tempo", juce::var(o)); } }
     const float vol = proc_.volume();
     if (std::abs(vol - lastVol_) > 1e-4f) { lastVol_ = vol; browser_.emitEventIfBrowserIsVisible("volume", vol); }
 }

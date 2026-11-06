@@ -20,7 +20,7 @@ private:
     VisuProcessor& proc_;
     std::unique_ptr<juce::FileChooser> chooser_;
     juce::WebBrowserComponent browser_;
-    int lastVoices_ = -1; float lastVol_ = -1;
+    int lastVoices_ = -1; float lastVol_ = -1; double lastBpm_ = 0; int lastSig_ = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VisuEditor)
 };

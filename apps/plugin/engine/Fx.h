@@ -28,6 +28,8 @@ struct Control {
 
 struct TagDef { std::string id, name, kind, basis; int steps = 0; float def = 0; };
 
+double noteBeats(int i, int sigN, int sigD);   // note value i of the tempo-sync list, in quarter notes
+
 class Module;
 struct Node;
 

@@ -400,7 +400,7 @@ static void testFx() {
     };
     for (size_t i = 0; i < cases.size(); ++i) {
         const std::string mod = cases[i]["module"].str(); const int key = cases[i]["key"].integer();
-        if (mod == "lfo-mod" || mod == "tag" || mod == "macro" || mod.rfind("bypass", 0) == 0) continue;
+        if (mod == "lfo-mod" || mod == "tag" || mod == "macro" || mod == "sync" || mod.rfind("bypass", 0) == 0) continue;
         const double secs = mod == "feedback" ? 3 : 1;
         auto [fin, peak, rms] = renderKey(key, secs, -1, nullptr);
         CHECK(fin && peak > 1e-3 && peak < 8, "%s: finite and audible (peak %.3f, rms %.4f)", mod.c_str(), peak, rms);
@@ -422,6 +422,18 @@ static void testFx() {
     auto keyOf = [&](const char* name) { for (size_t i = 0; i < cases.size(); ++i) if (cases[i]["module"].str() == name) return cases[i]["key"].integer(); return 0; };
     { const int k = keyOf("macro"); const double lo = rmsOf(renderPlay(k, .6, 0.f), 5, 30), mid = rmsOf(renderPlay(k, .6, .2f), 5, 30), hi = rmsOf(renderPlay(k, .6, 1.f), 5, 30);
       CHECK(mid > lo * 1.3 && hi > mid * 1.3, "a macro on a knob sweeps the filter across the whole knob (at 0, 20 and 100 %%: %.4f, %.4f, %.4f)", lo, mid, hi); }
+    {   // "Sync to tempo": a 1/4-note delay follows the host's tempo (only the echo is heard, so it starts one quarter note late)
+        const int k = keyOf("sync");
+        auto onset = [&](double bpm) {
+            auto L = Library::load(playFile, err, 48000); L->setTag("cut", 1.f);
+            auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setMasterGain(1.f); e.setLibrary(L); e.setHostTempo(bpm, 4, 4); e.noteOn(k, 110);
+            std::vector<float> l(48), r(48);
+            for (int b = 0; b < 3000; ++b) { std::fill(l.begin(), l.end(), 0.f); std::fill(r.begin(), r.end(), 0.f); e.render(l.data(), r.data(), 48);
+                for (int i = 0; i < 48; ++i) if (std::fabs(l[i]) > .02f) return (b * 48 + i) / 48.0; }
+            return -1.0; };
+        const double a = onset(120), b = onset(60), c = onset(150);
+        CHECK(std::fabs(a - 500) < 15 && std::fabs(b - 1000) < 15 && std::fabs(c - 400) < 15, "a synced 1/4-note delay follows the host tempo (%.0f ms at 120, %.0f at 60, %.0f at 150 BPM)", a, b, c);
+    }
     {   // the knob bypasses the delay: off = only the dry note; with tails the echoes keep ringing after switching off
         const int k = keyOf("bypass"), kt = keyOf("bypass-tails");
         const double on = rmsOf(renderPlay(k, 1.6, 1.f), 95, 150), off = rmsOf(renderPlay(k, 1.6, 0.f), 95, 150);

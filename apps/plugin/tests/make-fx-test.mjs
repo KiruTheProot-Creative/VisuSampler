@@ -41,6 +41,10 @@ for(const t of FX){
 for(const tails of [false,true]){const g='g_byp'+(tails?'t':'');groups.push(g);const i=node('input'),o=node('output'),d=node('delay',{p:Object.assign({},cat.defs.delay.p,{time:120,fb:60,mix:100}),byTag:{tag:'t_cut',inv:false,tails}});
  graphs[g]={nodes:[i,o,d],cables:[cable(i,'out',d,'in'),cable(d,'mix',o,'in')]};
  zones.push({id:'z_byp'+(tails?'t':''),sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:tails?'bypass-tails':'bypass'});key++;}
+/* "Sync to tempo" on a delay: 1/4 note (index 10 of the 18 note values), only the echo comes out */
+{const g='g_sync';groups.push(g);const i=node('input'),o=node('output'),d=node('delay',{p:Object.assign({},cat.defs.delay.p,{time:120,fb:0,mix:100}),sync:true,ps:{time:10/17}});
+ graphs[g]={nodes:[i,o,d],cables:[cable(i,'out',d,'in'),cable(d,'wet',o,'in')]};
+ zones.push({id:'z_sync',sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:'sync'});key++;}
 /* feedback loop through a delay must stay stable */
 {const g='g_loop';groups.push(g);const i=node('input'),o=node('output'),d=node('delay',{p:Object.assign({},cat.defs.delay.p,{fb:0,mix:100})}),f=node('filter');
  graphs[g]={nodes:[i,o,d,f],cables:[cable(i,'out',d,'in'),cable(d,'wet',f,'in'),cable(f,'mix',d,'in'),cable(d,'mix',o,'in')]};
@@ -61,7 +65,7 @@ const manifest={format:'vsamp',formatVersion:1,lib:{id:'fxtest',name:'FX test'},
 writeFileSync(new URL('fx.vsamp',dir),writeVsamp(manifest,pack));
 writeFileSync(new URL('fx-cases.json',dir),JSON.stringify(cases));
 /* fx-play.vsamp: only the macro and bypass cases, so nothing else in the chains (crackle, hiss) colours the measurements */
-{const keep=['g_macro','g_byp','g_bypt'],g2={master:{nodes:[node('input'),node('output')],cables:[]}};g2.master.cables=[cable(g2.master.nodes[0],'out',g2.master.nodes[1],'in')];
+{const keep=['g_macro','g_byp','g_bypt','g_sync'],g2={master:{nodes:[node('input'),node('output')],cables:[]}};g2.master.cables=[cable(g2.master.nodes[0],'out',g2.master.nodes[1],'in')];
  keep.forEach(k=>{g2[k]=graphs[k];});
  const m2=Object.assign({},manifest,{lib:{id:'fxplay',name:'FX play test'},project:Object.assign({},project,{fx:g2}),zones:zones.filter(z=>keep.includes(z.group)).map(full)});
  writeFileSync(new URL('fx-play.vsamp',dir),writeVsamp(m2,pack));}

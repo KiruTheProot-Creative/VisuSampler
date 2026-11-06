@@ -1039,6 +1039,7 @@ window.addEventListener('message',async e=>{
   }else if(m.t==='list'){chooseList(m.index);}
   else if(m.t==='listB'){chooseListB(m.index);}
   else if(m.t==='patch'){choosePatch(m.layer,m.index);}
+  else if(m.t==='tempo'){if(m.bpm>0){S.bpm=m.bpm;S.sig={n:m.n||4,d:m.d||4};refreshDisplays();}}
   else if(m.t==='scope'){GRAPH.time=Float32Array.from(m.d||[]);GRAPH.sr=m.sr||48000;graphWake();}
   else if(m.t==='tags'){   /* moved by DAW automation or a MIDI controller: show it, do not send it back */
     Object.keys(m.values||{}).forEach(n=>{const t=tagByName(n);if(t)setTag0(t,+m.values[n]);});

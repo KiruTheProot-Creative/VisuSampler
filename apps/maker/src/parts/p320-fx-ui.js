@@ -129,9 +129,10 @@ document.addEventListener('input',e=>{
   const t=e.target;
   if(t.classList&&t.classList.contains('pr')){
     const g=curG(),n=nodeById(g,t.dataset.n),q=n&&FXT[n.type].params.find(x=>x.k===t.dataset.pk); if(!q) return;
-    n.p[q.k]=realOfNorm(q,t.value/1000);if(q.opts)n.p[q.k]=Math.round(n.p[q.k]);
+    if(fxSynced(n,q)){n.ps=n.ps||{};n.ps[q.k]=t.value/1000;}
+    else{n.p[q.k]=realOfNorm(q,t.value/1000);if(q.opts)n.p[q.k]=Math.round(n.p[q.k]);}
     const row=t.closest('.fxp');
-    row.querySelector('.pv').textContent=fmtPar(q,parReal(g,n,q,fxClock()).v);
+    row.querySelector('.pv').textContent=fmtParR(q,parReal(g,n,q,fxClock()));
     S.fx.an=fxAnalyze(g); fxReport(); return;
   }
   if(t.dataset&&t.dataset.fn==='name'){
@@ -146,6 +147,9 @@ document.addEventListener('change',e=>{
   const t=e.target;
   if(t.classList&&t.classList.contains('mtag')){
     const n=nodeById(curG(),t.dataset.n); if(!n) return; if(t.value) n.tag.value=t.value; else delete n.tag.value; fxRefreshParams(); return;
+  }
+  if(t.dataset&&t.dataset.fn==='sync'){
+    const n=nodeById(curG(),S.fx.sel); if(!n) return; n.sync=t.checked; if(n.sync)fxSyncInit(n); fxRender(); return;
   }
   if(t.dataset&&(t.dataset.fn==='ir'||t.dataset.fn==='skin')){
     const n=nodeById(curG(),S.fx.sel); if(!n) return;

@@ -402,10 +402,11 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
         const GroupCfg& gcf = lib_->groups[(size_t) v.group]; const GroupCfg::VFilter& vf = gcf.vf; const GroupCfg::VLfo& vl = gcf.vl;
         float lfo = 0;
         if (vl.on) {
-            const double ph = v.lfoPh + vl.rate * (n * .5) / sr_; const double fr = ph - std::floor(ph);
+            const double lrate = vl.sync ? std::max(1.0, ctl_.bpm) / (60.0 * fx::noteBeats(vl.note, ctl_.sigN, ctl_.sigD)) : vl.rate;
+            const double ph = v.lfoPh + lrate * (n * .5) / sr_; const double fr = ph - std::floor(ph);
             const float w = vl.shape == 1 ? (float) (1 - std::fabs(fr * 4 - 2)) : (float) std::sin(2 * kPi * fr);
             const float fade = vl.delay > 0 ? (float) std::min(1.0, v.lfoAge / (vl.delay / 1000.0 * sr_)) : 1.f;
-            lfo = w * fade; v.lfoPh += vl.rate * n / sr_; v.lfoPh -= std::floor(v.lfoPh); v.lfoAge += n;
+            lfo = w * fade; v.lfoPh += lrate * n / sr_; v.lfoPh -= std::floor(v.lfoPh); v.lfoAge += n;
             lgSemis += lfo * vl.pitch / 100.f;                          // vibrato
             lgGain *= 1 - vl.vol * .5f * (1 - lfo);                   // tremolo
         }
@@ -531,7 +532,9 @@ void Engine::render(float* L, float* R, int n) {
     if (!lib_) { active_.store(0); return; }
     const float master = master_.load();
     fx::System* fx = (lib_->fx && lib_->fx->hasAny()) ? lib_->fx.get() : nullptr;
-    ctl_.bpm = lib_->bpm; ctl_.tags = lib_->tagValues.get(); ctl_.numTags = (int) lib_->tags.size(); ctl_.sampleRate = sr_;
+    { const double hb = hostBpm_.load(); const int hs = hostSig_.load(); ctl_.bpm = hb > 0 ? hb : lib_->bpm;
+      if (hb > 0) { ctl_.sigN = std::max(1, hs / 100); ctl_.sigD = std::max(1, hs % 100); } else { ctl_.sigN = lib_->sigN; ctl_.sigD = lib_->sigD; } }
+    ctl_.tags = lib_->tagValues.get(); ctl_.numTags = (int) lib_->tags.size(); ctl_.sampleRate = sr_;
     if (!fx) { active_.store(renderVoices(L, R, n, master)); ctl_.time += n / sr_; return; }
     int done = 0, active = 0;
     while (done < n) {

@@ -26,6 +26,9 @@ public:
     int list() const { return list_.load(); }
     // layer B: a second list that plays at the same time (-2 = the one the library was saved with, -3 = off)
     void setListB(int index) { listB_.store(index); }
+    // the host's tempo and time signature (bpm <= 0: use the library's own tempo)
+    void setHostTempo(double bpm, int sigN, int sigD) { hostBpm_.store(bpm); hostSig_.store(sigN * 100 + sigD); }
+    double tempo() const { const double h = hostBpm_.load(); return h > 0 ? h : (lib_ ? lib_->bpm : 120); }
     // patch mode "group": which group of the chosen list plays on each layer (-2 = the one the library was saved with)
     void setPatch(int layer, int index) { patch_[layer & 1].store(index); }
     int patch(int layer) const { return patch_[layer & 1].load(); }
@@ -100,6 +103,7 @@ private:
     std::atomic<const Library*> inUse_{nullptr};        // audio thread -> message thread (hazard pointer)
     std::vector<std::shared_ptr<const Library>> owners_; std::mutex ownersMutex_;
     std::atomic<float> master_{0.8f};
+    std::atomic<double> hostBpm_{ 0 }; std::atomic<int> hostSig_{ 404 };
     std::atomic<int> list_{-2}, listB_{-2}; std::atomic<int> patch_[2] = { {-2}, {-2} };
     bool groupAllowed(int g, int layer = 0) const;
     int keyswitchList(int note) const;

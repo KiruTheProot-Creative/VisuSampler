@@ -2293,7 +2293,7 @@ function paramNorm(n,q){
 }
 function paramReal(g,n,q,t,wantMod){
   const tg=n.tag[q.k]&&tagById(n.tag[q.k]);
-  if(tg&&q.sync&&tg.kind==='sync') return msOfBeats(syncBeats(tg,S.sig));
+  if(tg&&q.sync&&tg.kind==='sync'){const ms=msOfBeats(syncBeats(tg,S.sig));return q.unit==='Hz'?1000/Math.max(1,ms):ms;}   /* a rate gets one cycle per note value */
   let nm=paramNorm(n,q),mod=false;
   if(wantMod!==false) g.cables.forEach(c=>{
     if(c.to.n===n.id&&c.to.p==='p:'+q.k){const s=nodeById(g,c.from.n);if(s){
@@ -2530,6 +2530,32 @@ fmtPar=function(q,v){return q.opts?q.opts[clamp(Math.round(v),0,q.opts.length-1)
 /* Hz parameters with a wide range follow the ear (log scale) for knobs, macros and modulation */
 Object.values(FXT).forEach(d=>(d.params||[]).forEach(q=>{if(q.unit==='Hz'&&q.min>0&&q.max/q.min>=50&&!q.opts)q.log=1;}));
 
+/* ---- "Sync to tempo" (an effect setting): its time and rate parameters step through note values at the tempo ----
+   In the player the tempo is the DAW's; in the Maker it is the project's BPM. Same list as the engine (Fx.cpp kNote). */
+Object.values(FXT).forEach(d=>(d.params||[]).forEach(q=>{if(q.k==='rate'&&q.unit==='Hz'&&!q.opts)q.sync=1;}));
+const NOTE_SYNC=[['1/64',.0625],['1/32T',1/12],['1/32',.125],['1/16T',1/6],['1/16',.25],['1/8T',1/3],['1/16.',.375],['1/8',.5],['1/4T',2/3],['1/8.',.75],['1/4',1],['1/2T',4/3],['1/4.',1.5],['1/2',2],['1/2.',3],['1 bar',-1],['2 bars',-2],['4 bars',-4]];
+const noteBeatsOf=i=>{const b=NOTE_SYNC[i][1];return b>0?b:-b*barBeats(S.sig);};
+const fxSynced=(n,q)=>!!(n&&n.sync&&q.sync);
+const fxHasSync=n=>FXT[n.type].params.some(q=>q.sync);
+/* which note a synced parameter is on (rates count from slow to fast, so turning up still means faster) */
+function syncIdx(n,q,nm){const i=clamp(Math.round(nm*(NOTE_SYNC.length-1)),0,NOTE_SYNC.length-1);return q.unit==='Hz'?NOTE_SYNC.length-1-i:i;}
+const syncValue=(q,i)=>{const sec=noteBeatsOf(i)*60/Math.max(1,S.bpm||120);return q.unit==='Hz'?1/sec:sec*1000;};
+/* a synced parameter starts on the note closest to where it was */
+function fxSyncInit(n){
+  n.ps=n.ps||{};
+  FXT[n.type].params.forEach(q=>{if(!q.sync||n.ps[q.k]!=null)return;
+    let best=0,bd=1e9;for(let i=0;i<NOTE_SYNC.length;i++){const v=syncValue(q,i),d=Math.abs(Math.log(v/Math.max(1e-6,n.p[q.k])));if(d<bd){bd=d;best=i;}}
+    const ix=q.unit==='Hz'?NOTE_SYNC.length-1-best:best;n.ps[q.k]=ix/(NOTE_SYNC.length-1);});
+}
+{const pn0=paramNorm;paramNorm=function(n,q){if(fxSynced(n,q)&&!(n.tag[q.k]&&tagById(n.tag[q.k])))return n.ps&&n.ps[q.k]!=null?n.ps[q.k]:.5;return pn0(n,q);};}
+{const pr0=paramReal;paramReal=function(g,n,q,t,wantMod){
+  if(!fxSynced(n,q))return pr0(g,n,q,t,wantMod);
+  let nm=paramNorm(n,q),mod=false;
+  if(wantMod!==false)g.cables.forEach(c=>{if(c.to.n===n.id&&c.to.p==='p:'+q.k){const s=nodeById(g,c.from.n);if(s){nm+=s.type==='macro'?modOut(g,s,t)*(c.amt/100):(modOut(g,s,t)-.5)*2*(c.amt/100);mod=true;}}});
+  const i=syncIdx(n,q,clamp(nm,0,1));return{v:syncValue(q,i),mod,note:NOTE_SYNC[i][0]};
+};}
+const fmtParR=(q,r)=>r&&r.note?r.note+' · '+fmtPar(q,r.v):fmtPar(q,r.v);
+
 /* ---------- modular FX: view ---------- */
 const PORT_LBL={out:'out',in:'in',sc:'side',dry:'dry',wet:'wet',mix:'mix',in1:'in 1',in2:'in 2',in3:'in 3',in4:'in 4',low:'low',mid:'mid',high:'high',side:'side'};
 const portBtn=(n,p,dir,kind,extra)=>'<button type="button" class="port '+dir+' k-'+kind+'" data-n="'+n.id+'" data-p="'+p+'" data-dir="'+dir+'" aria-label="'+esc(n.name+' '+(PORT_LBL[p]||p)+' '+dir+'put')+'"'+(extra||'')+'></button>';
@@ -2540,7 +2566,7 @@ function parRowHTML(g,n,q,stack){
   return '<div class="fxp'+(tg?' tagged':'')+(r.mod?' modd':'')+'" data-k="'+q.k+'">'+port
     +'<span class="pl">'+q.label+'</span>'
     +'<input type="range" class="pr" min="0" max="1000" value="'+Math.round(norm*1000)+'" data-pk="'+q.k+'" data-n="'+n.id+'"'+(tg?' disabled':'')+' aria-label="'+esc(n.name+' '+q.label)+'">'
-    +'<output class="pv">'+fmtPar(q,r.v)+'</output></div>';
+    +'<output class="pv">'+fmtParR(q,r)+'</output></div>';
 }
 function nodeHTML(g,n,an){
   const d=FXT[n.type],cls=['fxn','k-'+d.kind];if(d.pedal||n.skin==='pedal')cls.push('pedal');
@@ -2598,6 +2624,8 @@ function fxInspHTML(){
   const d=FXT[n.type];
   let h='<div class="phead"><input type="text" class="pname" data-fn="name" value="'+esc(n.name)+'" aria-label="Node name"><span class="badge">'+d.label+'</span></div><p class="hint">'+d.hint+'</p>';
   if(d.sample){const cur=(n.s&&n.s.ir)||'';h+=sec('Impulse file','<label class="f"><span>Sample</span><select data-fn="ir" aria-label="Impulse sample"><option value="">— none —</option>'+S.samples.map(s=>'<option value="'+s.id+'"'+(s.id===cur?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select></label><p class="hint">Import the impulse (a recording of a room or a cabinet) in the Samples tab. It does not need to be mapped; it is packed into the library because this node uses it.</p>');}
+  if(fxHasSync(n))h+='<label class="f chk"><input type="checkbox" data-fn="sync"'+(n.sync?' checked':'')+'><span>Sync to tempo</span></label>'
+    +'<p class="hint">'+(n.sync?'Time and rate step through note values (1/64 to 4 bars, with dotted and triplet ones) at the tempo: the DAW\'s in the player, '+(S.bpm||120)+' BPM here. A knob linked to them steps through the notes too.':'Turn on to set time and rate in note values that follow the song\'s tempo.')+'</p>';
   if(d.kind==='fx'&&!d.pedal)h+='<label class="f chk"><input type="checkbox" data-fn="skin"'+(n.skin==='pedal'?' checked':'')+'><span>Show as a pedal</span></label>';
   if(d.params.length){
     h+=sec('Link parameters to tags',d.params.map(q=>'<label class="f"><span>'+q.label+'</span><select data-fn="tag" data-k="'+q.k+'" aria-label="Tag for '+q.label+'"><option value="">— set by hand —</option>'+S.tags.filter(t=>t.kind!==undefined).map(t=>'<option value="'+t.id+'"'+(n.tag[q.k]===t.id?' selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select></label>').join('')
@@ -2654,7 +2682,7 @@ function fxRefreshParams(){
     const q=FXT[n.type].params.find(x=>x.k===row.dataset.k); if(!q) return;
     const r=parReal(g,n,q,t),tg=n.tag[q.k]&&tagById(n.tag[q.k]);
     const rng=$('.pr',row); if(rng&&document.activeElement!==rng) rng.value=Math.round((tg?tg.value:normOf(q,r.v))*1000);
-    $('.pv',row).textContent=fmtPar(q,r.v); row.classList.toggle('modd',!!r.mod);
+    $('.pv',row).textContent=fmtParR(q,r); row.classList.toggle('modd',!!r.mod);
   });
   S.fx.an=fxAnalyze(g); fxReport();
 }
@@ -2801,9 +2829,10 @@ document.addEventListener('input',e=>{
   const t=e.target;
   if(t.classList&&t.classList.contains('pr')){
     const g=curG(),n=nodeById(g,t.dataset.n),q=n&&FXT[n.type].params.find(x=>x.k===t.dataset.pk); if(!q) return;
-    n.p[q.k]=realOfNorm(q,t.value/1000);if(q.opts)n.p[q.k]=Math.round(n.p[q.k]);
+    if(fxSynced(n,q)){n.ps=n.ps||{};n.ps[q.k]=t.value/1000;}
+    else{n.p[q.k]=realOfNorm(q,t.value/1000);if(q.opts)n.p[q.k]=Math.round(n.p[q.k]);}
     const row=t.closest('.fxp');
-    row.querySelector('.pv').textContent=fmtPar(q,parReal(g,n,q,fxClock()).v);
+    row.querySelector('.pv').textContent=fmtParR(q,parReal(g,n,q,fxClock()));
     S.fx.an=fxAnalyze(g); fxReport(); return;
   }
   if(t.dataset&&t.dataset.fn==='name'){
@@ -2818,6 +2847,9 @@ document.addEventListener('change',e=>{
   const t=e.target;
   if(t.classList&&t.classList.contains('mtag')){
     const n=nodeById(curG(),t.dataset.n); if(!n) return; if(t.value) n.tag.value=t.value; else delete n.tag.value; fxRefreshParams(); return;
+  }
+  if(t.dataset&&t.dataset.fn==='sync'){
+    const n=nodeById(curG(),S.fx.sel); if(!n) return; n.sync=t.checked; if(n.sync)fxSyncInit(n); fxRender(); return;
   }
   if(t.dataset&&(t.dataset.fn==='ir'||t.dataset.fn==='skin')){
     const n=nodeById(curG(),S.fx.sel); if(!n) return;
@@ -2931,7 +2963,7 @@ const FXA={ctx:null,gin:{},gout:{},min:null,sig:'',scopes:{},follow:{},buses:[],
 const FXM={vel:0,key:60,gate:false,tOn:-1,tOff:-1,mod:0,expr:1,at:0,bend:.5,lvlOn:0};
 /* ---- modulator outputs (used by modOut) ---- */
 function lfoOut(g,n,t){
-  const v=n.p,r=paramReal(g,n,FXT.lfo.params[0],t,false),hz=typeof r==='number'?1000/Math.max(1,r):r.v;
+  const v=n.p,r=paramReal(g,n,FXT.lfo.params[0],t,false),hz=typeof r==='number'?r:r.v;
   const tt=v.retrig&&FXM.tOn>=0?t-FXM.tOn:t,ph=(tt*hz)%1,sh=Math.round(v.shape);
   const w=sh===1?1-Math.abs(ph*4-2):sh===2?ph*2-1:sh===3?(ph<.5?1:-1):sh===4?hash01(Math.floor(tt*hz)+n.id.length)*2-1:Math.sin(2*Math.PI*ph);
   return .5+.5*w*(v.depth/100);
@@ -3386,7 +3418,7 @@ async function engineBytes(){
   }
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
   sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;const cb=curListB();sn.currentListB=cb?S.lists.indexOf(cb):-1;sn.currentPatch=patchIdx(0);sn.currentPatchB=patchIdx(1);if(sn.play)sn.play.patchMode=patchModeOn()?'group':'list';}
-  const fxRanges={};Object.keys(FXT).forEach(k=>{fxRanges[k]={};FXT[k].params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0];});});
+  const fxRanges={};Object.keys(FXT).forEach(k=>{fxRanges[k]={};FXT[k].params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0,q.unit==='Hz'?1:0];});});
   const zones=JSON.parse(JSON.stringify(S.zones));
   const manifest={format:'vsamp',formatVersion:1,lib:{id:'maker-live',name:S.lib.name},banner:{images:{}},project:sn,fxRanges,features:[],samples:smeta,zones};
   return writeVsamp(manifest,pack);
@@ -4979,7 +5011,7 @@ $('#snInsList').addEventListener('change',e=>{
    The filter has its own envelope; velocity, key and the envelope move the cutoff in semitones.
    The LFO starts with each note and can wobble the cutoff, the pitch (vibrato) and the volume (tremolo). */
 const VF_DEF={on:false,type:'lp12',cutoff:8000,res:0,key:0,vel:0,env:0,a:5,d:300,s:0,r:300,tags:{}};
-const VL_DEF={on:false,shape:'sine',rate:5,delay:0,cut:0,pitch:0,vol:0};
+const VL_DEF={on:false,shape:'sine',rate:5,delay:0,cut:0,pitch:0,vol:0,sync:false,note:10};
 const VF_TYPES=[['lp12','Low-pass 12 dB'],['lp24','Low-pass 24 dB'],['hp','High-pass'],['bp','Band-pass'],['notch','Notch']];
 const vfOf=c=>{const f=Object.assign({},VF_DEF,c.vfilter||{});f.tags=Object.assign({},f.tags||{});return f;};
 const vlOf=c=>Object.assign({},VL_DEF,c.vlfo||{});
@@ -5000,7 +5032,8 @@ function snVfHTML(c){
   h+='</div><div class="snenv snvl"><label class="f chk"><input type="checkbox" data-vl="on"'+(l.on?' checked':'')+'><span>LFO (one per note)</span></label>';
   if(l.on){
     h+='<label class="f"><span>Shape</span><select data-vl="shape">'+mopt([['sine','Sine'],['tri','Triangle']],l.shape)+'</select></label>'
-      +num('rate','Rate',.01,40,.1,'Hz',l,'data-vl')+num('delay','Fade in',0,10000,1,'ms',l,'data-vl')
+      +'<label class="f chk"><input type="checkbox" data-vl="sync"'+(l.sync?' checked':'')+'><span>Sync to tempo</span></label>'
+      +(l.sync?'<label class="f"><span>One cycle per</span><select data-vl="note">'+mopt(NOTE_SYNC.map((x,i)=>[String(i),x[0]]),String(l.note))+'</select></label>':num('rate','Rate',.01,40,.1,'Hz',l,'data-vl'))+num('delay','Fade in',0,10000,1,'ms',l,'data-vl')
       +num('pitch','To pitch',0,1200,1,'cents',l,'data-vl')+num('vol','To volume',0,100,1,'%',l,'data-vl')
       +(f.on?num('cut','To cutoff',0,96,1,'st',l,'data-vl'):'')
       +'<p class="hint">Starts fresh with every note. Pitch makes vibrato, volume makes tremolo'+(f.on?', cutoff makes the filter wobble':'')+'.</p>';
@@ -5011,7 +5044,7 @@ $('#snInsGroup').addEventListener('change',e=>{
   const t=e.target,g=S.map.group;if(!g||!(t.dataset.vf||t.dataset.vftag||t.dataset.vl))return;
   const c=gcfg(g);
   if(t.dataset.vl){const l=vlOf(c),k=t.dataset.vl;
-    if(k==='on')l.on=t.checked;else if(k==='shape')l[k]=t.value;else{const v=parseFloat(t.value);l[k]=isFinite(v)?Math.max(+t.min,Math.min(+t.max,v)):VL_DEF[k];}
+    if(k==='on'||k==='sync')l[k]=t.checked;else if(k==='shape')l[k]=t.value;else if(k==='note')l.note=+t.value;else{const v=parseFloat(t.value);l[k]=isFinite(v)?Math.max(+t.min,Math.min(+t.max,v)):VL_DEF[k];}
     c.vlfo=l;}
   else{const f=vfOf(c),k=t.dataset.vf;
     if(t.dataset.vftag){if(t.value)f.tags[t.dataset.vftag]=t.value;else delete f.tags[t.dataset.vftag];}
@@ -5570,7 +5603,7 @@ async function buildVsamp(progress){
   sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;const cb=curListB();sn.currentListB=cb?S.lists.indexOf(cb):-1;sn.currentPatch=patchIdx(0);sn.currentPatchB=patchIdx(1);if(sn.play)sn.play.patchMode=patchModeOn()?'group':'list';}
   if(S.els.some(e=>e.type==='graph'&&e.kind==='wave')){sn.graphPeaks={};S.groups.forEach(g=>{const p=groupPeaks(g,200);if(p)sn.graphPeaks[g]=Array.from(p,v=>Math.round(v*1000)/1000);});}   /* waveform graphs in the player */
   /* parameter ranges of every FX module, so the player can apply knobs and modulation exactly like the Maker */
-  const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0];});});
+  const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0,q.unit==='Hz'?1:0];});});
   const est=estimate(o),dropped=set.stats.unusedSkipped;
   const lib={id:L.id,name:L.name,author:L.author,version:L.version,desc:L.desc,tags:L.tags,category:L.category,web:L.web,licence:L.licence,changelog:L.changelog,accent:L.accent};
   delete banner.bgImg;delete banner.logoImg;delete banner.iconImg;

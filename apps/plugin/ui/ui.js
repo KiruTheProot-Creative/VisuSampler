@@ -124,6 +124,8 @@ on('status',d=>{const was=st;st=d||{};
   if(st.currentId&&!st.loading&&(was.loading||was.currentId!==st.currentId||!uiFor))showUI();
   if(st.currentId&&(!cur||cur.id!==st.currentId)){const L=libs.find(x=>x.id===st.currentId);if(L){cur=L;setMode('play');}}
   if(cur&&document.body.dataset.mode==='play')renderDetail();});
+let hostTempo=null;
+on('tempo',d=>{hostTempo=d;if(uiReady&&d)frame.contentWindow.postMessage({t:'tempo',bpm:d.bpm,n:d.n,d:d.d},'*');});
 on('scope',d=>{if(uiReady&&d)frame.contentWindow.postMessage({t:'scope',d:d.d,sr:d.sr},'*');});
 on('meter',d=>{$('#voices').textContent=(d&&d.voices||0)+' voices';});
 on('volume',v=>{$('#vol').value=v;$('#vol2').value=v;});
@@ -172,7 +174,7 @@ async function showUI(){
 }
 addEventListener('message',e=>{
   if(e.source!==frame.contentWindow)return;const m=e.data||{};
-  if(m.t==='ready'){uiReady=true;if(uiMsg)frame.contentWindow.postMessage(uiMsg,'*');}
+  if(m.t==='ready'){uiReady=true;if(uiMsg)frame.contentWindow.postMessage(uiMsg,'*');if(hostTempo)frame.contentWindow.postMessage({t:'tempo',bpm:hostTempo.bpm,n:hostTempo.n,d:hostTempo.d},'*');}
   else if(m.t==='list'&&m.index>=0){if(st.list!==m.index){st.list=m.index;call('setList',m.index);}}
   else if(m.t==='patch'&&m.index>=0){call('setPatch',m.layer|0,m.index);}
   else if(m.t==='listB'&&m.index!=null){if(st.listB!==m.index){st.listB=m.index;call('setListB',m.index);}}

@@ -109,3 +109,29 @@ fmtPar=function(q,v){return q.opts?q.opts[clamp(Math.round(v),0,q.opts.length-1)
 
 /* Hz parameters with a wide range follow the ear (log scale) for knobs, macros and modulation */
 Object.values(FXT).forEach(d=>(d.params||[]).forEach(q=>{if(q.unit==='Hz'&&q.min>0&&q.max/q.min>=50&&!q.opts)q.log=1;}));
+
+/* ---- "Sync to tempo" (an effect setting): its time and rate parameters step through note values at the tempo ----
+   In the player the tempo is the DAW's; in the Maker it is the project's BPM. Same list as the engine (Fx.cpp kNote). */
+Object.values(FXT).forEach(d=>(d.params||[]).forEach(q=>{if(q.k==='rate'&&q.unit==='Hz'&&!q.opts)q.sync=1;}));
+const NOTE_SYNC=[['1/64',.0625],['1/32T',1/12],['1/32',.125],['1/16T',1/6],['1/16',.25],['1/8T',1/3],['1/16.',.375],['1/8',.5],['1/4T',2/3],['1/8.',.75],['1/4',1],['1/2T',4/3],['1/4.',1.5],['1/2',2],['1/2.',3],['1 bar',-1],['2 bars',-2],['4 bars',-4]];
+const noteBeatsOf=i=>{const b=NOTE_SYNC[i][1];return b>0?b:-b*barBeats(S.sig);};
+const fxSynced=(n,q)=>!!(n&&n.sync&&q.sync);
+const fxHasSync=n=>FXT[n.type].params.some(q=>q.sync);
+/* which note a synced parameter is on (rates count from slow to fast, so turning up still means faster) */
+function syncIdx(n,q,nm){const i=clamp(Math.round(nm*(NOTE_SYNC.length-1)),0,NOTE_SYNC.length-1);return q.unit==='Hz'?NOTE_SYNC.length-1-i:i;}
+const syncValue=(q,i)=>{const sec=noteBeatsOf(i)*60/Math.max(1,S.bpm||120);return q.unit==='Hz'?1/sec:sec*1000;};
+/* a synced parameter starts on the note closest to where it was */
+function fxSyncInit(n){
+  n.ps=n.ps||{};
+  FXT[n.type].params.forEach(q=>{if(!q.sync||n.ps[q.k]!=null)return;
+    let best=0,bd=1e9;for(let i=0;i<NOTE_SYNC.length;i++){const v=syncValue(q,i),d=Math.abs(Math.log(v/Math.max(1e-6,n.p[q.k])));if(d<bd){bd=d;best=i;}}
+    const ix=q.unit==='Hz'?NOTE_SYNC.length-1-best:best;n.ps[q.k]=ix/(NOTE_SYNC.length-1);});
+}
+{const pn0=paramNorm;paramNorm=function(n,q){if(fxSynced(n,q)&&!(n.tag[q.k]&&tagById(n.tag[q.k])))return n.ps&&n.ps[q.k]!=null?n.ps[q.k]:.5;return pn0(n,q);};}
+{const pr0=paramReal;paramReal=function(g,n,q,t,wantMod){
+  if(!fxSynced(n,q))return pr0(g,n,q,t,wantMod);
+  let nm=paramNorm(n,q),mod=false;
+  if(wantMod!==false)g.cables.forEach(c=>{if(c.to.n===n.id&&c.to.p==='p:'+q.k){const s=nodeById(g,c.from.n);if(s){nm+=s.type==='macro'?modOut(g,s,t)*(c.amt/100):(modOut(g,s,t)-.5)*2*(c.amt/100);mod=true;}}});
+  const i=syncIdx(n,q,clamp(nm,0,1));return{v:syncValue(q,i),mod,note:NOTE_SYNC[i][0]};
+};}
+const fmtParR=(q,r)=>r&&r.note?r.note+' · '+fmtPar(q,r.v):fmtPar(q,r.v);

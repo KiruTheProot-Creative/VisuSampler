@@ -8,7 +8,7 @@ function parRowHTML(g,n,q,stack){
   return '<div class="fxp'+(tg?' tagged':'')+(r.mod?' modd':'')+'" data-k="'+q.k+'">'+port
     +'<span class="pl">'+q.label+'</span>'
     +'<input type="range" class="pr" min="0" max="1000" value="'+Math.round(norm*1000)+'" data-pk="'+q.k+'" data-n="'+n.id+'"'+(tg?' disabled':'')+' aria-label="'+esc(n.name+' '+q.label)+'">'
-    +'<output class="pv">'+fmtPar(q,r.v)+'</output></div>';
+    +'<output class="pv">'+fmtParR(q,r)+'</output></div>';
 }
 function nodeHTML(g,n,an){
   const d=FXT[n.type],cls=['fxn','k-'+d.kind];if(d.pedal||n.skin==='pedal')cls.push('pedal');
@@ -66,6 +66,8 @@ function fxInspHTML(){
   const d=FXT[n.type];
   let h='<div class="phead"><input type="text" class="pname" data-fn="name" value="'+esc(n.name)+'" aria-label="Node name"><span class="badge">'+d.label+'</span></div><p class="hint">'+d.hint+'</p>';
   if(d.sample){const cur=(n.s&&n.s.ir)||'';h+=sec('Impulse file','<label class="f"><span>Sample</span><select data-fn="ir" aria-label="Impulse sample"><option value="">— none —</option>'+S.samples.map(s=>'<option value="'+s.id+'"'+(s.id===cur?' selected':'')+'>'+esc(s.name)+'</option>').join('')+'</select></label><p class="hint">Import the impulse (a recording of a room or a cabinet) in the Samples tab. It does not need to be mapped; it is packed into the library because this node uses it.</p>');}
+  if(fxHasSync(n))h+='<label class="f chk"><input type="checkbox" data-fn="sync"'+(n.sync?' checked':'')+'><span>Sync to tempo</span></label>'
+    +'<p class="hint">'+(n.sync?'Time and rate step through note values (1/64 to 4 bars, with dotted and triplet ones) at the tempo: the DAW\'s in the player, '+(S.bpm||120)+' BPM here. A knob linked to them steps through the notes too.':'Turn on to set time and rate in note values that follow the song\'s tempo.')+'</p>';
   if(d.kind==='fx'&&!d.pedal)h+='<label class="f chk"><input type="checkbox" data-fn="skin"'+(n.skin==='pedal'?' checked':'')+'><span>Show as a pedal</span></label>';
   if(d.params.length){
     h+=sec('Link parameters to tags',d.params.map(q=>'<label class="f"><span>'+q.label+'</span><select data-fn="tag" data-k="'+q.k+'" aria-label="Tag for '+q.label+'"><option value="">— set by hand —</option>'+S.tags.filter(t=>t.kind!==undefined).map(t=>'<option value="'+t.id+'"'+(n.tag[q.k]===t.id?' selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select></label>').join('')
@@ -122,7 +124,7 @@ function fxRefreshParams(){
     const q=FXT[n.type].params.find(x=>x.k===row.dataset.k); if(!q) return;
     const r=parReal(g,n,q,t),tg=n.tag[q.k]&&tagById(n.tag[q.k]);
     const rng=$('.pr',row); if(rng&&document.activeElement!==rng) rng.value=Math.round((tg?tg.value:normOf(q,r.v))*1000);
-    $('.pv',row).textContent=fmtPar(q,r.v); row.classList.toggle('modd',!!r.mod);
+    $('.pv',row).textContent=fmtParR(q,r); row.classList.toggle('modd',!!r.mod);
   });
   S.fx.an=fxAnalyze(g); fxReport();
 }

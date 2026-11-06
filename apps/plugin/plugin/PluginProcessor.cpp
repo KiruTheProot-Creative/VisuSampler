@@ -363,6 +363,13 @@ void VisuProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuf
     if (panicRequest_.exchange(false)) engine_.allNotesOff();
     for (int i = 0; i < kMacros; ++i) if (slotDirty_[i].exchange(false)) engine_.setTagIndex(slotTagIndex_[i].load(), slotValue_[i].load());
     keyboardState.processNextMidiBuffer(midi, 0, n, true);
+    // the host's tempo and time signature drive tempo-synced effects and LFOs (no tempo from the host: the library's own)
+    if (auto* ph = getPlayHead()) if (auto pos = ph->getPosition()) {
+        double bpm = 0; int sn = 4, sd = 4;
+        if (auto b = pos->getBpm()) bpm = *b;
+        if (auto ts = pos->getTimeSignature()) { sn = ts->numerator; sd = ts->denominator; }
+        if (bpm > 0) { engine_.setHostTempo(bpm, sn, sd); hostBpm_.store(bpm); hostSig_.store(sn * 100 + sd); }
+    }
     float* L = buffer.getWritePointer(0);
     float* R = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : L;
     int pos = 0;

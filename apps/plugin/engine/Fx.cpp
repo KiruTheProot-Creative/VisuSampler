@@ -107,7 +107,7 @@ static inline void panStereo(float pan, float& l, float& r) {   // Web Audio Ste
 }
 
 /* ================= nodes ================= */
-struct ParamInfo { std::string key; float min = 0, max = 1, raw = 0, real = 0; bool opt = false, sync = false, known = false, log = false; int tag = -1; };
+struct ParamInfo { std::string key; float min = 0, max = 1, raw = 0, real = 0; bool opt = false, sync = false, known = false, log = false, syncOn = false, hz = false; float ps = -1; int tag = -1; };
 struct ModLink { int param; int src; float amt; };
 struct Cable { int src; std::string srcPort; std::string dstPort; };
 
@@ -761,6 +761,12 @@ static std::unique_ptr<Module> makeModule(Node& nd, const Library& lib) {
 /* ================= parameter evaluation (same rules as the Maker's paramReal) ================= */
 static const float kSync[] = { .125f, 1.f / 6, .25f, 1.f / 3, .5f, .75f, 2.f / 3, 1.f, 1.5f, 2.f, 4.f };
 static const float kSyncBar[] = { .125f, .25f, .5f, 1.f, 2.f, 4.f };
+/* "Sync to tempo" on an effect: its time and rate parameters step through these note values (in quarter notes; the last
+   three are 1, 2 and 4 bars of the time signature). Times go short to long as the knob rises, rates go slow to fast.
+   Same list as the Maker's NOTE_SYNC (p300). */
+static const float kNote[] = { .0625f, 1.f / 12, .125f, 1.f / 6, .25f, 1.f / 3, .375f, .5f, 2.f / 3, .75f, 1.f, 4.f / 3, 1.5f, 2.f, 3.f };
+constexpr int kNoteN = 18;
+double noteBeats(int i, int sigN, int sigD) { const double bar = sigN * 4.0 / sigD; return i < 15 ? kNote[i] : bar * (i == 15 ? 1 : i == 16 ? 2 : 4); }
 
 static float modOut(Node& m, Control& c, double blockSec, const std::vector<TagDef>& tags);
 
@@ -772,12 +778,21 @@ static void evalParams(Node& nd, Control& c, const std::vector<TagDef>& tags, co
         ParamInfo& p = nd.params[pi];
         if (!p.known) { p.real = p.raw; continue; }
         float norm;
+        if (p.syncOn) {   // note values that follow the tempo (the host's in the player)
+            norm = p.tag >= 0 && p.tag < c.numTags ? c.tags[p.tag].load(std::memory_order_relaxed) : (p.ps >= 0 ? p.ps : .5f);
+            for (auto& m : nd.mods) if (m.param == (int) pi) { const Node& src = *all[(size_t) m.src];
+                norm += src.type == "macro" ? src.modValue * (m.amt / 100.f) : (src.modValue - .5f) * 2 * (m.amt / 100.f); }
+            int i = std::min(kNoteN - 1, std::max(0, (int) std::lround(clampf(norm, 0, 1) * (kNoteN - 1))));
+            if (p.hz) i = kNoteN - 1 - i;
+            const double beats = noteBeats(i, c.sigN, c.sigD), sec = beats * 60.0 / std::max(1.0, c.bpm);
+            p.real = (float) (p.hz ? 1.0 / sec : sec * 1000.0); continue;
+        }
         if (p.tag >= 0 && p.tag < c.numTags) {
             const float tv = c.tags[p.tag].load(std::memory_order_relaxed);
             const TagDef& td = tags[(size_t) p.tag];
             if (p.sync && td.kind == "sync") {
                 const bool bar = td.basis == "bar"; const int cnt = bar ? 6 : 11, i = std::min(cnt - 1, std::max(0, (int) std::lround(tv * (cnt - 1))));
-                const double beats = bar ? kSyncBar[i] * (c.sigN * 4.0 / c.sigD) : kSync[i]; p.real = (float) (beats * 60000.0 / c.bpm); continue;
+                const double beats = bar ? kSyncBar[i] * (c.sigN * 4.0 / c.sigD) : kSync[i]; const double ms = beats * 60000.0 / c.bpm; p.real = (float) (p.hz ? 1000.0 / std::max(1.0, ms) : ms); continue;
             }
             norm = tv;
         } else if (p.log) norm = std::log(std::max(p.min, p.raw) / p.min) / std::log(p.max / p.min);
@@ -793,8 +808,7 @@ static void evalParams(Node& nd, Control& c, const std::vector<TagDef>& tags, co
 
 static float lfoValue(Node& m, Control& c) {
     const int ri = m.idx("rate"), si = m.idx("shape"), di = m.idx("depth"), ti = m.idx("retrig");
-    float hz = m.P(ri, 1); const ParamInfo* rp = ri >= 0 ? &m.params[(size_t) ri] : nullptr;
-    if (rp && rp->sync && rp->tag >= 0) hz = 1000.f / std::max(1.f, hz);
+    float hz = m.P(ri, 1);
     const double tt = (m.P(ti, 0) > .5f && c.tOn >= 0) ? c.time - c.tOn : c.time, ph = std::fmod(tt * hz, 1.0);
     const int sh = (int) std::lround(m.P(si, 0)); float w;
     if (sh == 1) w = (float) (1 - std::fabs(ph * 4 - 2)); else if (sh == 2) w = (float) (ph * 2 - 1); else if (sh == 3) w = ph < .5 ? 1.f : -1.f;
@@ -854,7 +868,8 @@ static std::unique_ptr<Graph> buildGraph(const Json& g, const Json& ranges, cons
         for (auto& kv : nj["p"].o) {
             ParamInfo p; p.key = kv.first; p.raw = (float) kv.second.num(); p.real = p.raw;
             const Json& r = rr[kv.first.c_str()];
-            if (r.size() >= 2) { p.known = true; p.min = (float) r[(size_t) 0].num(); p.max = (float) r[(size_t) 1].num(); p.opt = r[(size_t) 2].num() > .5; p.sync = r[(size_t) 3].num() > .5; p.log = r.size() > 4 && r[(size_t) 4].num() > .5 && p.min > 0; }
+            if (r.size() >= 2) { p.known = true; p.min = (float) r[(size_t) 0].num(); p.max = (float) r[(size_t) 1].num(); p.opt = r[(size_t) 2].num() > .5; p.sync = r[(size_t) 3].num() > .5; p.log = r.size() > 4 && r[(size_t) 4].num() > .5 && p.min > 0; p.hz = r.size() > 5 && r[(size_t) 5].num() > .5; }
+            if (p.sync && nj["sync"].boolean(false)) { p.syncOn = true; p.ps = (float) nj["ps"][kv.first.c_str()].num(-1); }
             const std::string tid = nj["tag"][kv.first.c_str()].str();
             if (!tid.empty()) for (size_t k = 0; k < tags.size(); ++k) if (tags[k].id == tid) p.tag = (int) k;
             nd->params.push_back(p);
