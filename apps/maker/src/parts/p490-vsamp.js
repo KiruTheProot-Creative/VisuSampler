@@ -16,7 +16,7 @@ function libraryFeatures(set){
   S.samples.forEach(s=>{const sm=smOf(s);if(S.zones.some(z=>z.sample===s.id)){add(sm.mode);if(sm.uni.on)add('unison');}});
   set.zones.forEach(z=>{const g=gcfg(z.group);if(z.loop&&z.loop.on){add('loop');if(z.loop.pp)add('pingpong');}if(z.rev)add('reverse');if(z.vstart)add('velstart');
     if(z.fadeLo||z.fadeHi||z.vfadeLo||z.vfadeHi)add('crossfade');if(z.hum&&(z.hum.tune||z.hum.vol||z.hum.start))add('humanize');
-    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.links&&Object.keys(g.links).length)add('grouplinks');if((g.vfilter&&g.vfilter.on)||(g.vlfo&&g.vlfo.on))add('vfilter');if(g.voices)add('voicelimit');});if(layerBOn())add('layers');if(patchModeOn())add('grouppatches');if(set.zones.some(z=>z.trig==='release'))add('releasetrigger');
+    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.links&&Object.keys(g.links).length)add('grouplinks');if((g.vfilter&&g.vfilter.on)||(g.vlfo&&g.vlfo.on))add('vfilter');if(g.voices)add('voicelimit');});if(layerBOn())add('layers');if(patchModeOn())add('grouppatches');if(set.zones.some(z=>z.trig==='release'))add('releasetrigger');if(S.groups.some(g=>S.gset[g]&&S.gset[g].play&&S.gset[g].play.mode))add('groupmono');
   if(S.lists.length)add('lists');if(S.els.length)add('ui');
   Object.values(S.fx.graphs).forEach(g=>g.nodes.forEach(n=>{if(FXT[n.type]&&FXT[n.type].kind!=='io')add('fx:'+n.type);}));
   return [...f].sort();

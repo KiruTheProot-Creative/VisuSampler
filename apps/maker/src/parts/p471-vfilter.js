@@ -44,3 +44,19 @@ $('#snInsGroup').addEventListener('change',e=>{
     c.vfilter=f;}
   touchMap();$('#snInsGroup').innerHTML=snGroupHTML();
 });
+
+/* ---- how a group plays: like the Playing settings, or its own poly / mono / legato with its own glide ---- */
+function snPlayModeHTML(c){
+  const p=c.play||{},m=p.mode||'',pl=playOf(),glob=pl.mono?(pl.legato?'legato':'mono'):'poly';
+  return '<div class="snenv"><label class="f"><span>Plays</span><select data-gpm="mode">'
+    +mopt([['','Like the Playing settings ('+glob+')'],['poly','Poly (chords)'],['mono','Mono (one note, restarts)'],['legato','Legato (one note, slides)']],m)+'</select></label>'
+    +(m==='mono'||m==='legato'?'<label class="f"><span>Glide</span><input type="number" data-gpm="glide" min="0" max="5000" step="1" value="'+(p.glide||0)+'"><em class="sfx">ms</em></label>':'')
+    +(m?'<p class="hint">'+(m==='poly'?'This '+(patchModeOn()?'patch':'group')+' plays chords even when the rest is mono.':'This '+(patchModeOn()?'patch':'group')+' keeps its own held keys: other groups are not cut off by it.')+'</p>':'')+'</div>';
+}
+$('#snInsGroup').addEventListener('change',e=>{
+  const t=e.target,k=t.dataset.gpm,g=S.map.group;if(!k||!g)return;
+  const c=gcfg(g),p=Object.assign({},c.play||{});
+  if(k==='mode'){if(t.value)p.mode=t.value;else delete p.mode;}else{const v=parseFloat(t.value);p.glide=isFinite(v)?Math.max(0,Math.min(5000,v)):0;}
+  if(p.mode)c.play=p;else delete c.play;
+  touchMap();$('#snInsGroup').innerHTML=snGroupHTML();
+});

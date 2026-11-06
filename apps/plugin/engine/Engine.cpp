@@ -32,7 +32,7 @@ void Engine::adopt() {
     for (auto& v : voices_) endVoice(v);
     lib_ = p;
     for (auto& r : rr_) r = 0;
-    stackSize_ = 0; monoNote_ = lastNote_ = -1;
+    mono_ = Mono(); for (auto& m : monoG_) m = Mono();
     active_.store(0);
 }
 
@@ -194,7 +194,7 @@ bool Engine::groupAllowed(int g, int layer) const {
     return std::find(gs.begin(), gs.end(), g) != gs.end();
 }
 
-float Engine::glideStepFor(float semis) const { const float t = lib_ ? lib_->play.glideMs : 0.f; return t > 0 ? std::fabs(semis) / (float) (t / 1000.0 * sr_) : 0.f; }
+float Engine::glideStepFor(float semis) const { const float t = glideNow_; return t > 0 ? std::fabs(semis) / (float) (t / 1000.0 * sr_) : 0.f; }
 int Engine::limit() const { int l = lib_ && lib_->play.maxVoices > 0 ? std::min(kMaxVoices, lib_->play.maxVoices) : kMaxVoices; return std::max(1, std::min(l, guard_.load())); }
 int Engine::sounding() const { int n = 0; for (auto& v : voices_) if (v.on && !v.stolen) ++n; return n; }
 bool Engine::stealOne() {
@@ -228,24 +228,45 @@ void Engine::noteOn(int note, int vel) {
     vel = std::min(127, std::max(1, vel));
     heldNotes_[note] = true; noteVel_[note] = vel;
     ctl_.vel = (float) vel; ctl_.key = (float) note; ctl_.gate = true; ctl_.tOn = ctl_.time;
-    if (!lib_->play.mono) { startNote(note, vel, 0, nullptr, 0); return; }
-    // mono: remember the order of held keys, so letting go returns to the previous one
-    int k = 0; for (int i = 0; i < stackSize_; ++i) if (stack_[i] != note) stack_[k++] = stack_[i];
-    stackSize_ = k; if (stackSize_ < 128) stack_[stackSize_++] = note;
-    const int previous = monoNote_ >= 0 ? monoNote_ : lastNote_;
-    monoNote_ = note; monoVel_ = vel;
-    monoNoteOn(note, vel, previous);
+    // groups with their own way of playing
+    if (lib_->anyOwnMode) for (int g = 0; g < (int) lib_->groups.size(); ++g) {
+        const GroupCfg& gc = lib_->groups[(size_t) g]; if (!gc.pmode) continue;
+        if (gc.pmode == 1 || g >= kMonoGroups) { glideNow_ = 0; startNote(note, vel, 0, nullptr, 0, g); continue; }
+        monoPress(monoG_[g], note, vel, g, gc.pmode == 3, gc.glideMs);
+    }
+    // everything else follows the Playing settings
+    if (!lib_->play.mono) { glideNow_ = 0; startNote(note, vel, 0, nullptr, 0, -1); return; }
+    monoPress(mono_, note, vel, -1, lib_->play.legato, lib_->play.glideMs);
+}
+// mono: remember the order of held keys, so letting go returns to the previous one
+void Engine::monoPress(Mono& m, int note, int vel, int scope, bool legato, float glideMs) {
+    int k = 0; for (int i = 0; i < m.size; ++i) if (m.stack[i] != note) m.stack[k++] = m.stack[i];
+    m.size = k; if (m.size < 128) m.stack[m.size++] = note;
+    const int previous = m.note >= 0 ? m.note : m.last;
+    m.note = note; m.vel = vel;
+    monoNoteOn(note, vel, previous, scope, legato, glideMs);
+}
+bool Engine::monoRelease(Mono& m, int note, int scope, bool legato, float glideMs) {
+    int k = 0; for (int i = 0; i < m.size; ++i) if (m.stack[i] != note) m.stack[k++] = m.stack[i];
+    m.size = k;
+    if (note == m.note && !sustain_ && m.size > 0) {   // return to the key still held
+        const int back = m.stack[m.size - 1], prev = m.note; m.note = back;
+        ctl_.gate = true; ctl_.key = (float) back;
+        monoNoteOn(back, m.vel, prev, scope, legato, glideMs); return true;
+    }
+    if (note == m.note && m.size == 0) { m.last = m.note; m.note = -1; }
+    return false;
 }
 
-void Engine::monoNoteOn(int note, int vel, int previous) {
-    const bool glide = lib_->play.glideMs > 0;
+void Engine::monoNoteOn(int note, int vel, int previous, int scope, bool legato, float glideMs) {
+    const bool glide = glideMs > 0; glideNow_ = glideMs;
     float from = (float) previous; bool overlapping = false;
-    for (auto& v : voices_) if (v.on && !v.stolen && !v.releasing && !v.fromRelease && previous >= 0 && v.note == previous) { overlapping = true; from = (float) v.note + v.glide; break; }
-    if (lib_->play.legato && overlapping) {
+    for (auto& v : voices_) if (v.on && !v.stolen && !v.releasing && !v.fromRelease && previous >= 0 && v.note == previous && inScope(v.group, scope)) { overlapping = true; from = (float) v.note + v.glide; break; }
+    if (legato && overlapping) {
         // legato: voices whose zone also plays the new note just change pitch, no restart
         const Zone* handled[64]; int nh = 0;
         for (auto& v : voices_) {
-            if (!v.on || v.stolen || v.releasing || v.fromRelease || v.note != previous) continue;
+            if (!v.on || v.stolen || v.releasing || v.fromRelease || v.note != previous || !inScope(v.group, scope)) continue;
             const Zone& z = *v.zone;
             if (note >= z.lo && note <= z.hi && vel >= z.vlo && vel <= z.vhi) {
                 const float cur = (float) v.note + v.glide;
@@ -255,23 +276,23 @@ void Engine::monoNoteOn(int note, int vel, int previous) {
                 if (!seen && nh < 64) handled[nh++] = &z;
             } else kill(v, true);   // a different zone takes over
         }
-        startNote(note, vel, glide ? from - (float) note : 0.f, handled, nh);
+        startNote(note, vel, glide ? from - (float) note : 0.f, handled, nh, scope);
         return;
     }
     // retrigger: fade what is sounding and start the new note (gliding from the old pitch)
-    for (auto& v : voices_) if (v.on && !v.stolen && !v.fromRelease) kill(v, true);
-    startNote(note, vel, glide && previous >= 0 ? from - (float) note : 0.f, nullptr, 0);
+    for (auto& v : voices_) if (v.on && !v.stolen && !v.fromRelease && inScope(v.group, scope)) kill(v, true);
+    startNote(note, vel, glide && previous >= 0 ? from - (float) note : 0.f, nullptr, 0, scope);
 }
 
-void Engine::startNote(int note, int vel, float glideFrom, const Zone* const* skip, int nskip) {
-    const int n = layerCount(); for (int l = 0; l < n; ++l) startNoteLayer(note, vel, glideFrom, skip, nskip, l);
+void Engine::startNote(int note, int vel, float glideFrom, const Zone* const* skip, int nskip, int scope) {
+    const int n = layerCount(); for (int l = 0; l < n; ++l) startNoteLayer(note, vel, glideFrom, skip, nskip, l, scope);
 }
-void Engine::startNoteLayer(int note, int vel, float glideFrom, const Zone* const* skip, int nskip, int layer) {
+void Engine::startNoteLayer(int note, int vel, float glideFrom, const Zone* const* skip, int nskip, int layer, int scope) {
     const std::vector<int>& list = lib_->byNote[(size_t) note];
     int hits[64]; int nh = 0;
     for (int zi : list) {
         const Zone& z = lib_->zones[(size_t) zi]; const GroupCfg& g = lib_->groups[(size_t) z.group];
-        if (z.mute || g.mute || g.mode == GroupMode::Release || z.onRelease || vel < z.vlo || vel > z.vhi || (lib_->anySolo && !g.solo) || (lib_->anyZoneSolo && !z.solo) || !groupAllowed(z.group, layer)) continue;
+        if (z.mute || g.mute || g.mode == GroupMode::Release || z.onRelease || vel < z.vlo || vel > z.vhi || (lib_->anySolo && !g.solo) || (lib_->anyZoneSolo && !z.solo) || !groupAllowed(z.group, layer) || !inScope(z.group, scope)) continue;
         if (nh < 64) hits[nh++] = zi;
     }
     // round robin: one sequence per group per hit
@@ -307,22 +328,20 @@ void Engine::noteOff(int note) {
     if (ctl_.gate) { ctl_.gate = false; ctl_.tOff = ctl_.time; }
     if (!lib_ || note < 0 || note > 127) return;
     heldNotes_[note] = false;
-    if (lib_->play.mono) {
-        int k = 0; for (int i = 0; i < stackSize_; ++i) if (stack_[i] != note) stack_[k++] = stack_[i];
-        stackSize_ = k;
-        if (note == monoNote_ && !sustain_ && stackSize_ > 0) {   // return to the key still held
-            const int back = stack_[stackSize_ - 1], prev = monoNote_; monoNote_ = back;
-            ctl_.gate = true; ctl_.key = (float) back;
-            monoNoteOn(back, monoVel_, prev); return;
-        }
-        if (note == monoNote_ && stackSize_ == 0) { lastNote_ = monoNote_; monoNote_ = -1; }
+    // mono scopes that went back to a key still held: their voices moved on, and no release samples play for them
+    bool backGlobal = false, backG[kMonoGroups] = {};
+    if (lib_->anyOwnMode) for (int g = 0; g < (int) lib_->groups.size() && g < kMonoGroups; ++g) {
+        const GroupCfg& gc = lib_->groups[(size_t) g]; if (gc.pmode < 2) continue;
+        backG[g] = monoRelease(monoG_[g], note, g, gc.pmode == 3, gc.glideMs);
     }
+    if (lib_->play.mono) backGlobal = monoRelease(mono_, note, -1, lib_->play.legato, lib_->play.glideMs);
+    auto wentBack = [&](int group) { const int pm = lib_->groups[(size_t) group].pmode; return pm >= 2 ? (group < kMonoGroups && backG[group]) : pm == 0 && backGlobal; };
     if (sustain_) { for (auto& v : voices_) if (v.on && !v.fromRelease && v.note == note) v.held = true; return; }
-    for (auto& v : voices_) if (v.on && !v.releasing && !v.fromRelease && v.note == note && !v.oneshot) kill(v, false);
+    for (auto& v : voices_) if (v.on && !v.releasing && !v.fromRelease && v.note == note && !v.oneshot && !wentBack(v.group)) kill(v, false);
     const int rv = noteVel_[note] > 0 ? noteVel_[note] : 100;   // release samples follow how hard the key was played
     for (int l = 0, nl = layerCount(); l < nl; ++l) for (int zi : lib_->byNote[(size_t) note]) {
         const Zone& z = lib_->zones[(size_t) zi];
-        if ((lib_->groups[(size_t) z.group].mode == GroupMode::Release || z.onRelease) && !z.mute && rv >= z.vlo && rv <= z.vhi && !lib_->groups[(size_t) z.group].mute && groupAllowed(z.group, l)) startZone(z, note, rv, true, 0, l);
+        if ((lib_->groups[(size_t) z.group].mode == GroupMode::Release || z.onRelease) && !z.mute && rv >= z.vlo && rv <= z.vhi && !lib_->groups[(size_t) z.group].mute && groupAllowed(z.group, l) && !wentBack(z.group)) startZone(z, note, rv, true, 0, l);
     }
 }
 
@@ -331,7 +350,7 @@ void Engine::sustain(bool down) {
     sustain_ = down;
     if (!down) for (auto& v : voices_) if (v.on && v.held) { v.held = false; if (!heldNotes_[v.note] && !v.oneshot) kill(v, false); }
 }
-void Engine::allNotesOff() { adopt(); for (auto& v : voices_) if (v.on) kill(v, true); for (auto& h : heldNotes_) h = false; sustain_ = false; stackSize_ = 0; monoNote_ = -1; }
+void Engine::allNotesOff() { adopt(); for (auto& v : voices_) if (v.on) kill(v, true); for (auto& h : heldNotes_) h = false; sustain_ = false; mono_ = Mono(); for (auto& m : monoG_) m = Mono(); }
 
 static inline double hash01(double n) { const double x = std::sin(n * 127.1 + 311.7) * 43758.5453; return x - std::floor(x); }
 static inline float cubicAt(const float* src, int base, int fl, double ph) {   // one cycle of a wavetable frame, wrapping

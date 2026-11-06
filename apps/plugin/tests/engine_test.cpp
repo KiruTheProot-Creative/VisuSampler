@@ -104,6 +104,25 @@ static void testPlay() {
         CHECK(before == 20 && e.activeVoices() <= 16 && e.voiceLimit() <= 16, "CPU guard: under load the voice limit drops (%d -> %d voices)", before, e.activeVoices());
         for (int i = 0; i < 400; ++i) e.reportLoad(.2f);
         CHECK(e.voiceLimit() == Engine::kMaxVoices, "CPU guard recovers when the load drops (%d)", e.voiceLimit()); }
+    // a group with its own way of playing: mono or legato on its own, or poly while the rest is mono
+    int tg = -1; for (auto& z : lib->zones) if (72 >= z.lo && 72 <= z.hi && z.audio.loop) { tg = z.group; break; }
+    if (tg < 0) { CHECK(false, "the looped zone's group"); }
+    else {
+        auto own = [&](int mode, float glide, bool globalMono) { lib->play = {}; lib->play.mono = globalMono; for (auto& g : lib->groups) { g.pmode = 0; g.glideMs = 0; }
+            lib->groups[(size_t) tg].pmode = mode; lib->groups[(size_t) tg].glideMs = glide; lib->anyOwnMode = mode != 0; };
+        {   own(2, 0, false); auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(44100); e.setLibrary(lib);
+            e.noteOn(72, 110); hz(e, .05); e.noteOn(76, 110); hz(e, .1); const int v = e.activeVoices(); const double f = hz(e, .2);
+            e.noteOff(76); hz(e, .02); const double back = hz(e, .2);
+            CHECK(v == 1 && std::fabs(f / (base * std::pow(2.0, 4 / 12.0)) - 1) < .03 && std::fabs(back / base - 1) < .03, "a group set to mono plays one note while the library is poly (%d voice, %.0f Hz, back to %.0f Hz)", v, f, back); }
+        {   own(3, 300, false); auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(44100); e.setLibrary(lib);
+            e.noteOn(72, 110); hz(e, .05); e.noteOn(79, 110); std::vector<float> L(64), R(64); e.render(L.data(), R.data(), 64); const int v = e.activeVoices();
+            const double early = hz(e, .04); hz(e, .3); const double late = hz(e, .1);
+            CHECK(v == 1 && early < late * .85 && std::fabs(late / (base * std::pow(2.0, 7 / 12.0)) - 1) < .04, "a group set to legato with its own glide slides without restarting (%d voice, %.0f then %.0f Hz)", v, early, late); }
+        {   own(1, 0, true); auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(44100); e.setLibrary(lib);
+            e.noteOn(72, 110); e.noteOn(76, 110); hz(e, .1);
+            CHECK(e.activeVoices() == 2, "a group set to poly plays chords while the rest of the library is mono (%d voices)", e.activeVoices()); }
+        own(0, 0, false);
+    }
     lib->play = {};
 }
 

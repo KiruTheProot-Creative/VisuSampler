@@ -4911,7 +4911,7 @@ function snGroupHTML(){
     +'<label class="f"><span>Name</span><input type="text" data-sg="name" value="'+esc(g)+'"></label>'
     +'<label class="f"><span>Plays</span><select data-sg="mode">'+mopt(MODES,c.mode)+'</select></label>'
     +nf('Volume','data-sg="vol"',c.vol,-48,24,.5,'dB')+nf('Pan','data-sg="pan"',c.pan,-100,100,1,'L–R')+nf('Tune','data-sg="tune"',c.tune,-2400,2400,1,'cents')
-    +snLinksHTML(c)+snEnvHTML(c)+snVfHTML(c)
+    +snPlayModeHTML(c)+snLinksHTML(c)+snEnvHTML(c)+snVfHTML(c)
     +'<div class="snmores"><details class="snmore"><summary>More</summary><div>'
     +nf('Choke group','data-sg="choke"',c.choke,0,999,1)+'<p class="hint">Groups with the same choke number cut each other off, like open and closed hi-hats.</p>'
     +nf('Voice limit','data-sg="voices"',c.voices,0,9999,1)+'<p class="hint">0 means unlimited.</p>'
@@ -5051,6 +5051,22 @@ $('#snInsGroup').addEventListener('change',e=>{
     else if(k==='on')f.on=t.checked;else if(k==='type')f.type=t.value;
     else{const v=parseFloat(t.value);f[k]=isFinite(v)?Math.max(+t.min,Math.min(+t.max,v)):VF_DEF[k];}
     c.vfilter=f;}
+  touchMap();$('#snInsGroup').innerHTML=snGroupHTML();
+});
+
+/* ---- how a group plays: like the Playing settings, or its own poly / mono / legato with its own glide ---- */
+function snPlayModeHTML(c){
+  const p=c.play||{},m=p.mode||'',pl=playOf(),glob=pl.mono?(pl.legato?'legato':'mono'):'poly';
+  return '<div class="snenv"><label class="f"><span>Plays</span><select data-gpm="mode">'
+    +mopt([['','Like the Playing settings ('+glob+')'],['poly','Poly (chords)'],['mono','Mono (one note, restarts)'],['legato','Legato (one note, slides)']],m)+'</select></label>'
+    +(m==='mono'||m==='legato'?'<label class="f"><span>Glide</span><input type="number" data-gpm="glide" min="0" max="5000" step="1" value="'+(p.glide||0)+'"><em class="sfx">ms</em></label>':'')
+    +(m?'<p class="hint">'+(m==='poly'?'This '+(patchModeOn()?'patch':'group')+' plays chords even when the rest is mono.':'This '+(patchModeOn()?'patch':'group')+' keeps its own held keys: other groups are not cut off by it.')+'</p>':'')+'</div>';
+}
+$('#snInsGroup').addEventListener('change',e=>{
+  const t=e.target,k=t.dataset.gpm,g=S.map.group;if(!k||!g)return;
+  const c=gcfg(g),p=Object.assign({},c.play||{});
+  if(k==='mode'){if(t.value)p.mode=t.value;else delete p.mode;}else{const v=parseFloat(t.value);p.glide=isFinite(v)?Math.max(0,Math.min(5000,v)):0;}
+  if(p.mode)c.play=p;else delete c.play;
   touchMap();$('#snInsGroup').innerHTML=snGroupHTML();
 });
 
@@ -5563,7 +5579,7 @@ function libraryFeatures(set){
   S.samples.forEach(s=>{const sm=smOf(s);if(S.zones.some(z=>z.sample===s.id)){add(sm.mode);if(sm.uni.on)add('unison');}});
   set.zones.forEach(z=>{const g=gcfg(z.group);if(z.loop&&z.loop.on){add('loop');if(z.loop.pp)add('pingpong');}if(z.rev)add('reverse');if(z.vstart)add('velstart');
     if(z.fadeLo||z.fadeHi||z.vfadeLo||z.vfadeHi)add('crossfade');if(z.hum&&(z.hum.tune||z.hum.vol||z.hum.start))add('humanize');
-    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.links&&Object.keys(g.links).length)add('grouplinks');if((g.vfilter&&g.vfilter.on)||(g.vlfo&&g.vlfo.on))add('vfilter');if(g.voices)add('voicelimit');});if(layerBOn())add('layers');if(patchModeOn())add('grouppatches');if(set.zones.some(z=>z.trig==='release'))add('releasetrigger');
+    if(/^rr/.test(g.mode))add('rr');if(g.mode==='release')add('release');if(g.choke)add('choke');if(g.env&&g.env.on)add('envelope');if(g.links&&Object.keys(g.links).length)add('grouplinks');if((g.vfilter&&g.vfilter.on)||(g.vlfo&&g.vlfo.on))add('vfilter');if(g.voices)add('voicelimit');});if(layerBOn())add('layers');if(patchModeOn())add('grouppatches');if(set.zones.some(z=>z.trig==='release'))add('releasetrigger');if(S.groups.some(g=>S.gset[g]&&S.gset[g].play&&S.gset[g].play.mode))add('groupmono');
   if(S.lists.length)add('lists');if(S.els.length)add('ui');
   Object.values(S.fx.graphs).forEach(g=>g.nodes.forEach(n=>{if(FXT[n.type]&&FXT[n.type].kind!=='io')add('fx:'+n.type);}));
   return [...f].sort();

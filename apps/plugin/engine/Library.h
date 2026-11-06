@@ -41,6 +41,8 @@ struct GroupCfg {
     // a linked value replaces the fixed one. Volume fades with equal power, and -60 dB or lower is silent.
     struct Link { int tag = -1; std::string tagId; float from = 0, to = 0; };
     Link lVol, lPan, lTune, lFine;
+    // how this group plays: 0 = like the Playing settings, 1 = poly, 2 = mono (retrigger), 3 = legato; glide in ms (mono/legato)
+    int pmode = 0; float glideMs = 0;
     // a filter per note: type, cutoff (Hz), resonance 0..1, key tracking 0..1, velocity and envelope in semitones, its own ADSR.
     // cutoff and resonance can follow knobs (tag 0..1 = 20 Hz..20 kHz, 0..100 %).
     struct VFilter { bool on = false; int type = 0; float cutoff = 8000, res = 0, key = 0, vel = 0, env = 0, a = 5, d = 300, s = 0, r = 300; Link cut, reso; } vf;   // type: 0 lp12, 1 lp24, 2 hp, 3 bp, 4 notch
@@ -105,6 +107,7 @@ public:
     GroupCfg layers[2];
     Interp projectInterp = Interp::Linear;
     // how the library plays (project.play): mono / legato / glide, pitch-bend range, voice limit and stealing
+    bool anyOwnMode = false;              // some group plays its own way (poly / mono / legato)
     struct Play { bool mono = false, legato = false, quietest = false; float glideMs = 0, bend = 2; int maxVoices = 0; } play;
     std::vector<std::string> features;    // what the file says it uses
     // for drawing the library's own interface in the plugin window

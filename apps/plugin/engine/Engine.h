@@ -80,11 +80,20 @@ private:
     void kill(Voice& v, bool fast);
     void endVoice(Voice& v);
     void startZone(const Zone& z, int note, int vel, bool fromRelease, float glideFrom = 0, int layer = 0);
-    void startNote(int note, int vel, float glideFrom, const Zone* const* skip, int nskip);
-    void startNoteLayer(int note, int vel, float glideFrom, const Zone* const* skip, int nskip, int layer);
+    // scope: -1 = the groups that follow the Playing settings, g >= 0 = only group g (it has its own mono/legato/poly)
+    void startNote(int note, int vel, float glideFrom, const Zone* const* skip, int nskip, int scope = -1);
+    void startNoteLayer(int note, int vel, float glideFrom, const Zone* const* skip, int nskip, int layer, int scope);
+    bool inScope(int group, int scope) const { return scope >= 0 ? group == scope : !lib_->anyOwnMode || lib_->groups[(size_t) group].pmode == 0; }
     int layerCount() const;   // 1, or 2 when layer B plays
     void voiceEnv(const Voice& v, float& a, float& d, float& s, float& r) const;   // the layer's envelope when it has one, else the group's
-    void monoNoteOn(int note, int vel, int previous);
+    void monoNoteOn(int note, int vel, int previous, int scope, bool legato, float glideMs);
+    // the held keys of one mono scope (the global one, or a group with its own mono/legato)
+    struct Mono { int stack[128] = {}; int size = 0, note = -1, last = -1, vel = 100; };
+    static constexpr int kMonoGroups = 64;
+    Mono monoG_[kMonoGroups];
+    void monoPress(Mono& m, int note, int vel, int scope, bool legato, float glideMs);
+    bool monoRelease(Mono& m, int note, int scope, bool legato, float glideMs);   // true: went back to a key still held
+    float glideNow_ = 0;   // glide time of the note being started
     bool stealOne();
     int limit() const;
     int sounding() const;
@@ -92,7 +101,7 @@ private:
     void groupEnv(int group, float& a, float& d, float& s, float& r) const;
     void groupLive(int group, float& gain, float& pan, float& semis) const;
     void layerLive(int layer, float& gain, float& pan, float& semis) const;   // the layer's knobs, added on top   // knob-driven group volume, pan and tuning   // live values (knobs included), A/D/R in ms
-    int stack_[128] = {}; int stackSize_ = 0, monoNote_ = -1, lastNote_ = -1, monoVel_ = 100;
+    Mono mono_;
     std::atomic<int> guard_{kMaxVoices};
     Interp interpFor(const Zone& z) const;
     float zoneGain(const Zone& z, int note, int vel) const;

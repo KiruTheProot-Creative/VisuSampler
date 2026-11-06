@@ -104,7 +104,7 @@ bool Library::readInfo(const std::string& path, LibraryInfo& info, std::string& 
 
 const std::vector<std::string>& supportedFeatures() {
     static const std::vector<std::string> s = { "sampler", "slicer", "loop", "pingpong", "reverse", "unison", "rr", "release", "choke",
-        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep", "granular", "wavetable", "envelope", "grouplinks", "vfilter", "layers", "grouppatches", "releasetrigger" };
+        "voicelimit", "crossfade", "velstart", "humanize", "lists", "mute-solo", "interp", "ui", "speedkeep", "granular", "wavetable", "envelope", "grouplinks", "vfilter", "layers", "grouppatches", "releasetrigger", "groupmono" };
     return s;
 }
 
@@ -222,6 +222,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
           const Json& o = j["vlfo"]; GroupCfg::VLfo& l = g.vl; l.on = o["on"].boolean(false); l.shape = o["shape"].str("sine") == "tri" ? 1 : 0;
           l.rate = (float) std::max(.01, o["rate"].num(5)); l.cut = (float) o["cut"].num(0); l.pitch = (float) o["pitch"].num(0); l.vol = (float) std::min(1.0, std::max(0.0, o["vol"].num(0) / 100.0)); l.delay = (float) std::max(0.0, o["delay"].num(0));
           l.sync = o["sync"].boolean(false); l.note = std::min(17, std::max(0, o["note"].integer(10))); }
+        { const Json& pj = j["play"]; const std::string pm = pj["mode"].str(""); g.pmode = pm == "poly" ? 1 : pm == "mono" ? 2 : pm == "legato" ? 3 : 0; g.glideMs = (float) std::max(0.0, pj["glide"].num(0)); }
         { const Json& lk = j["links"]; GroupCfg::Link* L4[4] = { &g.lVol, &g.lPan, &g.lTune, &g.lFine }; const char* K[4] = { "vol", "pan", "tune", "fine" };
           for (int k = 0; k < 4; ++k) { const Json& x = lk[K[k]]; L4[k]->tagId = x["tag"].str(""); L4[k]->from = (float) x["from"].num(0); L4[k]->to = (float) x["to"].num(0); } }
         int id = (int) L->groups.size(); gidx[name] = id; L->groups.push_back(g); return id;
@@ -254,6 +255,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
     }
     if (!L->lists.empty()) L->defaultList = std::min((int) L->lists.size() - 1, std::max(0, m["project"]["currentList"].integer(0)));
     { const Json& pg = m["project"]["groups"]; for (size_t k = 0; k < pg.size(); ++k) { auto it = gidx.find(pg[k].str()); L->allSlots.push_back(it != gidx.end() ? it->second : -1); } }
+    for (auto& g : L->groups) if (g.pmode) L->anyOwnMode = true;
     {   const Json& pl = m["project"]["play"]; L->groupPatches = pl["patchMode"].str("list") == "group";
         L->defaultPatch[0] = std::max(0, m["project"]["currentPatch"].integer(0)); L->defaultPatch[1] = std::max(0, m["project"]["currentPatchB"].integer(L->defaultPatch[0]));
         L->layerB = pl["layerB"].boolean(false) && (!L->lists.empty() || L->groupPatches);
