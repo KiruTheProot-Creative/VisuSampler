@@ -99,7 +99,9 @@ function sampNoteOff(note){
   updVoices();
 }
 function sampPanic(){SV.list.forEach(v=>stopVoice(v,40));SV.list=[];SV.held.clear();updVoices();}
-function updVoices(){const e=$('#mapVoices');if(e)e.textContent=(SV.list.filter(v=>!v.dead).length+(engineOn()?ENG.voices:0))+' voices · no limit'+(engineOn()?' · shared engine':ENG.failed||ENG.loadError?' · ENGINE OFF: '+(ENG.failed||ENG.loadError):'');if(e)e.classList.toggle('engoff',!engineOn()&&!!(ENG.failed||ENG.loadError));}
+/* how long a key takes to be heard: the audio system's own delay, as the browser reports it */
+const audioLatencyMs=()=>{const c=AU.ctx;if(!c)return null;return Math.round(((c.baseLatency||0)+(c.outputLatency||0))*1000+128/c.sampleRate*1000);};
+function updVoices(){const e=$('#mapVoices'),lat=audioLatencyMs();if(e)e.textContent=(SV.list.filter(v=>!v.dead).length+(engineOn()?ENG.voices:0))+' voices · no limit'+(lat!=null?' · '+lat+' ms delay':'')+(engineOn()?' · shared engine':ENG.failed||ENG.loadError?' · ENGINE OFF: '+(ENG.failed||ENG.loadError):'');if(e)e.classList.toggle('engoff',!engineOn()&&!!(ENG.failed||ENG.loadError));}
 /* dispatchers: the sampler plays when zones exist, otherwise the little synth does */
 const hasSampler=()=>S.zones.length>0&&S.zones.some(z=>BUF.has(z.sample));
 /* keyswitches: a key that picks a list (and makes no sound); "Set by playing a key" learns it */

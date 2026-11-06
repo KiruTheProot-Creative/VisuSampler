@@ -79,7 +79,7 @@ function ensureAudio(){
   if(AU.ctx){if(AU.ctx.state==='suspended')AU.ctx.resume();return true;}
   try{
     const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return false;
-    const c=new AC(); AU.master=c.createGain(); AU.filter=c.createBiquadFilter(); AU.filter.type='lowpass';
+    const c=new AC({latencyHint:'interactive'}); AU.master=c.createGain(); AU.filter=c.createBiquadFilter(); AU.filter.type='lowpass';
     AU.filter.frequency.value=2000; AU.filter.connect(AU.master); AU.master.connect(c.destination); AU.ctx=c; applyAudio(); return true;
   }catch(e){return false;}
 }
