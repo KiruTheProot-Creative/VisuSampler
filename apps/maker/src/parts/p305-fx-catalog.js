@@ -66,6 +66,9 @@ Object.assign(FXT,{
     params:[FP('crackle','Crackle',0,100,'%',40),FP('rumble','Rumble',0,100,'%',20),FP('wear','Wear',0,100,'%',30),FP('wow','Wow',0,100,'%',20),FP('mix','Mix',0,100,'%',100)]},
   radio:{label:'Radio / Phone',kind:'fx',cat:'Retro',ins:['in'],outs:AO,cpu:.8,lat:0,hint:'Narrow, crunchy, a little noisy.',
     params:[OPT('band','Band',['AM radio','Telephone','Walkie-talkie'],0),FP('crunch','Crunch',0,100,'%',30),FP('noise','Noise',0,100,'%',15),FP('mix','Mix',0,100,'%',100)]},
+  amp:{label:'Amp & Mic',kind:'fx',cat:'Retro',ins:['in'],outs:AO,cpu:1.5,lat:0,fbOk:1,hint:'A guitar amp and speaker, picked up by a microphone. Cable something from further down back into it and it howls (it limits itself, so it never runs away).',
+    params:[OPT('amp','Amp',['Mini practice amp','Combo 1x12','Stack 4x12'],0),FP('gain','Gain',0,100,'%',55),FP('bass','Bass',-12,12,'dB',0),FP('mid','Mid',-12,12,'dB',0),FP('treble','Treble',-12,12,'dB',0),
+      FP('volume','Volume',-24,12,'dB',0),OPT('mic','Mic',['Close, on the cone','Close, off axis','In the room'],0),FP('mix','Mix',0,100,'%',100)]},
   /* ---- pedals (same DSP, stomp-box look; the footswitch is bypass) ---- */
   pod:{label:'Overdrive',kind:'fx',cat:'Pedals',pedal:'#3f8a4a',ins:['in'],outs:AO,cpu:1,lat:0,hint:'Mid-hump overdrive pedal.',
     params:[FP('drive','Drive',0,100,'%',45),FP('tone','Tone',0,100,'%',50),FP('level','Level',-24,12,'dB',0),FP('mix','Mix',0,100,'%',100)]},

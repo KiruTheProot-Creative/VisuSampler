@@ -451,6 +451,49 @@ struct DistM : Module {   // distortion, overdrive pedal, fuzz pedal
     }
 };
 
+/* Amp & Mic: a guitar amp (two preamp stages, tone stack, power stage) into a speaker cabinet picked up by a
+   microphone. Mono inside, like a real amp; "In the room" adds early reflections that spread it in stereo.
+   Self-limiting (every stage saturates), so a cable from further down the chain back into it howls but stays bounded. */
+struct AmpM : Module {
+    int amp_, gain_, bass_, mid_, treb_, vol_, mic_;
+    Biquad hp, push, bass, mid, treb, cab[4], micf[3]; float dcx = 0, dcy = 0; DelayLine room; const float kBias = std::tanh(.15f);
+    explicit AmpM(Node& nd) { amp_ = nd.idx("amp"); gain_ = nd.idx("gain"); bass_ = nd.idx("bass"); mid_ = nd.idx("mid"); treb_ = nd.idx("treble"); vol_ = nd.idx("volume"); mic_ = nd.idx("mic"); }
+    void prepare(double sr) override { Module::prepare(sr); room.init((int) (sr * .05)); }
+    void run(Node& nd, int n, Control&) override {
+        const int a = std::min(2, std::max(0, (int) std::lround(nd.P(amp_, 0)))), m = std::min(2, std::max(0, (int) std::lround(nd.P(mic_, 0))));
+        const float g = nd.P(gain_, 55) / 100.f, pre = std::pow(10.f, g * 2.4f);   // x1 .. x250
+        hp.set(Biquad::HP, a == 0 ? 120.f : 70.f, -3, 0, sr_);
+        push.set(Biquad::Peak, a == 0 ? 1100.f : 800.f, .8f, 3 + g * 6, sr_);       // small amps honk in the mids when pushed
+        bass.set(Biquad::LowShelf, 160, .7f, nd.P(bass_, 0), sr_); mid.set(Biquad::Peak, 650, .7f, nd.P(mid_, 0), sr_); treb.set(Biquad::HighShelf, 2800, .7f, nd.P(treb_, 0), sr_);
+        // the cabinet: low cut and resonance of the speaker, cone break-up, the top end the speaker cannot reproduce
+        static const float C[3][7] = { { 150, 0, 1700, 5, 4200, 2600, -4 }, { 90, 3, 2300, 3, 5200, 3400, -3 }, { 75, 4, 2800, 4, 6000, 400, -3 } };
+        const float* c = C[a];
+        cab[0].set(Biquad::HP, c[0], 2, 0, sr_); cab[1].set(Biquad::Peak, c[0] * 1.25f, 1.4f, c[1], sr_); cab[2].set(Biquad::Peak, c[2], 1.1f, c[3], sr_);
+        cab[3].set(Biquad::LP, c[4], -1, 0, sr_);
+        // the microphone: close on the cone (bright, proximity bass), off axis (darker), in the room (thinner, reflections)
+        micf[0].set(Biquad::LowShelf, 220, .7f, m == 0 ? 3.f : m == 1 ? 2.f : -4.f, sr_);
+        micf[1].set(Biquad::HighShelf, 4500, .7f, m == 0 ? 2.f : m == 1 ? -6.f : -3.f, sr_);
+        micf[2].set(Biquad::Peak, c[5], 1.f, c[6], sr_);
+        const float vol = dbg(nd.P(vol_, 0)) * (a == 0 ? .6f : .5f);
+        Stereo& x = nd.ins[0];
+        const float d1 = (float) (sr_ * .0071), d2 = (float) (sr_ * .0133), d3 = (float) (sr_ * .0229);
+        for (int i = 0; i < n; ++i) {
+            float s = .5f * (x.l[i] + x.r[i]);
+            s = hp.run(0, s); s = push.run(0, s);
+            s = std::tanh(s * pre + .15f) - kBias;                          // preamp 1 (a little asymmetric: even harmonics; silence stays silent)
+            s = std::tanh(s * (1.5f + g * 3));                              // preamp 2
+            const float y = s - dcx + .995f * dcy; dcx = s; dcy = y; s = y;  // coupling capacitor
+            s = treb.run(0, mid.run(0, bass.run(0, s)));
+            s = std::tanh(s * 1.4f) / 1.4f * 1.3f;                          // power stage
+            for (auto& f : cab) s = f.run(0, s);
+            for (auto& f : micf) s = f.run(0, s);
+            float l = s, r = s;
+            if (m == 2) { room.push(s); l = s * .7f + room.read(d1) * .35f + room.read(d3) * .2f; r = s * .7f + room.read(d2) * .35f + room.read(d3 * 1.3f) * .18f; }
+            nd.wet.l[i] = l * vol; nd.wet.r[i] = r * vol;
+        }
+    }
+};
+
 struct Crusher {   // sample-and-hold, bit reduction and optional mu-law, like the Maker's worklet
     double ph[2] = {}; float h[2] = {}; Noise nz;
     inline float run(int c, float x, float bits, float rate, bool comp, double sr, float noise) {
@@ -701,7 +744,7 @@ static const std::vector<TypeInfo>& types() {
 }
 static const std::vector<std::string> kFx = { "delay", "reverb", "chorus", "phaser", "dist", "filter", "eq", "comp", "limiter", "conv", "shimmer", "flanger", "trem", "rotary",
     "vibrato", "peq", "crush", "lofi", "transient", "morph", "vintage", "tapeecho", "bbd", "ensemble", "tapemach", "digiverb", "gatedverb", "spring", "vinyl", "radio",
-    "pod", "pfuzz", "pwah", "pcomp", "pvibe" };
+    "pod", "pfuzz", "pwah", "pcomp", "pvibe", "amp" };
 
 bool System::setParam(const std::string& nodeId, const std::string& key, float value, bool syncPos) {
     auto inGraph = [&](Graph* g) {
@@ -746,6 +789,7 @@ static std::unique_ptr<Module> makeModule(Node& nd, const Library& lib) {
     if (t == "peq") return std::make_unique<EqM>(nd, true);
     if (t == "dist") return std::make_unique<DistM>(nd, -1, "drive", false);
     if (t == "pod") return std::make_unique<DistM>(nd, 0, "drive", true);
+    if (t == "amp") return std::make_unique<AmpM>(nd);
     if (t == "pfuzz") return std::make_unique<DistM>(nd, 4, "fuzz", false);
     if (t == "crush") return std::make_unique<CrushM>(nd);
     if (t == "vintage") return std::make_unique<VintageM>(nd);

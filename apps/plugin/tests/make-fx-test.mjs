@@ -49,6 +49,10 @@ for(const tails of [false,true]){const g='g_byp'+(tails?'t':'');groups.push(g);c
 {const g='g_loop';groups.push(g);const i=node('input'),o=node('output'),d=node('delay',{p:Object.assign({},cat.defs.delay.p,{fb:0,mix:100})}),f=node('filter');
  graphs[g]={nodes:[i,o,d,f],cables:[cable(i,'out',d,'in'),cable(d,'wet',f,'in'),cable(f,'mix',d,'in'),cable(d,'mix',o,'in')]};
  zones.push({id:'z_loop',sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:'feedback'});key++;}
+/* an amp fed back into itself (a mic in front of its own speaker): howls, but stays bounded */
+{const g='g_ampfb';groups.push(g);const i=node('input'),o=node('output'),a=node('amp',{p:Object.assign({},cat.defs.amp.p,{gain:85,mix:100})}),u=node('util',{p:{gain:6,pan:0,width:100}});
+ graphs[g]={nodes:[i,o,a,u],cables:[cable(i,'out',a,'in'),cable(a,'mix',u,'in'),cable(u,'out',a,'in'),cable(a,'mix',o,'in')]};
+ zones.push({id:'z_ampfb',sample:'s',group:g,lo:key,hi:key,root:key});cases.push({key,module:'feedback-amp'});key++;}
 /* every mode of the multi-mode modules (the EmulonX set) */
 for(const [t,k,count] of [['reverb','type',7],['delay','pp',4],['dist','type',10],['comp','mode',3],['chorus','mode',3]])
   for(let m=0;m<count;m++){
@@ -65,7 +69,7 @@ const manifest={format:'vsamp',formatVersion:1,lib:{id:'fxtest',name:'FX test'},
 writeFileSync(new URL('fx.vsamp',dir),writeVsamp(manifest,pack));
 writeFileSync(new URL('fx-cases.json',dir),JSON.stringify(cases));
 /* fx-play.vsamp: only the macro and bypass cases, so nothing else in the chains (crackle, hiss) colours the measurements */
-{const keep=['g_macro','g_byp','g_bypt','g_sync'],g2={master:{nodes:[node('input'),node('output')],cables:[]}};g2.master.cables=[cable(g2.master.nodes[0],'out',g2.master.nodes[1],'in')];
+{const keep=['g_macro','g_byp','g_bypt','g_sync','g_ampfb'],g2={master:{nodes:[node('input'),node('output')],cables:[]}};g2.master.cables=[cable(g2.master.nodes[0],'out',g2.master.nodes[1],'in')];
  keep.forEach(k=>{g2[k]=graphs[k];});
  const m2=Object.assign({},manifest,{lib:{id:'fxplay',name:'FX play test'},project:Object.assign({},project,{fx:g2}),zones:zones.filter(z=>keep.includes(z.group)).map(full)});
  writeFileSync(new URL('fx-play.vsamp',dir),writeVsamp(m2,pack));}

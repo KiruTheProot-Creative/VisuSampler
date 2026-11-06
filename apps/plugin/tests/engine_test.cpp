@@ -447,9 +447,14 @@ static void testFx() {
     for (size_t i = 0; i < cases.size(); ++i) {
         const std::string mod = cases[i]["module"].str(); const int key = cases[i]["key"].integer();
         if (mod == "lfo-mod" || mod == "tag" || mod == "macro" || mod == "sync" || mod.rfind("bypass", 0) == 0) continue;
-        const double secs = mod == "feedback" ? 3 : 1;
+        const double secs = mod.rfind("feedback", 0) == 0 ? 3 : 1;
         auto [fin, peak, rms] = renderKey(key, secs, -1, nullptr);
         CHECK(fin && peak > 1e-3 && peak < 8, "%s: finite and audible (peak %.3f, rms %.4f)", mod.c_str(), peak, rms);
+    }
+    {   // no notes: the chains are silent, even an amp that feeds back into itself (fx-play has no noise makers like vinyl)
+        auto L = Library::load(dir + "/fx-play.vsamp", err, 48000); auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setMasterGain(1.f); e.setLibrary(L);
+        std::vector<float> l(480), r(480); double pk = 0; for (int b = 0; b < 100; ++b) { std::fill(l.begin(), l.end(), 0.f); std::fill(r.begin(), r.end(), 0.f); e.render(l.data(), r.data(), 480); for (float x : l) pk = std::max(pk, (double) std::fabs(x)); }
+        CHECK(pk < 1e-4, "with no notes every effect chain stays silent, feedback loops included (peak %.2g)", pk);
     }
     int lfoKey = 0, tagKey = 0; for (size_t i = 0; i < cases.size(); ++i) { if (cases[i]["module"].str() == "lfo-mod") lfoKey = cases[i]["key"].integer(); if (cases[i]["module"].str() == "tag") tagKey = cases[i]["key"].integer(); }
     { std::vector<float> env; renderKey(lfoKey, 1, -1, &env); double ripple = 0; for (size_t i = 2; i + 2 < env.size() / 2; ++i) { const double sm = (env[i - 1] + env[i + 1]) / 2; ripple += std::fabs(env[i] - sm); }
