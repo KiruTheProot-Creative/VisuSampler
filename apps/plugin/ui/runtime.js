@@ -653,8 +653,9 @@ function drawGraph(el){
 }
 /* live graphs: one animation loop while any is on show */
 function graphLoop(){
-  GRAPH.raf=0;const live=S.els.filter(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)&&elShown(e));if(!live.length)return;
+  GRAPH.raf=0;const live=S.els.filter(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)&&elShown(e));if(!live.length){if(typeof GRAPH.wantScope==='function')GRAPH.wantScope(false);return;}
   if(GRAPH.pull){const d=GRAPH.pull();if(d)GRAPH.time=d;}
+  if(typeof GRAPH.wantScope==='function')GRAPH.wantScope(true);
   live.forEach(drawGraph);GRAPH.raf=requestAnimationFrame(graphLoop);
 }
 function graphWake(){if(!GRAPH.raf&&S.els.some(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)))GRAPH.raf=requestAnimationFrame(graphLoop);}
@@ -753,6 +754,7 @@ function applyAudio(){
   const r=drive('resonance'); AU.filter.Q.setTargetAtTime(r?.5+r.value*16:.7,now,.02);
   const v=drive('volume'); let g=.8; if(v) g=(v.kind==='number'&&v.unit==='dB')?Math.pow(10,realOf(v)/20):v.value*v.value;
   AU.master.gain.setTargetAtTime(clamp(g,0,2)*.28,now,.02);
+  if(typeof ENG!=='undefined'&&ENG.native&&ENG.node)ENG.node.port.postMessage({t:'gain',g:2.4*clamp(g,0,2)*.28});   /* native audio: the same level as through the browser */
   const wt=waveType(); AU.v.forEach(x=>{x.o.type=wt;});
 }
 function synthOn(m){

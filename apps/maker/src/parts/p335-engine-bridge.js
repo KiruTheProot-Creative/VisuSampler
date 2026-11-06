@@ -13,8 +13,38 @@ function engineFail(why){
   ENG.failed=why;console.warn('engine',why);updVoices();
   flash('The shared engine could not start ('+why+'). Envelopes, knobs on groups and FX on/off buttons need it.');
 }
+/* ---- native audio (desktop app): VisuMakerAudio plays the project on the sound card with the VST's own engine ----
+   Lower delay than the browser's audio, long samples stream from disk, no 2 GB limit. It speaks the worklet's messages,
+   so everything below works the same; the browser engine stays as the fallback. */
+const AUDIO_PREF=(()=>{try{return JSON.parse(localStorage.getItem('visu.audio')||'{}');}catch(e){return{};}})();
+const saveAudioPref=()=>{try{localStorage.setItem('visu.audio',JSON.stringify(AUDIO_PREF));}catch(e){}};
+const nativeWanted=()=>!!window.visuNative&&AUDIO_PREF.mode!=='browser';
+async function nativeStart(){
+  const r=await window.visuNative.start();
+  if(!r||!r.ok)throw new Error(r&&r.error||'native audio did not start');
+  const port={onmessage:null,postMessage:m=>window.visuNative.send(m)};
+  window.visuNative.on(m=>{
+    if(m.t==='ready'){ENG.dev=m;if(AUDIO_PREF.device||AUDIO_PREF.buffer||AUDIO_PREF.type)port.postMessage({t:'setDevice',type:AUDIO_PREF.type||'',device:AUDIO_PREF.device||'',rate:AUDIO_PREF.rate||0,buffer:AUDIO_PREF.buffer||0});updVoices();return;}
+    if(m.t==='devices'){ENG.dev=Object.assign({},ENG.dev||{},m.current);ENG.devices=m;if(typeof audioSettingsRender==='function')audioSettingsRender();updVoices();return;}
+    if(m.t==='scope'){GRAPH.time=Float32Array.from(m.d||[]);GRAPH.sr=m.sr||48000;return;}
+    if(m.t==='exit'){   /* it stopped: go back to the browser engine */
+      if(!ENG.native)return;ENG.node=null;ENG.native=false;ENG.loaded=false;ENG.failed='';ENG.nativeLost=true;
+      flash('Native audio stopped'+(m.error?' ('+m.error+')':'')+'. Playing through the browser instead.');updVoices();return;}
+    if(port.onmessage)port.onmessage({data:m});
+  });
+  return{port};
+}
 async function engineStart(){
   if(ENG.node||ENG.starting||ENG.failed||!AU.ctx) return;
+  if(nativeWanted()&&!ENG.nativeLost){
+    ENG.starting=true;
+    try{
+      const node=await nativeStart();
+      node.port.onmessage=({data:m})=>engineMessage(m);
+      ENG.node=node;ENG.out=null;ENG.native=true;ENG.sig='';engineSync(true);applyAudio();ENG.starting=false;return;
+    }catch(err){console.warn('native audio',err);flash('Native audio could not start ('+(err.message||err)+'). Playing through the browser instead.');ENG.nativeLost=true;}
+    ENG.starting=false;
+  }
   if(!AU.ctx.audioWorklet){engineFail('this window has no AudioWorklet');return;}
   ENG.starting=true;
   try{
@@ -25,17 +55,18 @@ async function engineStart(){
     await AU.ctx.audioWorklet.addModule(url);
     const node=new AudioWorkletNode(AU.ctx,'visu-engine',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}});
     const out=AU.ctx.createGain();out.gain.value=2.4;node.connect(out);out.connect(AU.master);
-    node.port.onmessage=({data:m})=>{
-      if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;ENG.lastListB=-9;ENG.lastPatch=[-9,-9];engineSendState();updVoices();}
-      else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
-      else if(m.t==='error'){if(ENG.lastErr!==m.error){ENG.lastErr=m.error;flash('Engine error: '+m.error);console.warn('engine worklet',m.error);}}
-    };
+    node.port.onmessage=({data:m})=>engineMessage(m);
     ENG.node=node;ENG.out=out;ENG.sig='';engineSync(true);
   }catch(err){engineFail(String(err&&err.message||err));}
   ENG.starting=false;
 }
+function engineMessage(m){
+  if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';ENG.memory=m.memory;ENG.streamed=m.streamed;if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;ENG.lastListB=-9;ENG.lastPatch=[-9,-9];ENG.scopeSent=null;engineSendState();updVoices();}
+  else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
+  else if(m.t==='error'){if(ENG.lastErr!==m.error){ENG.lastErr=m.error;flash('Engine error: '+m.error);console.warn('engine',m.error);}}
+}
 /* for the desktop app's self-check (and anyone curious in the console) */
-window.__visuEngine=()=>({on:engineOn(),failed:ENG.failed||'',loadError:ENG.loadError||'',zones:ENG.zones,voices:ENG.voices,started:!!ENG.node});
+window.__visuEngine=()=>({on:engineOn(),native:!!ENG.native,device:ENG.dev||null,failed:ENG.failed||'',loadError:ENG.loadError||'',zones:ENG.zones,voices:ENG.voices,started:!!ENG.node});
 window.__visuStartAudio=()=>{ensureAudio();return !!AU.ctx;};
 /* what decides that the engine needs the project again */
 function engineSig(){

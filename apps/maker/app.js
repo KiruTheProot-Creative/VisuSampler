@@ -658,8 +658,9 @@ function drawGraph(el){
 }
 /* live graphs: one animation loop while any is on show */
 function graphLoop(){
-  GRAPH.raf=0;const live=S.els.filter(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)&&elShown(e));if(!live.length)return;
+  GRAPH.raf=0;const live=S.els.filter(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)&&elShown(e));if(!live.length){if(typeof GRAPH.wantScope==='function')GRAPH.wantScope(false);return;}
   if(GRAPH.pull){const d=GRAPH.pull();if(d)GRAPH.time=d;}
+  if(typeof GRAPH.wantScope==='function')GRAPH.wantScope(true);
   live.forEach(drawGraph);GRAPH.raf=requestAnimationFrame(graphLoop);
 }
 function graphWake(){if(!GRAPH.raf&&S.els.some(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)))GRAPH.raf=requestAnimationFrame(graphLoop);}
@@ -873,6 +874,7 @@ function applyAudio(){
   const r=drive('resonance'); AU.filter.Q.setTargetAtTime(r?.5+r.value*16:.7,now,.02);
   const v=drive('volume'); let g=.8; if(v) g=(v.kind==='number'&&v.unit==='dB')?Math.pow(10,realOf(v)/20):v.value*v.value;
   AU.master.gain.setTargetAtTime(clamp(g,0,2)*.28,now,.02);
+  if(typeof ENG!=='undefined'&&ENG.native&&ENG.node)ENG.node.port.postMessage({t:'gain',g:2.4*clamp(g,0,2)*.28});   /* native audio: the same level as through the browser */
   const wt=waveType(); AU.v.forEach(x=>{x.o.type=wt;});
 }
 function synthOn(m){
@@ -1715,7 +1717,7 @@ rbody.addEventListener('change',e=>{
 });
 /* the Maker feeds live graphs from its audio engine */
 GRAPH.pull=()=>{
-  const E=typeof ENG!=='undefined'?ENG:null;if(!E||!E.out||!E.out.context)return null;
+  const E=typeof ENG!=='undefined'?ENG:null;if(!E||E.native||!E.out||!E.out.context)return null;
   if(!GRAPH.an||GRAPH.an.context!==E.out.context){GRAPH.an=E.out.context.createAnalyser();GRAPH.an.fftSize=4096;E.out.connect(GRAPH.an);GRAPH.buf=new Float32Array(4096);GRAPH.sr=E.out.context.sampleRate;}
   GRAPH.an.getFloatTimeDomainData(GRAPH.buf);return GRAPH.buf;
 };
@@ -1726,6 +1728,8 @@ function groupPeaks(g,n){
   const b=BUF.get(zs[0].sample);if(!b||!b.ch)return null;return peaksOf(b.ch,n||300);
 }
 GRAPH.peaksOf=g=>groupPeaks(g,300);
+/* native audio sends its output for live graphs only while one is on show */
+GRAPH.wantScope=on=>{if(!ENG.native||!ENG.node||ENG.scopeSent===on)return;ENG.scopeSent=on;ENG.node.port.postMessage({t:'scope',on});};
 
 /* ---------- inspector events ---------- */
 rbody.addEventListener('toggle',e=>{const d=e.target;if(d&&d.dataset&&d.dataset.sec){if(d.open)closed.delete(d.dataset.sec);else closed.add(d.dataset.sec);}},true);
@@ -3381,8 +3385,38 @@ function engineFail(why){
   ENG.failed=why;console.warn('engine',why);updVoices();
   flash('The shared engine could not start ('+why+'). Envelopes, knobs on groups and FX on/off buttons need it.');
 }
+/* ---- native audio (desktop app): VisuMakerAudio plays the project on the sound card with the VST's own engine ----
+   Lower delay than the browser's audio, long samples stream from disk, no 2 GB limit. It speaks the worklet's messages,
+   so everything below works the same; the browser engine stays as the fallback. */
+const AUDIO_PREF=(()=>{try{return JSON.parse(localStorage.getItem('visu.audio')||'{}');}catch(e){return{};}})();
+const saveAudioPref=()=>{try{localStorage.setItem('visu.audio',JSON.stringify(AUDIO_PREF));}catch(e){}};
+const nativeWanted=()=>!!window.visuNative&&AUDIO_PREF.mode!=='browser';
+async function nativeStart(){
+  const r=await window.visuNative.start();
+  if(!r||!r.ok)throw new Error(r&&r.error||'native audio did not start');
+  const port={onmessage:null,postMessage:m=>window.visuNative.send(m)};
+  window.visuNative.on(m=>{
+    if(m.t==='ready'){ENG.dev=m;if(AUDIO_PREF.device||AUDIO_PREF.buffer||AUDIO_PREF.type)port.postMessage({t:'setDevice',type:AUDIO_PREF.type||'',device:AUDIO_PREF.device||'',rate:AUDIO_PREF.rate||0,buffer:AUDIO_PREF.buffer||0});updVoices();return;}
+    if(m.t==='devices'){ENG.dev=Object.assign({},ENG.dev||{},m.current);ENG.devices=m;if(typeof audioSettingsRender==='function')audioSettingsRender();updVoices();return;}
+    if(m.t==='scope'){GRAPH.time=Float32Array.from(m.d||[]);GRAPH.sr=m.sr||48000;return;}
+    if(m.t==='exit'){   /* it stopped: go back to the browser engine */
+      if(!ENG.native)return;ENG.node=null;ENG.native=false;ENG.loaded=false;ENG.failed='';ENG.nativeLost=true;
+      flash('Native audio stopped'+(m.error?' ('+m.error+')':'')+'. Playing through the browser instead.');updVoices();return;}
+    if(port.onmessage)port.onmessage({data:m});
+  });
+  return{port};
+}
 async function engineStart(){
   if(ENG.node||ENG.starting||ENG.failed||!AU.ctx) return;
+  if(nativeWanted()&&!ENG.nativeLost){
+    ENG.starting=true;
+    try{
+      const node=await nativeStart();
+      node.port.onmessage=({data:m})=>engineMessage(m);
+      ENG.node=node;ENG.out=null;ENG.native=true;ENG.sig='';engineSync(true);applyAudio();ENG.starting=false;return;
+    }catch(err){console.warn('native audio',err);flash('Native audio could not start ('+(err.message||err)+'). Playing through the browser instead.');ENG.nativeLost=true;}
+    ENG.starting=false;
+  }
   if(!AU.ctx.audioWorklet){engineFail('this window has no AudioWorklet');return;}
   ENG.starting=true;
   try{
@@ -3393,17 +3427,18 @@ async function engineStart(){
     await AU.ctx.audioWorklet.addModule(url);
     const node=new AudioWorkletNode(AU.ctx,'visu-engine',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{module}});
     const out=AU.ctx.createGain();out.gain.value=2.4;node.connect(out);out.connect(AU.master);
-    node.port.onmessage=({data:m})=>{
-      if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;ENG.lastListB=-9;ENG.lastPatch=[-9,-9];engineSendState();updVoices();}
-      else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
-      else if(m.t==='error'){if(ENG.lastErr!==m.error){ENG.lastErr=m.error;flash('Engine error: '+m.error);console.warn('engine worklet',m.error);}}
-    };
+    node.port.onmessage=({data:m})=>engineMessage(m);
     ENG.node=node;ENG.out=out;ENG.sig='';engineSync(true);
   }catch(err){engineFail(String(err&&err.message||err));}
   ENG.starting=false;
 }
+function engineMessage(m){
+  if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';ENG.memory=m.memory;ENG.streamed=m.streamed;if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;ENG.lastListB=-9;ENG.lastPatch=[-9,-9];ENG.scopeSent=null;engineSendState();updVoices();}
+  else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
+  else if(m.t==='error'){if(ENG.lastErr!==m.error){ENG.lastErr=m.error;flash('Engine error: '+m.error);console.warn('engine',m.error);}}
+}
 /* for the desktop app's self-check (and anyone curious in the console) */
-window.__visuEngine=()=>({on:engineOn(),failed:ENG.failed||'',loadError:ENG.loadError||'',zones:ENG.zones,voices:ENG.voices,started:!!ENG.node});
+window.__visuEngine=()=>({on:engineOn(),native:!!ENG.native,device:ENG.dev||null,failed:ENG.failed||'',loadError:ENG.loadError||'',zones:ENG.zones,voices:ENG.voices,started:!!ENG.node});
 window.__visuStartAudio=()=>{ensureAudio();return !!AU.ctx;};
 /* what decides that the engine needs the project again */
 function engineSig(){
@@ -3737,8 +3772,8 @@ function sampNoteOff(note){
 }
 function sampPanic(){SV.list.forEach(v=>stopVoice(v,40));SV.list=[];SV.held.clear();updVoices();}
 /* how long a key takes to be heard: the audio system's own delay, as the browser reports it */
-const audioLatencyMs=()=>{const c=AU.ctx;if(!c)return null;return Math.round(((c.baseLatency||0)+(c.outputLatency||0))*1000+128/c.sampleRate*1000);};
-function updVoices(){const e=$('#mapVoices'),lat=audioLatencyMs();if(e)e.textContent=(SV.list.filter(v=>!v.dead).length+(engineOn()?ENG.voices:0))+' voices · no limit'+(lat!=null?' · '+lat+' ms delay':'')+(engineOn()?' · shared engine':ENG.failed||ENG.loadError?' · ENGINE OFF: '+(ENG.failed||ENG.loadError):'');if(e)e.classList.toggle('engoff',!engineOn()&&!!(ENG.failed||ENG.loadError));}
+const audioLatencyMs=()=>{if(ENG.native&&ENG.dev&&ENG.dev.latencyMs!=null)return Math.round(ENG.dev.latencyMs);const c=AU.ctx;if(!c)return null;return Math.round(((c.baseLatency||0)+(c.outputLatency||0))*1000+128/c.sampleRate*1000);};
+function updVoices(){const e=$('#mapVoices'),lat=audioLatencyMs();if(e)e.textContent=(SV.list.filter(v=>!v.dead).length+(engineOn()?ENG.voices:0))+' voices · no limit'+(lat!=null?' · '+lat+' ms delay':'')+(engineOn()?(ENG.native?' · native audio':' · browser audio'):ENG.failed||ENG.loadError?' · ENGINE OFF: '+(ENG.failed||ENG.loadError):'');if(e)e.classList.toggle('engoff',!engineOn()&&!!(ENG.failed||ENG.loadError));}
 /* dispatchers: the sampler plays when zones exist, otherwise the little synth does */
 const hasSampler=()=>S.zones.length>0&&S.zones.some(z=>BUF.has(z.sample));
 /* keyswitches: a key that picks a list (and makes no sound); "Set by playing a key" learns it */
@@ -5933,6 +5968,48 @@ document.addEventListener('keydown',e=>{
 /* a new project or preset starts a fresh history */
 {const op0=openProject;openProject=async function(b){const r=await op0(b);histClear();return r;};}
 {const lp0=loadPreset;loadPreset=function(k){const r=lp0(k);histClear();return r;};}
+
+/* ---------- Audio settings (desktop app): native audio on the sound card, driver, device, buffer size ----------
+   Smaller buffers = less delay between key and sound, but more work for the computer (crackles when it is too small). */
+(function(){
+  const o=$('#projOpen');if(!o)return;
+  const b=document.createElement('button');b.type='button';b.className='btn';b.id='audioSetBtn';b.textContent='Audio';b.title='Audio settings: sound card, buffer size, delay';
+  o.before(b);
+  const dlg=document.createElement('dialog');dlg.id='audioSet';dlg.className='audioset';dlg.setAttribute('aria-labelledby','audioSetH');document.body.appendChild(dlg);
+  b.addEventListener('click',()=>{audioSettingsRender();if(!dlg.open)dlg.showModal();if(ENG.native&&ENG.node)ENG.node.port.postMessage({t:'devices'});});
+  dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close();});
+  dlg.addEventListener('change',e=>{
+    const t=e.target,k=t.dataset.as;if(!k)return;
+    if(k==='mode'){AUDIO_PREF.mode=t.value;saveAudioPref();audioSettingsRender();flash(t.value==='browser'?'Browser audio is used after a restart of VisuMaker.':'Native audio starts after a restart of VisuMaker.');return;}
+    const d=ENG.devices||{},cur=d.current||{};
+    const want={type:k==='type'?t.value:cur.type,device:k==='device'?t.value:(k==='type'?'':cur.device),rate:k==='rate'?+t.value:cur.rate,buffer:k==='buffer'?+t.value:cur.buffer};
+    Object.assign(AUDIO_PREF,want);saveAudioPref();
+    if(ENG.native&&ENG.node)ENG.node.port.postMessage(Object.assign({t:'setDevice'},want));
+  });
+})();
+function audioSettingsRender(){
+  const dlg=$('#audioSet');if(!dlg)return;
+  const desk=!!window.visuNative,nat=ENG.native,d=ENG.devices,cur=(d&&d.current)||ENG.dev||{};
+  const sel=(k,lab,opts,v)=>'<label class="f"><span>'+lab+'</span><select data-as="'+k+'">'+opts.map(x=>'<option value="'+esc(String(x[0]))+'"'+(String(x[0])===String(v)?' selected':'')+'>'+esc(x[1])+'</option>').join('')+'</select></label>';
+  let h='<h2 id="audioSetH">Audio</h2>';
+  if(!desk)h+='<p class="hint">In the browser, VisuMaker plays through the browser\'s audio. The desktop app can use the sound card directly (less delay).</p>';
+  else{
+    h+=sel('mode','Play through',[['native','The sound card (native, low delay)'],['browser','The browser\'s audio (fallback)']],AUDIO_PREF.mode==='browser'?'browser':'native');
+    if(nat&&d){
+      const types=d.types||[],ty=types.find(x=>x.name===cur.type)||{devices:[]};
+      h+=sel('type','Driver',types.map(x=>[x.name,x.name]),cur.type)+sel('device','Output',ty.devices.map(x=>[x,x]),cur.device)
+        +sel('buffer','Buffer size',(d.buffers||[]).map(x=>[x,x+' samples ('+(x/(cur.rate||48000)*1000).toFixed(1)+' ms)']),cur.buffer)
+        +sel('rate','Sample rate',(d.rates||[]).map(x=>[x,x+' Hz']),cur.rate);
+      if(d.error)h+='<p class="hint err">'+esc(d.error)+'</p>';
+    }else if(nat)h+='<p class="hint">Asking the sound card…</p>';
+    else if(AUDIO_PREF.mode!=='browser')h+='<p class="hint">Native audio is not running'+(ENG.nativeLost?' (it could not start, so the browser\'s audio plays)':'')+'. It starts with the first note.</p>';
+  }
+  const lat=audioLatencyMs();
+  h+='<p class="lat">'+(lat!=null?'Delay from key to sound: about <b>'+lat+' ms</b>':'Play a note to start the audio.')+'</p>'
+    +'<p class="hint">"Windows Audio (Low Latency Mode)" with 128 samples is a good start. Go smaller for less delay, bigger if you hear crackles.</p>'
+    +'<div class="row"><button type="button" class="btn" onclick="this.closest(\'dialog\').close()">Close</button></div>';
+  dlg.innerHTML=h;
+}
 
 /* ---------- init ---------- */
 buildKb();

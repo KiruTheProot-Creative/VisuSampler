@@ -92,6 +92,7 @@ function applyAudio(){
   const r=drive('resonance'); AU.filter.Q.setTargetAtTime(r?.5+r.value*16:.7,now,.02);
   const v=drive('volume'); let g=.8; if(v) g=(v.kind==='number'&&v.unit==='dB')?Math.pow(10,realOf(v)/20):v.value*v.value;
   AU.master.gain.setTargetAtTime(clamp(g,0,2)*.28,now,.02);
+  if(typeof ENG!=='undefined'&&ENG.native&&ENG.node)ENG.node.port.postMessage({t:'gain',g:2.4*clamp(g,0,2)*.28});   /* native audio: the same level as through the browser */
   const wt=waveType(); AU.v.forEach(x=>{x.o.type=wt;});
 }
 function synthOn(m){

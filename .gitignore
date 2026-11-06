@@ -7,3 +7,4 @@ build/
 !apps/plugin/tests/compat/*.vsamp
 apps/maker-desktop/www/
 apps/maker-desktop/dist/
+apps/maker-desktop/native/

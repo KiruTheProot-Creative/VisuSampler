@@ -6,6 +6,8 @@ on:
       - "apps/maker-desktop/**"
       - "packages/core/**"
       - "packages/engine-wasm/**"
+      - "apps/plugin/native/**"
+      - "apps/plugin/engine/**"
       - ".github/workflows/maker.yml"
   pull_request:
     paths:
@@ -27,6 +29,14 @@ jobs:
       - name: Install
         run: npm install --no-audit --no-fund
         working-directory: apps/maker-desktop
+      - name: Build native audio (VisuMakerAudio)
+        shell: bash
+        run: |
+          cmake -S apps/plugin -B nbuild -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_TESTS=OFF -DVISU_BUILD_MAKER_AUDIO=ON
+          cmake --build nbuild --config Release --target VisuMakerAudio --parallel 4
+          mkdir -p apps/maker-desktop/native
+          find nbuild -name "VisuMakerAudio.exe" -exec cp {} apps/maker-desktop/native/ \;
+          ls -la apps/maker-desktop/native
       - name: Engine self-check (old way, worklet loaded as a file; allowed to fail)
         continue-on-error: true
         shell: bash
@@ -35,6 +45,10 @@ jobs:
       - name: Engine self-check (the shared engine must run inside the desktop app)
         shell: bash
         run: npm run copy && timeout 120 npx electron . --smoke
+        working-directory: apps/maker-desktop
+      - name: Native audio self-check (VisuMakerAudio must start and load the project)
+        shell: bash
+        run: npm run copy && timeout 120 npx electron . --smoke --smoke-native
         working-directory: apps/maker-desktop
       - name: Build installer
         run: npm run dist

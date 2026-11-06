@@ -20,6 +20,7 @@
     "appId": "com.visusampler.visumaker",
     "productName": "VisuMaker",
     "files": ["main.js", "preload.js", "www/**/*"],
+    "extraResources": [{ "from": "native", "to": "native", "filter": ["VisuMakerAudio*"] }],
     "directories": { "output": "dist" },
     "fileAssociations": [{ "ext": "vmproj", "name": "VisuMaker project", "role": "Editor" }],
     "win": { "target": "nsis" },

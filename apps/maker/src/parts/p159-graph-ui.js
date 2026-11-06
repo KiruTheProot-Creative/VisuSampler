@@ -30,7 +30,7 @@ rbody.addEventListener('change',e=>{
 });
 /* the Maker feeds live graphs from its audio engine */
 GRAPH.pull=()=>{
-  const E=typeof ENG!=='undefined'?ENG:null;if(!E||!E.out||!E.out.context)return null;
+  const E=typeof ENG!=='undefined'?ENG:null;if(!E||E.native||!E.out||!E.out.context)return null;
   if(!GRAPH.an||GRAPH.an.context!==E.out.context){GRAPH.an=E.out.context.createAnalyser();GRAPH.an.fftSize=4096;E.out.connect(GRAPH.an);GRAPH.buf=new Float32Array(4096);GRAPH.sr=E.out.context.sampleRate;}
   GRAPH.an.getFloatTimeDomainData(GRAPH.buf);return GRAPH.buf;
 };
@@ -41,3 +41,5 @@ function groupPeaks(g,n){
   const b=BUF.get(zs[0].sample);if(!b||!b.ch)return null;return peaksOf(b.ch,n||300);
 }
 GRAPH.peaksOf=g=>groupPeaks(g,300);
+/* native audio sends its output for live graphs only while one is on show */
+GRAPH.wantScope=on=>{if(!ENG.native||!ENG.node||ENG.scopeSent===on)return;ENG.scopeSent=on;ENG.node.port.postMessage({t:'scope',on});};

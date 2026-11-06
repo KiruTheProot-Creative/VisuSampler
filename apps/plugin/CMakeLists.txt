@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(VISU_BUILD_PLUGIN "Build the VST3/AU plugin (needs JUCE, fetched automatically)" OFF)
 option(VISU_BUILD_TESTS "Build the engine tests" ON)
+option(VISU_BUILD_MAKER_AUDIO "Build VisuMakerAudio, VisuMaker's native audio (needs JUCE, fetched automatically)" OFF)
 
 add_library(visu_engine STATIC engine/Vsamp.cpp engine/Inflate.cpp engine/Library.cpp engine/Engine.cpp engine/Fx.cpp engine/Stream.cpp)
 find_package(Threads REQUIRED)
@@ -27,6 +28,25 @@ if(VISU_BUILD_TESTS)
   add_test(NAME engine COMMAND engine_test)
 endif()
 
+# VisuMaker's native audio: the protocol core (no JUCE), a null host for tests, and the JUCE host (with the plugin build)
+add_library(visu_helper_core STATIC native/HelperCore.cpp)
+target_link_libraries(visu_helper_core PUBLIC visu_engine)
+target_include_directories(visu_helper_core PUBLIC native)
+add_executable(VisuMakerAudioNull native/NullHost.cpp)
+target_link_libraries(VisuMakerAudioNull PRIVATE visu_helper_core)
+
+if(VISU_BUILD_PLUGIN OR VISU_BUILD_MAKER_AUDIO)
+  include(FetchContent)
+  FetchContent_Declare(JUCE GIT_REPOSITORY https://github.com/juce-framework/JUCE.git GIT_TAG 8.0.8 GIT_SHALLOW TRUE)
+  FetchContent_MakeAvailable(JUCE)
+  # VisuMakerAudio: VisuMaker's native audio (the same engine as the VST, on the sound card, driven over a pipe)
+  juce_add_console_app(VisuMakerAudio PRODUCT_NAME "VisuMakerAudio")
+  target_sources(VisuMakerAudio PRIVATE native/AudioHost.cpp)
+  target_compile_definitions(VisuMakerAudio PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0 JUCE_WASAPI=1 JUCE_DIRECTSOUND=1)
+  target_link_libraries(VisuMakerAudio
+    PRIVATE visu_helper_core juce::juce_audio_devices juce::juce_events
+    PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+endif()
 if(VISU_BUILD_PLUGIN)
   add_subdirectory(plugin)
 endif()

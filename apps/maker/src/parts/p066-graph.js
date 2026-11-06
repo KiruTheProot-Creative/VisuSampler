@@ -115,8 +115,9 @@ function drawGraph(el){
 }
 /* live graphs: one animation loop while any is on show */
 function graphLoop(){
-  GRAPH.raf=0;const live=S.els.filter(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)&&elShown(e));if(!live.length)return;
+  GRAPH.raf=0;const live=S.els.filter(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)&&elShown(e));if(!live.length){if(typeof GRAPH.wantScope==='function')GRAPH.wantScope(false);return;}
   if(GRAPH.pull){const d=GRAPH.pull();if(d)GRAPH.time=d;}
+  if(typeof GRAPH.wantScope==='function')GRAPH.wantScope(true);
   live.forEach(drawGraph);GRAPH.raf=requestAnimationFrame(graphLoop);
 }
 function graphWake(){if(!GRAPH.raf&&S.els.some(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)))GRAPH.raf=requestAnimationFrame(graphLoop);}

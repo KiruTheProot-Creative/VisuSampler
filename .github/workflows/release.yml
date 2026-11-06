@@ -40,6 +40,14 @@ jobs:
         with: { node-version: 20 }
       - run: npm install --no-audit --no-fund
         working-directory: apps/maker-desktop
+      - name: Build native audio (VisuMakerAudio)
+        shell: bash
+        run: |
+          cmake -S apps/plugin -B nbuild -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_TESTS=OFF -DVISU_BUILD_MAKER_AUDIO=ON
+          cmake --build nbuild --config Release --target VisuMakerAudio --parallel 4
+          mkdir -p apps/maker-desktop/native
+          find nbuild -name "VisuMakerAudio.exe" -exec cp {} apps/maker-desktop/native/ \;
+          ls -la apps/maker-desktop/native
       - run: npm run dist
         working-directory: apps/maker-desktop
         env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
