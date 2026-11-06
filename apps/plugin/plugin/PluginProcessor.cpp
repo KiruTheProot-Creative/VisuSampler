@@ -101,6 +101,13 @@ void VisuProcessor::setList(int index)
 {
     list_ = index; engine_.setList(index); sendChangeMessage();
 }
+juce::var VisuProcessor::scopeVar() const
+{
+    // the newest 2048 samples, oldest first (the audio thread may be writing meanwhile: a picture, not a recording)
+    const int w = scopeW_.load(std::memory_order_acquire), n = 2048; juce::Array<juce::var> a; a.ensureStorageAllocated(n);
+    for (int i = 0; i < n; ++i) a.add(std::round(scope_[(w - n + i + kScope) & (kScope - 1)] * 10000.f) / 10000.f);
+    auto* o = new juce::DynamicObject(); o->setProperty("d", juce::var(a)); o->setProperty("sr", getSampleRate()); return juce::var(o);
+}
 void VisuProcessor::setPatch(int layer, int index)
 {
     patch_[layer & 1] = index; engine_.setPatch(layer, index); sendChangeMessage();
@@ -380,6 +387,11 @@ void VisuProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuf
     }
     if (pos < n) engine_.render(L + pos, R + pos, n - pos);
     midi.clear();
+    if (scopeOn_.load(std::memory_order_relaxed)) {   // keep the last moments of the output for the interface's graphs
+        int w = scopeW_.load(std::memory_order_relaxed);
+        for (int i = 0; i < n; ++i) { scope_[w] = .5f * (L[i] + R[i]); w = (w + 1) & (kScope - 1); }
+        scopeW_.store(w, std::memory_order_release);
+    }
     // CPU guard: tell the engine how much of the block's time this took, so it can drop voices before the audio breaks up
     if (n > 0 && getSampleRate() > 0) engine_.reportLoad((float) ((juce::Time::getMillisecondCounterHiRes() - t0) / (1000.0 * n / getSampleRate())));
 }

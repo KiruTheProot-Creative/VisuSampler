@@ -5,7 +5,7 @@ const path=require('node:path');const {pathToFileURL}=require('node:url');
 protocol.registerSchemesAsPrivileged([{scheme:'app',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
 const WWW=path.join(__dirname,'www');
 function createWindow(){
-  const win=new BrowserWindow({width:1500,height:900,minWidth:1100,minHeight:640,backgroundColor:'#262626',title:'VisuMaker',
+  const win=new BrowserWindow({width:1500,height:900,minWidth:1100,minHeight:640,backgroundColor:'#262626',title:'VisuMaker 0.0.1',
     webPreferences:{contextIsolation:true,sandbox:true,preload:path.join(__dirname,'preload.js')}});
   win.loadURL('app://local/apps/maker/index.html'+(process.argv.includes('--worklet-file')?'?wfile=1':''));
   /* --smoke: start the audio, wait, and report whether the shared engine runs (used by the Windows build check) */

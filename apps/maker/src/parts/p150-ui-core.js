@@ -28,7 +28,7 @@ function propsHTML(){
   let h='<div class="phead"><input type="text" class="pname" data-k="name" value="'+esc(el.name)+'" aria-label="Element name"><span class="badge">'+el.type+'</span></div>'
     +'<div class="acts"><button type="button" class="btn" data-act="fwd">Forward</button><button type="button" class="btn" data-act="back">Back</button><button type="button" class="btn" data-act="dup">Duplicate</button><button type="button" class="btn danger" data-act="del">Delete</button></div>';
   h+=sec('Transform',H.num('X','x',el.x)+H.num('Y','y',el.y)+H.num('Width','w',el.w,12,1920,1,1)+H.num('Height','h',el.h,12,1080,1,1)+(el.type==='knob'?'<p class="hint">Knobs stay square when resized.</p>':''));
-  const fn={knob:knobProps,fader:faderProps,panel:panelProps,text:textProps,button:buttonProps,lcd:lcdProps,list:listProps,dropdown:dropdownProps,image:imageProps}[el.type];
+  const fn={knob:knobProps,fader:faderProps,panel:panelProps,text:textProps,button:buttonProps,lcd:lcdProps,list:listProps,dropdown:dropdownProps,image:imageProps,graph:graphProps}[el.type];
   return h+fn(el);
 }
 function knobProps(el){

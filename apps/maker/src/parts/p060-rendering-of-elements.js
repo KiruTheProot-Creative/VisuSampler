@@ -89,6 +89,7 @@ function renderEl(el){
   else if(el.type==='list'){n.style.cssText=css+lcdCss(el);n.innerHTML=listHTML(el);}
   else if(el.type==='dropdown'){n.style.cssText=css+dropdownCss(el);n.innerHTML=dropdownHTML(el);}
   else if(el.type==='image'){n.style.cssText=css+imageCss(el);n.innerHTML='';}
+  else if(el.type==='graph'){n.style.cssText=css+graphCss(el);if(!n.querySelector('canvas.gc'))n.innerHTML=graphHTML(el);drawGraph(el);graphWake();}
   else{
     const j={left:'flex-start',center:'center',right:'flex-end'}[el.align]||'center';
     n.style.cssText=css+'justify-content:'+j+';';

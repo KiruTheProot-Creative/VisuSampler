@@ -1,5 +1,5 @@
 /* ---------- element factories ---------- */
-const TYPE_NAMES={panel:'Panel',knob:'Knob',fader:'Fader',text:'Text',button:'Button',lcd:'Text panel',list:'List selector',dropdown:'Dropdown',image:'Image'};
+const TYPE_NAMES={panel:'Panel',knob:'Knob',fader:'Fader',text:'Text',button:'Button',lcd:'Text panel',list:'List selector',dropdown:'Dropdown',image:'Image',graph:'Graph'};
 const DEF={
   panel:()=>({w:240,h:160,fillMode:'solid',fill2:'#1f1b26',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',fill:'#3a3445',round:true,radius:14,bevel:true,bevelSize:3,bevelDir:'out',shadow:true,shadowDist:6,shadowBlur:18,mat:null,matBlend:'overlay',matOpacity:.5,matMode:'tile',matScale:1}),
   knob:()=>({w:110,h:110,tag:'',lower:null,upper:null,ringMode:'auto',ringImg:null,ringColor:'#ff7eb6',ringFrom:'start',ringWidth:.09,start:-135,end:135,px:.5,py:.5,baseColor:'#4a4357',capColor:'#e9e4f2',ptrColor:'#ff7eb6',ptrStyle:'line',rules:[]}),
@@ -9,6 +9,8 @@ const DEF={
   lcd:()=>({w:320,h:84,text:'{list.id}  {list.name}',font:'Figtree',size:26,align:'left',fg:'#f2f2f2',bg:'#1d1d22',glow:0,screen:false,grid:true,gridAmt:.16,scan:false,radius:6,pad:12,fillMode:'solid',fill2:'#0e0e12',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover'}),
   dropdown:()=>({w:200,h:34,tag:'',font:'Figtree',size:15,weight:'600',fg:'#f2f2f2',bg:'#2a2730',fillMode:'solid',fill2:'#141218',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',
     radius:6,pad:10,bevel:true,arrowColor:'#ff7eb6',menuBg:'#1d1b22',menuFg:'#f2f2f2',menuHi:'#ff7eb6',menuRows:8,prefix:'',rules:[]}),
+  graph:()=>({w:260,h:120,kind:'env',bg:'#121216',bgOn:true,radius:8,border:true,borderColor:'#2e2e36',grid:true,gridColor:'rgba(255,255,255,.07)',
+    line:'#ff7eb6',lineW:2,glow:6,fillOn:true,fill:'#ff7eb6',fillAmt:.18,env:{},filt:{type:'lp',hz:2000,resv:0},layer:0,span:512,gain:1,bars:64,style:'line',smooth:.7}),
   image:()=>({w:200,h:150,img:null,fit:'contain',opacity:1,radius:0,shadow:false,flipX:false,flipY:false}),
   list:()=>({w:360,h:200,rows:6,font:'VT323',size:0,fg:'#1f2a0f',bg:'#a3b865',selStyle:'invert',numbers:true,screen:true,grid:true,gridAmt:.16,radius:6,pad:10,glow:0,fillMode:'solid',fill2:'#6f8a3c',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',rules:[]})
 };

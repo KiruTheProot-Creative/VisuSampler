@@ -97,5 +97,6 @@ function valDisplay(el){
   if(el.type==='text') valText(el);
   else if(el.type==='lcd') valLcd(el);
   else if(el.type==='list'||el.type==='button'||el.type==='dropdown') renderEl(el);
+  else if(el.type==='graph'&&!GRAPH_LIVE(el.kind)) drawGraph(el);
 }
-const refreshDisplays=()=>S.els.forEach(el=>{if(el.type==='text'||el.type==='lcd')valDisplay(el);else if(el.type==='list'||el.type==='dropdown')renderEl(el);});
+const refreshDisplays=()=>S.els.forEach(el=>{if(el.type==='text'||el.type==='lcd'||el.type==='graph')valDisplay(el);else if(el.type==='list'||el.type==='dropdown')renderEl(el);});

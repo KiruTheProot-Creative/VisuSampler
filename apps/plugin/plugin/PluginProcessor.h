@@ -36,7 +36,11 @@ public:
     int addLibraryFiles(const juce::Array<juce::File>& files);
     void setList(int index);
     void setListB(int index);   // layer B (-3 = off)
-    void setPatch(int layer, int index);   // patch mode "group": which group of the list plays on a layer
+    void setPatch(int layer, int index);
+    // the last moments of the output, for graph elements (oscilloscope, spectrum) in the interface
+    void setScope(bool on) { scopeOn_.store(on); }
+    bool scopeOn() const { return scopeOn_.load(); }
+    juce::var scopeVar() const;   // patch mode "group": which group of the list plays on a layer
     int currentPatch(int layer) const { const int p = patch_[layer & 1]; return p == -2 && current_ ? current_->defaultPatch[layer & 1] : p; }
     bool pollKeyswitch() { if (!engine_.takeKeyswitchChange()) return false; list_ = engine_.list(); sendChangeMessage(); return true; }
     void panic() { panicRequest_ = true; }
@@ -113,6 +117,7 @@ private:
     juce::String currentId_, status_ = "No library loaded", pendingId_; bool pendingKeep_ = false;
     std::map<juce::String, float> tagState_; juce::CriticalSection tagLock_;   // saved with the DAW project
     juce::File currentFile_;
+    static constexpr int kScope = 4096; float scope_[kScope] = {}; std::atomic<int> scopeW_{ 0 }; std::atomic<bool> scopeOn_{ false };
     int list_ = -2, listB_ = -2, patch_[2] = { -2, -2 }; double sampleRate_ = 0;
     std::atomic<bool> loading_{ false }, panicRequest_{ false };
     std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);

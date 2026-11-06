@@ -29,7 +29,7 @@ window.addEventListener('message',async e=>{
   const m=e.data||{};
   if(m.t==='load'){
     const p=m.project||{};
-    Object.assign(S,{canvas:p.canvas||S.canvas,light:p.light==null?315:p.light,bpm:p.bpm||120,sig:p.sig||{n:4,d:4},els:p.els||[],pages:p.pages||[],tags:p.tags||[],groups:p.groups||[],lists:p.lists||[],banks:p.banks||[],gset:p.gset||{}});
+    Object.assign(S,{canvas:p.canvas||S.canvas,light:p.light==null?315:p.light,bpm:p.bpm||120,sig:p.sig||{n:4,d:4},els:p.els||[],pages:p.pages||[],tags:p.tags||[],groups:p.groups||[],lists:p.lists||[],banks:p.banks||[],gset:p.gset||{},graphPeaks:p.graphPeaks||{}});
     S.assets={};addTexAssets();
     Object.keys(m.assets||{}).forEach(id=>{const a=m.assets[id];S.assets[id]={name:a.name,w:a.w||256,h:a.h||256,svg:/svg/.test(a.mime||''),mips:[{s:Math.max(a.w||256,a.h||256),url:a.url}]};});
     for(const fam of Object.keys(m.fonts||{})){try{const ff=new FontFace(fam,'url('+m.fonts[fam]+')');await ff.load();document.fonts.add(ff);}catch(err){}}
@@ -45,6 +45,7 @@ window.addEventListener('message',async e=>{
   }else if(m.t==='list'){chooseList(m.index);}
   else if(m.t==='listB'){chooseListB(m.index);}
   else if(m.t==='patch'){choosePatch(m.layer,m.index);}
+  else if(m.t==='scope'){GRAPH.time=Float32Array.from(m.d||[]);GRAPH.sr=m.sr||48000;graphWake();}
   else if(m.t==='tags'){   /* moved by DAW automation or a MIDI controller: show it, do not send it back */
     Object.keys(m.values||{}).forEach(n=>{const t=tagByName(n);if(t)setTag0(t,+m.values[n]);});
   }

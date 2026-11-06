@@ -224,7 +224,7 @@ function addTexAssets(){
 
 
 /* ---------- element factories ---------- */
-const TYPE_NAMES={panel:'Panel',knob:'Knob',fader:'Fader',text:'Text',button:'Button',lcd:'Text panel',list:'List selector',dropdown:'Dropdown',image:'Image'};
+const TYPE_NAMES={panel:'Panel',knob:'Knob',fader:'Fader',text:'Text',button:'Button',lcd:'Text panel',list:'List selector',dropdown:'Dropdown',image:'Image',graph:'Graph'};
 const DEF={
   panel:()=>({w:240,h:160,fillMode:'solid',fill2:'#1f1b26',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',fill:'#3a3445',round:true,radius:14,bevel:true,bevelSize:3,bevelDir:'out',shadow:true,shadowDist:6,shadowBlur:18,mat:null,matBlend:'overlay',matOpacity:.5,matMode:'tile',matScale:1}),
   knob:()=>({w:110,h:110,tag:'',lower:null,upper:null,ringMode:'auto',ringImg:null,ringColor:'#ff7eb6',ringFrom:'start',ringWidth:.09,start:-135,end:135,px:.5,py:.5,baseColor:'#4a4357',capColor:'#e9e4f2',ptrColor:'#ff7eb6',ptrStyle:'line',rules:[]}),
@@ -234,6 +234,8 @@ const DEF={
   lcd:()=>({w:320,h:84,text:'{list.id}  {list.name}',font:'Figtree',size:26,align:'left',fg:'#f2f2f2',bg:'#1d1d22',glow:0,screen:false,grid:true,gridAmt:.16,scan:false,radius:6,pad:12,fillMode:'solid',fill2:'#0e0e12',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover'}),
   dropdown:()=>({w:200,h:34,tag:'',font:'Figtree',size:15,weight:'600',fg:'#f2f2f2',bg:'#2a2730',fillMode:'solid',fill2:'#141218',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',
     radius:6,pad:10,bevel:true,arrowColor:'#ff7eb6',menuBg:'#1d1b22',menuFg:'#f2f2f2',menuHi:'#ff7eb6',menuRows:8,prefix:'',rules:[]}),
+  graph:()=>({w:260,h:120,kind:'env',bg:'#121216',bgOn:true,radius:8,border:true,borderColor:'#2e2e36',grid:true,gridColor:'rgba(255,255,255,.07)',
+    line:'#ff7eb6',lineW:2,glow:6,fillOn:true,fill:'#ff7eb6',fillAmt:.18,env:{},filt:{type:'lp',hz:2000,resv:0},layer:0,span:512,gain:1,bars:64,style:'line',smooth:.7}),
   image:()=>({w:200,h:150,img:null,fit:'contain',opacity:1,radius:0,shadow:false,flipX:false,flipY:false}),
   list:()=>({w:360,h:200,rows:6,font:'VT323',size:0,fg:'#1f2a0f',bg:'#a3b865',selStyle:'invert',numbers:true,screen:true,grid:true,gridAmt:.16,radius:6,pad:10,glow:0,fillMode:'solid',fill2:'#6f8a3c',gradAngle:180,gradLight:true,bgImg:null,bgFit:'cover',rules:[]})
 };
@@ -403,6 +405,7 @@ function renderEl(el){
   else if(el.type==='list'){n.style.cssText=css+lcdCss(el);n.innerHTML=listHTML(el);}
   else if(el.type==='dropdown'){n.style.cssText=css+dropdownCss(el);n.innerHTML=dropdownHTML(el);}
   else if(el.type==='image'){n.style.cssText=css+imageCss(el);n.innerHTML='';}
+  else if(el.type==='graph'){n.style.cssText=css+graphCss(el);if(!n.querySelector('canvas.gc'))n.innerHTML=graphHTML(el);drawGraph(el);graphWake();}
   else{
     const j={left:'flex-start',center:'center',right:'flex-end'}[el.align]||'center';
     n.style.cssText=css+'justify-content:'+j+';';
@@ -534,8 +537,132 @@ function valDisplay(el){
   if(el.type==='text') valText(el);
   else if(el.type==='lcd') valLcd(el);
   else if(el.type==='list'||el.type==='button'||el.type==='dropdown') renderEl(el);
+  else if(el.type==='graph'&&!GRAPH_LIVE(el.kind)) drawGraph(el);
 }
-const refreshDisplays=()=>S.els.forEach(el=>{if(el.type==='text'||el.type==='lcd')valDisplay(el);else if(el.type==='list'||el.type==='dropdown')renderEl(el);});
+const refreshDisplays=()=>S.els.forEach(el=>{if(el.type==='text'||el.type==='lcd'||el.type==='graph')valDisplay(el);else if(el.type==='list'||el.type==='dropdown')renderEl(el);});
+
+/* ---------- Graph element: waveform, oscilloscope, spectrum, envelope or filter curve ----------
+   Drawn on a canvas. Envelope and filter redraw when their knobs move; scope and spectrum run live from the output
+   (the Maker reads its audio engine, the player gets the plugin's output from the host page as {t:'scope'} messages);
+   waveform shows the sample of the patch that plays now (peaks come with the library as project.graphPeaks). */
+const GRAPH={time:null,pull:null,spec:new Map(),raf:0};
+const GRAPH_LIVE=k=>k==='scope'||k==='spectrum';
+function graphCss(el){
+  return 'border-radius:'+(el.radius||0)+'px;overflow:hidden;background:'+(el.bgOn===false?'transparent':el.bg)+';'
+    +(el.border?'box-shadow:inset 0 0 0 1px '+el.borderColor+';':'');
+}
+function graphHTML(){return '<canvas class="gc" style="width:100%;height:100%;display:block"></canvas>';}
+/* the tag value 0..1 of a linked knob, or null */
+const gTag=id=>{const t=id&&tagById(id);return t?t.value:null;};
+function graphCanvas(el){
+  const n=nodes.get(el.id),cv=n&&n.querySelector('canvas.gc');if(!cv)return null;
+  const k=Math.min(3,(window.devicePixelRatio||1)*(S.z||1)),W=Math.max(1,Math.round(el.w*k)),H=Math.max(1,Math.round(el.h*k));
+  if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;}
+  const c=cv.getContext('2d');c.setTransform(k,0,0,k,0,0);c.clearRect(0,0,el.w,el.h);return c;
+}
+function graphGrid(c,el,xs,ys){
+  if(!el.grid)return;c.strokeStyle=el.gridColor;c.lineWidth=1;c.beginPath();
+  (xs||[.25,.5,.75]).forEach(x=>{const X=Math.round(x*el.w)+.5;c.moveTo(X,0);c.lineTo(X,el.h);});
+  (ys||[.25,.5,.75]).forEach(y=>{const Y=Math.round(y*el.h)+.5;c.moveTo(0,Y);c.lineTo(el.w,Y);});c.stroke();
+}
+/* stroke a list of [x,y] points, with an optional fill down to `base` */
+function graphPath(c,el,pts,base){
+  if(!pts.length)return;
+  if(el.fillOn&&base!=null){c.beginPath();c.moveTo(pts[0][0],base);pts.forEach(p=>c.lineTo(p[0],p[1]));c.lineTo(pts[pts.length-1][0],base);c.closePath();
+    c.globalAlpha=el.fillAmt;c.fillStyle=el.fill;c.fill();c.globalAlpha=1;}
+  c.beginPath();pts.forEach((p,i)=>i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1]));
+  c.lineJoin='round';c.lineCap='round';c.lineWidth=el.lineW;c.strokeStyle=el.line;
+  if(el.glow){c.shadowColor=el.line;c.shadowBlur=el.glow;}c.stroke();c.shadowBlur=0;
+}
+const PAD=el=>Math.max(1,el.lineW/2+1);
+function drawEnv(c,el){
+  const ms=t=>t*t*10000,g=el.env||{},v=(k,d)=>{const x=gTag(g[k]);return x==null?d:x;};
+  const a=ms(v('a',.1)),d=ms(v('d',.3)),s=v('s',.7),r=ms(v('r',.3));
+  const total=Math.max(1,a+d+r),hold=.22,usable=1-hold,p=PAD(el),w=el.w-2*p,h=el.h-2*p;
+  /* each stage gets at least a little room so even a 0 ms attack is visible as a corner */
+  const fa=.04+(usable-.12)*(a/total),fd=.04+(usable-.12)*(d/total),fr=.04+(usable-.12)*(r/total);
+  const X=f=>p+f*w,Y=y=>p+(1-y)*h,pts=[[X(0),Y(0)]];
+  const curve=(x0,y0,x1,y1,exp)=>{for(let i=1;i<=16;i++){const t=i/16,e=exp?1-Math.pow(1-t,2.2):t;pts.push([X(x0+(x1-x0)*t),Y(y0+(y1-y0)*e)]);}};
+  curve(0,0,fa,1,false);curve(fa,1,fa+fd,s,true);pts.push([X(fa+fd+hold),Y(s)]);curve(fa+fd+hold,s,fa+fd+hold+fr,0,true);
+  graphGrid(c,el,[fa,fa+fd,fa+fd+hold],[.5]);graphPath(c,el,pts,Y(0));
+}
+function drawFilter(c,el){
+  const f=el.filt||{},ct=gTag(f.cut),rt=gTag(f.res);
+  const fc=ct==null?(f.hz||2000):20*Math.pow(1000,ct),res=rt==null?(f.resv||0):rt,q=.5*Math.pow(40,res),type=f.type||'lp';
+  const p=PAD(el),w=el.w-2*p,h=el.h-2*p,top=18,bot=-36,pts=[];
+  for(let i=0;i<=160;i++){
+    const fr=20*Math.pow(1000,i/160),x=fr/fc,re=1-x*x,im=x/q,den=re*re+im*im;
+    let m=type==='hp'?(x*x*x*x)/den:type==='bp'?(im*im)/den:type==='notch'?(re*re)/den:1/den;
+    if(type==='lp24')m=m*m;
+    const db=Math.max(bot,Math.min(top,10*Math.log10(Math.max(1e-9,m))));
+    pts.push([p+i/160*w,p+(top-db)/(top-bot)*h]);
+  }
+  graphGrid(c,el,[Math.log(100/20)/Math.log(1000),Math.log(1000/20)/Math.log(1000),Math.log(10000/20)/Math.log(1000)],[top/(top-bot)]);
+  graphPath(c,el,pts,el.h);
+}
+/* the group that plays now on a layer: its patch, the first group of its list, or the first group */
+function graphGroup(B){
+  if(typeof curPatch==='function'&&patchModeOn()){const g=curPatch(B);if(g)return g;}
+  const l=B?curListB():curList();if(l&&l.groups&&l.groups.length)return l.groups[0];
+  return S.groups[0]||null;
+}
+function drawWave(c,el){
+  const g=graphGroup(el.layer===1),pk=g&&((GRAPH.peaksOf&&GRAPH.peaksOf(g))||(S.graphPeaks&&S.graphPeaks[g]));
+  const p=PAD(el),w=el.w-2*p,h=el.h-2*p,mid=p+h/2;graphGrid(c,el,[],[.5]);
+  if(!pk||!pk.length){c.fillStyle=el.line;c.globalAlpha=.5;c.font='12px Figtree,sans-serif';c.textAlign='center';c.fillText(g?'no audio yet':'no patch',el.w/2,el.h/2+4);c.globalAlpha=1;return;}
+  const n=pk.length/2,top=[],bot=[];
+  for(let i=0;i<n;i++){const x=p+i/(n-1)*w;top.push([x,mid-pk[i*2+1]*h/2]);bot.push([x,mid-pk[i*2]*h/2]);}
+  c.beginPath();top.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]));for(let i=bot.length-1;i>=0;i--)c.lineTo(bot[i][0],bot[i][1]);c.closePath();
+  c.globalAlpha=el.fillOn?el.fillAmt:0;c.fillStyle=el.fill;c.fill();c.globalAlpha=1;
+  c.lineWidth=el.lineW;c.strokeStyle=el.line;if(el.glow){c.shadowColor=el.line;c.shadowBlur=el.glow;}c.stroke();c.shadowBlur=0;
+}
+function drawScope(c,el){
+  const d=GRAPH.time,p=PAD(el),w=el.w-2*p,h=el.h-2*p,mid=p+h/2;graphGrid(c,el,[],[.5]);
+  if(!d||!d.length){graphPath(c,el,[[p,mid],[p+w,mid]],null);return;}
+  const n=Math.min(d.length>>1,Math.max(64,Math.round(el.span||512)));let s=0;
+  for(let i=1;i<d.length-n;i++)if(d[i-1]<0&&d[i]>=0){s=i;break;}   /* start on a rising zero crossing so the picture stands still */
+  const gain=el.gain||1,pts=[];for(let i=0;i<n;i++)pts.push([p+i/(n-1)*w,mid-Math.max(-1,Math.min(1,d[s+i]*gain))*h/2]);
+  graphPath(c,el,pts,el.fillOn?mid:null);
+}
+function fftMag(x){   /* magnitude spectrum of a power-of-two block (Hann window) */
+  const n=x.length,re=new Float32Array(n),im=new Float32Array(n);
+  for(let i=0;i<n;i++)re[i]=x[i]*(.5-.5*Math.cos(2*Math.PI*i/(n-1)));
+  for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;}}
+  for(let len=2;len<=n;len<<=1){const a=-2*Math.PI/len,wr=Math.cos(a),wi=Math.sin(a);
+    for(let i=0;i<n;i+=len){let cr=1,ci=0;for(let k=0;k<len/2;k++){const u=i+k,v=u+len/2,tr=re[v]*cr-im[v]*ci,ti=re[v]*ci+im[v]*cr;
+      re[v]=re[u]-tr;im[v]=im[u]-ti;re[u]+=tr;im[u]+=ti;const nr=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=nr;}}}
+  const m=new Float32Array(n/2);for(let i=0;i<n/2;i++)m[i]=Math.hypot(re[i],im[i])*4/n;return m;
+}
+function drawSpectrum(c,el){
+  const d=GRAPH.time,p=PAD(el),w=el.w-2*p,h=el.h-2*p,bins=Math.max(16,Math.min(256,Math.round(el.bars||96))),top=0,bot=-78;
+  graphGrid(c,el,[Math.log(100/20)/Math.log(1000),Math.log(1000/20)/Math.log(1000),Math.log(10000/20)/Math.log(1000)],[.33,.66]);
+  let prev=GRAPH.spec.get(el.id);if(!prev||prev.length!==bins){prev=new Float32Array(bins).fill(bot);GRAPH.spec.set(el.id,prev);}
+  if(d&&d.length>=512){
+    let N=1;while(N*2<=d.length&&N<4096)N*=2;const m=fftMag(d.subarray(d.length-N)),sr=GRAPH.sr||48000;
+    for(let b=0;b<bins;b++){
+      const f0=20*Math.pow(1000,b/bins),f1=20*Math.pow(1000,(b+1)/bins),i0=Math.max(1,Math.floor(f0/sr*N)),i1=Math.max(i0+1,Math.ceil(f1/sr*N));
+      let mx=0;for(let i=i0;i<i1&&i<m.length;i++)if(m[i]>mx)mx=m[i];
+      const db=Math.max(bot,20*Math.log10(mx+1e-9)),sm=el.smooth==null?.7:el.smooth;
+      prev[b]=db>prev[b]?db:prev[b]*sm+db*(1-sm);
+    }
+  }else for(let b=0;b<bins;b++)prev[b]=prev[b]*.9+bot*.1;
+  const y=v=>p+(top-Math.min(top,v))/(top-bot)*h;
+  if(el.style==='bars'){
+    const bw=w/bins;c.fillStyle=el.line;if(el.glow){c.shadowColor=el.line;c.shadowBlur=el.glow;}
+    for(let b=0;b<bins;b++){const Y=y(prev[b]);c.fillRect(p+b*bw+.5,Y,Math.max(1,bw-1.5),p+h-Y);}c.shadowBlur=0;
+  }else{const pts=[];for(let b=0;b<bins;b++)pts.push([p+(b+.5)/bins*w,y(prev[b])]);graphPath(c,el,pts,p+h);}
+}
+function drawGraph(el){
+  const c=graphCanvas(el);if(!c)return;
+  ({env:drawEnv,filter:drawFilter,wave:drawWave,scope:drawScope,spectrum:drawSpectrum}[el.kind]||drawEnv)(c,el);
+}
+/* live graphs: one animation loop while any is on show */
+function graphLoop(){
+  GRAPH.raf=0;const live=S.els.filter(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)&&elShown(e));if(!live.length)return;
+  if(GRAPH.pull){const d=GRAPH.pull();if(d)GRAPH.time=d;}
+  live.forEach(drawGraph);GRAPH.raf=requestAnimationFrame(graphLoop);
+}
+function graphWake(){if(!GRAPH.raf&&S.els.some(e=>e.type==='graph'&&GRAPH_LIVE(e.kind)))GRAPH.raf=requestAnimationFrame(graphLoop);}
 
 /* ---------- layout / canvas size ---------- */
 function layout(){
@@ -1021,7 +1148,7 @@ function propsHTML(){
   let h='<div class="phead"><input type="text" class="pname" data-k="name" value="'+esc(el.name)+'" aria-label="Element name"><span class="badge">'+el.type+'</span></div>'
     +'<div class="acts"><button type="button" class="btn" data-act="fwd">Forward</button><button type="button" class="btn" data-act="back">Back</button><button type="button" class="btn" data-act="dup">Duplicate</button><button type="button" class="btn danger" data-act="del">Delete</button></div>';
   h+=sec('Transform',H.num('X','x',el.x)+H.num('Y','y',el.y)+H.num('Width','w',el.w,12,1920,1,1)+H.num('Height','h',el.h,12,1080,1,1)+(el.type==='knob'?'<p class="hint">Knobs stay square when resized.</p>':''));
-  const fn={knob:knobProps,fader:faderProps,panel:panelProps,text:textProps,button:buttonProps,lcd:lcdProps,list:listProps,dropdown:dropdownProps,image:imageProps}[el.type];
+  const fn={knob:knobProps,fader:faderProps,panel:panelProps,text:textProps,button:buttonProps,lcd:lcdProps,list:listProps,dropdown:dropdownProps,image:imageProps,graph:graphProps}[el.type];
   return h+fn(el);
 }
 function knobProps(el){
@@ -1555,6 +1682,50 @@ rbody.addEventListener('click',e=>{
   const r0=restore;restore=function(sn){r0(sn);S.pages=sn&&sn.pages?JSON.parse(JSON.stringify(sn.pages)):[];syncPageTag();};
 })();
 renderPageBar();
+
+/* ---------- Graph element: inspector, the Maker's live audio and the waveform peaks ---------- */
+const GKINDS=[['env','Envelope (ADSR from knobs)'],['filter','Filter curve (from knobs)'],['wave','Waveform of the patch'],['scope','Oscilloscope (live output)'],['spectrum','Spectrum (live output)']];
+function graphProps(el){
+  const num=S.tags.filter(t=>!t.sys&&t.kind==='number'),opts=[['','— fixed —']].concat(num.map(t=>[t.id,t.name]));
+  const gsel=(l,path,v,o)=>'<label class="f"><span>'+l+'</span><select data-gk="'+path+'">'+o.map(a=>'<option value="'+esc(a[0])+'"'+(String(a[0])===String(v==null?'':v)?' selected':'')+'>'+esc(a[1])+'</option>').join('')+'</select></label>';
+  const gnum=(l,path,v,mn,mx,st)=>'<label class="f"><span>'+l+'</span><input type="number" data-gk="'+path+'" value="'+v+'" min="'+mn+'" max="'+mx+'" step="'+st+'"></label>';
+  let what='';
+  if(el.kind==='env'){const g=el.env||{};what=gsel('Attack knob','env.a',g.a,opts)+gsel('Decay knob','env.d',g.d,opts)+gsel('Sustain knob','env.s',g.s,opts)+gsel('Release knob','env.r',g.r,opts)
+    +'<p class="hint">Pick the knobs that set your envelope: the curve follows them, the same way the sound does.</p>';}
+  else if(el.kind==='filter'){const f=el.filt||{};what=gsel('Type','filt.type',f.type||'lp',[['lp','Low-pass 12 dB'],['lp24','Low-pass 24 dB'],['hp','High-pass'],['bp','Band-pass'],['notch','Notch']])
+    +gsel('Cutoff knob','filt.cut',f.cut,opts)+(f.cut?'':gnum('Cutoff (Hz)','filt.hz',f.hz||2000,20,20000,1))
+    +gsel('Resonance knob','filt.res',f.res,opts)+(f.res?'':gnum('Resonance (0–1)','filt.resv',f.resv||0,0,1,.01))
+    +'<p class="hint">A knob on cutoff sweeps 20 Hz – 20 kHz, like the per-note filter.</p>';}
+  else if(el.kind==='wave')what=(layerBOn()?H.sel('Side','layer',el.layer||0,[[0,'A'],[1,'B']]):'')+'<p class="hint">Shows the sample of the patch that plays now and changes with it.</p>';
+  else if(el.kind==='scope')what=H.range('Time shown (samples)','span',128,2048,32,el.span||512)+H.range('Zoom','gain',.5,8,.1,el.gain||1)+'<p class="hint">Moves with the sound while you play (in Test mode and in the player).</p>';
+  else what=H.sel('Draw as','style',el.style||'line',[['line','Line'],['bars','Bars']])+H.range('Bands','bars',16,256,1,el.bars||64)+H.range('Fall time','smooth',0,.97,.01,el.smooth==null?.7:el.smooth)
+    +'<p class="hint">20 Hz on the left to 20 kHz on the right.</p>';
+  return sec('Graph',H.sel('Shows','kind',el.kind,GKINDS,true)+what)
+    +sec('Line',H.color('Colour','line',el.line)+H.range('Width','lineW',.5,8,.5,el.lineW)+H.range('Glow','glow',0,30,1,el.glow)
+      +H.chk('Fill under the line','fillOn',el.fillOn,true)+(el.fillOn?H.color('Fill colour','fill',el.fill)+H.range('Fill strength','fillAmt',0,1,.01,el.fillAmt):''))
+    +sec('Background',H.chk('Background','bgOn',el.bgOn!==false,true)+(el.bgOn!==false?H.color('Colour','bg',el.bg):'')
+      +H.chk('Grid','grid',el.grid)+H.chk('Border','border',el.border,true)+(el.border?H.color('Border colour','borderColor',el.borderColor):'')+H.range('Rounding','radius',0,40,1,el.radius));
+}
+rbody.addEventListener('change',e=>{
+  const t=e.target,path=t.dataset.gk,el=sel();if(!path||!el||el.type!=='graph')return;
+  const [o,k]=path.split('.');el[o]=Object.assign({},el[o]||{});
+  const v=t.type==='number'?parseFloat(t.value):t.value;
+  if(v===''||(typeof v==='number'&&isNaN(v)))delete el[o][k];else el[o][k]=v;
+  renderEl(el);renderRight();
+});
+/* the Maker feeds live graphs from its audio engine */
+GRAPH.pull=()=>{
+  const E=typeof ENG!=='undefined'?ENG:null;if(!E||!E.out||!E.out.context)return null;
+  if(!GRAPH.an||GRAPH.an.context!==E.out.context){GRAPH.an=E.out.context.createAnalyser();GRAPH.an.fftSize=4096;E.out.connect(GRAPH.an);GRAPH.buf=new Float32Array(4096);GRAPH.sr=E.out.context.sampleRate;}
+  GRAPH.an.getFloatTimeDomainData(GRAPH.buf);return GRAPH.buf;
+};
+/* waveform peaks of a group: its zone nearest middle C */
+function groupPeaks(g,n){
+  const zs=S.zones.filter(z=>z.group===g&&!z.mute);if(!zs.length)return null;
+  zs.sort((a,b)=>Math.abs((a.lo+a.hi)/2-60)-Math.abs((b.lo+b.hi)/2-60));
+  const b=BUF.get(zs[0].sample);if(!b||!b.ch)return null;return peaksOf(b.ch,n||300);
+}
+GRAPH.peaksOf=g=>groupPeaks(g,300);
 
 /* ---------- inspector events ---------- */
 rbody.addEventListener('toggle',e=>{const d=e.target;if(d&&d.dataset&&d.dataset.sec){if(d.open)closed.delete(d.dataset.sec);else closed.add(d.dataset.sec);}},true);
@@ -5397,6 +5568,7 @@ async function buildVsamp(progress){
   }
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
   sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;const cb=curListB();sn.currentListB=cb?S.lists.indexOf(cb):-1;sn.currentPatch=patchIdx(0);sn.currentPatchB=patchIdx(1);if(sn.play)sn.play.patchMode=patchModeOn()?'group':'list';}
+  if(S.els.some(e=>e.type==='graph'&&e.kind==='wave')){sn.graphPeaks={};S.groups.forEach(g=>{const p=groupPeaks(g,200);if(p)sn.graphPeaks[g]=Array.from(p,v=>Math.round(v*1000)/1000);});}   /* waveform graphs in the player */
   /* parameter ranges of every FX module, so the player can apply knobs and modulation exactly like the Maker */
   const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0];});});
   const est=estimate(o),dropped=set.stats.unusedSkipped;

@@ -1,6 +1,6 @@
 {
   "name": "@visusampler/core",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "VisuSampler core: .vsamp format, resampler, time-stretch, wavetable, granular, unison, zone rendering and bake planning. No dependencies, runs in browsers and Node 18+.",
   "type": "module",
   "main": "src/index.js",

@@ -1,7 +1,7 @@
 {
   "name": "visumaker-desktop",
   "productName": "VisuMaker",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "VisuMaker desktop app",
   "main": "main.js",
   "private": true,

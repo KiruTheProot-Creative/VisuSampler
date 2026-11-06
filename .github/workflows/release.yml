@@ -74,4 +74,4 @@ jobs:
           Libraries exported from VisuMaker go to `Documents\VisuSampler\Libraries`, where VisuPlayer finds them.
           The builds are not code-signed, so Windows SmartScreen may ask before the first start ("More info", then "Run anyway").
           MD
-          gh release create "$TAG" dl/player/* dl/maker/* --repo "$REPO" --target "${GITHUB_SHA}" --title "VisuSampler ${TAG}" --notes-file notes.md --prerelease
+          gh release create "$TAG" dl/player/* dl/maker/* --repo "$REPO" --target "${GITHUB_SHA}" --title "VisuSampler 0.0.1 (${TAG})" --notes-file notes.md --prerelease

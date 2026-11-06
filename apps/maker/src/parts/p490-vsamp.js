@@ -54,6 +54,7 @@ async function buildVsamp(progress){
   }
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
   sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;const cb=curListB();sn.currentListB=cb?S.lists.indexOf(cb):-1;sn.currentPatch=patchIdx(0);sn.currentPatchB=patchIdx(1);if(sn.play)sn.play.patchMode=patchModeOn()?'group':'list';}
+  if(S.els.some(e=>e.type==='graph'&&e.kind==='wave')){sn.graphPeaks={};S.groups.forEach(g=>{const p=groupPeaks(g,200);if(p)sn.graphPeaks[g]=Array.from(p,v=>Math.round(v*1000)/1000);});}   /* waveform graphs in the player */
   /* parameter ranges of every FX module, so the player can apply knobs and modulation exactly like the Maker */
   const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0];});});
   const est=estimate(o),dropped=set.stats.unusedSkipped;

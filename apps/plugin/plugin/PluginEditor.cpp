@@ -28,7 +28,7 @@ VisuEditor::VisuEditor(VisuProcessor& p)
     setResizable(true, true); setResizeLimits(640, 440, 2400, 1600); setSize(1000, 660);
     browser_.goToURL(juce::WebBrowserComponent::getResourceProviderRoot());
     proc_.addChangeListener(this);
-    startTimerHz(20);
+    startTimerHz(30);
 }
 
 VisuEditor::~VisuEditor() { proc_.removeChangeListener(this); }
@@ -68,6 +68,7 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
         .withNativeFunction("loadPreset", [this, reply](const juce::Array<juce::var>& a, auto done) { reply(done, proc_.loadPreset(a.isEmpty() ? juce::String() : a[0].toString())); })
         .withNativeFunction("deletePreset", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.deletePreset(a[0].toString()); reply(done, proc_.presetsVar()); })
         .withNativeFunction("unload", [this, reply](const juce::Array<juce::var>&, auto done) { proc_.unloadLibrary(); reply(done, juce::var(true)); })
+        .withNativeFunction("scopeOn", [this, reply](const juce::Array<juce::var>& a, auto done) { proc_.setScope(!a.isEmpty() && (bool) a[0]); reply(done, juce::var(true)); })
         .withNativeFunction("setPatch", [this, reply](const juce::Array<juce::var>& a, auto done) { if (a.size() >= 2) proc_.setPatch((int) a[0], (int) a[1]); reply(done, juce::var(true)); })
         .withNativeFunction("setListB", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setListB((int) a[0]); reply(done, juce::var(true)); })
         .withNativeFunction("setList", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setList((int) a[0]); reply(done, juce::var(true)); })
@@ -140,6 +141,7 @@ void VisuEditor::timerCallback()
     proc_.pollKeyswitch();   // a keyswitch note changed the list: the status event updates the interface
     if (proc_.pollLearned()) browser_.emitEventIfBrowserIsVisible("mappings", proc_.mappingsVar());
     { const auto ch = proc_.takeUiChanges(); if (!ch.isVoid()) browser_.emitEventIfBrowserIsVisible("tags", ch); }
+    if (proc_.scopeOn()) browser_.emitEventIfBrowserIsVisible("scope", proc_.scopeVar());
     const float vol = proc_.volume();
     if (std::abs(vol - lastVol_) > 1e-4f) { lastVol_ = vol; browser_.emitEventIfBrowserIsVisible("volume", vol); }
 }

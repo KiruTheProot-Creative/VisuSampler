@@ -70,7 +70,7 @@ async function open(id){
   const r=await call('loadLibrary',id);
   if(r&&r.error){toast('Could not load '+L.name+': '+r.error);}
 }
-async function leave(){releaseAll();hideUI();await call('unload');cur=null;st={};setMode('browse');}
+async function leave(){call('scopeOn',false);releaseAll();hideUI();await call('unload');cur=null;st={};setMode('browse');}
 $('#btnBack').onclick=leave;
 addEventListener('keydown',e=>{if(e.key==='Escape'&&!e.defaultPrevented&&!ctxOpen&&document.body.dataset.mode==='play')leave();});
 function renderDetail(){
@@ -124,6 +124,7 @@ on('status',d=>{const was=st;st=d||{};
   if(st.currentId&&!st.loading&&(was.loading||was.currentId!==st.currentId||!uiFor))showUI();
   if(st.currentId&&(!cur||cur.id!==st.currentId)){const L=libs.find(x=>x.id===st.currentId);if(L){cur=L;setMode('play');}}
   if(cur&&document.body.dataset.mode==='play')renderDetail();});
+on('scope',d=>{if(uiReady&&d)frame.contentWindow.postMessage({t:'scope',d:d.d,sr:d.sr},'*');});
 on('meter',d=>{$('#voices').textContent=(d&&d.voices||0)+' voices';});
 on('volume',v=>{$('#vol').value=v;$('#vol2').value=v;});
 /* knobs moved by DAW automation or a MIDI controller: the interface follows */
@@ -165,7 +166,7 @@ async function showUI(){
   const assets={},fonts={};
   Object.keys(m.assets||{}).forEach(id=>{const a=m.assets[id];assets[id]={name:a.name,w:a.w,h:a.h,mime:a.mime,url:url('asset',id)};});
   Object.keys(m.fonts||{}).forEach(f=>{fonts[f]=url('font',f);});
-  uiFor=r.id;uiMsg={t:'load',project:p,assets,fonts,list:r.list,listB:r.listB,patch:r.patch,patchB:r.patchB,tags:r.tags||{}};
+  uiFor=r.id;call('scopeOn',!!(p.els||[]).some(e=>e.type==='graph'&&(e.kind==='scope'||e.kind==='spectrum')));uiMsg={t:'load',project:p,assets,fonts,list:r.list,listB:r.listB,patch:r.patch,patchB:r.patchB,tags:r.tags||{}};
   $('#stage').classList.add('hasui');$('#btnAbout').hidden=false;frame.hidden=false;$('#presetBox').hidden=false;presetsRefresh();
   uiReady=false;frame.src='runtime.html?'+Date.now();
 }
