@@ -56,6 +56,7 @@ struct ZoneAudio {
     const float* ch[2] = { nullptr, nullptr };
     long len = 0; bool loop = false; long loopS = 0, loopE = 0;
     int streamSrc = -1; long head = 0;   // streamed: frames from `head` on come from disk
+    long xf = 0, le = 0; bool pp = false; int curve = 0;   // streamed loop: crossfade length, loop end in the file, ping-pong, fade curve
 };
 
 struct Zone {

@@ -18,6 +18,9 @@ struct StreamSource {
     std::string path; uint64_t base = 0;            // file and the offset where blob offsets start
     std::vector<BlobRef> chunks; int chunkFrames = 32768; int chn = 1, bits = 16; uint64_t frames = 0;
 };
+// A loop the disk thread unrolls while streaming: the voice reads a timeline that keeps going, and frame k of it is
+// frame k of the prepared loop (crossfade at the loop end, ping-pong mirrored), same rules as Library's prepareAudio.
+struct StreamLoop { bool on = false, pp = false; int64_t ls = 0, le = 0, outLen = 0, x = 0; int curve = 0; };   // curve: 0 power, 1 linear, 2 s
 // Sources are registered once (message thread) and never freed, so the disk thread can always use them.
 int registerStreamSource(StreamSource src);
 bool decodeChunk(const StreamSource& s, std::FILE* f, size_t k, std::vector<float>* out, int keepCh);   // per-channel floats
@@ -28,7 +31,7 @@ public:
     Streamer();
     ~Streamer();
     // audio thread
-    int open(int source, int64_t fromFrame);          // a slot, or -1 when all are busy
+    int open(int source, int64_t fromFrame, const StreamLoop* loop = nullptr);   // a slot, or -1 when all are busy
     void close(int slot);
     void setRead(int slot, int64_t frame) { if (slot >= 0) slots_[(size_t) slot].readPos.store(frame, std::memory_order_release); }
     inline float at(int slot, int c, int64_t i) const {
@@ -44,10 +47,12 @@ private:
         std::atomic<int> state{ Free }; int source = -1; int64_t start = 0;
         std::atomic<int64_t> filled{ 0 }, readPos{ 0 };
         std::vector<float> ring[2];
+        StreamLoop loop;                               // written before the slot is handed to the disk thread
         StreamSource src; int64_t next = 0;           // disk thread only
     };
     void run();
     bool fill(Slot& s);
+    bool fillLoop(Slot& s);
     std::unique_ptr<Slot[]> slots_;
     std::atomic<bool> running_{ true };
     mutable std::atomic<long> misses_{ 0 };

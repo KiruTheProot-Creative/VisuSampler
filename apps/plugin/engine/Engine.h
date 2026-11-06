@@ -66,6 +66,7 @@ private:
         // per-note filter and LFO
         float fenv = 0, fRel = 0; int fstage = 0; float fz[2][2][2] = {}; float fa1 = 0, fa2 = 0, fa3 = 0, fk = 1; double lfoPh = 0; long lfoAge = 0;
         int layer = 0;   // 0 = A, 1 = B
+        int64_t loops = 0;   // how often a streamed loop went round (the stream counts frames without wrapping)
         int slot = -1;   // disk stream for a long sample (player)   // group envelope: 0 attack, 1 decay, 2 sustain
         int kind = 0;   // 0 sample, 2 granular, 3 wavetable
         struct Grain { double o, p0, rate; };

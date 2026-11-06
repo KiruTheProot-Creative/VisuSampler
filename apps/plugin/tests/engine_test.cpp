@@ -245,26 +245,27 @@ static void testGroupLinks() {
 
 // long samples stream from disk and sound exactly like the same library fully in memory
 static void testStreaming() {
-    for (const char* name : { "stream.vsamp", "stream-z.vsamp" }) {
+    for (const char* name : { "stream.vsamp", "stream-z.vsamp", "stream-loop.vsamp" }) {
+        const bool looped = std::string(name) == "stream-loop.vsamp";
         const std::string path = std::string(TEST_DATA_DIR) + "/" + name; std::string err;
         auto disk = Library::load(path, err, 48000);
         std::vector<uint8_t> bytes; { std::FILE* f = std::fopen(path.c_str(), "rb"); std::fseek(f, 0, SEEK_END); bytes.resize((size_t) std::ftell(f)); std::fseek(f, 0, SEEK_SET); if (std::fread(bytes.data(), 1, bytes.size(), f) != bytes.size()) bytes.clear(); std::fclose(f); }
         auto mem = Library::loadBytes(bytes, err, 48000);
         if (!disk || !mem) { CHECK(false, "%s loads (%s)", name, err.c_str()); continue; }
-        CHECK(disk->streamedSamples() == 1 && mem->streamedSamples() == 0 && disk->memoryBytes() * 3 < mem->memoryBytes(),
+        CHECK(disk->streamedSamples() == 1 && mem->streamedSamples() == 0 && disk->memoryBytes() * (looped ? 2 : 3) < mem->memoryBytes(),
               "%s: the long sample streams; %.1f MB in memory instead of %.1f MB", name, disk->memoryBytes() / 1048576.0, mem->memoryBytes() / 1048576.0);
-        for (int note : { 60, 79, 96 }) {   // straight, pitched up (faster reading), and a zone that starts 3 s in
+        for (int note : looped ? std::vector<int>{ 60, 63, 72, 84, 100 } : std::vector<int>{ 60, 79, 96 }) {   // straight, pitched up (faster reading), and a zone that starts 3 s in; looped: crossfade loop, ping-pong, an early loop kept in memory
             auto a = std::make_unique<Engine>(), b = std::make_unique<Engine>();
             a->prepare(48000); b->prepare(48000); a->setMasterGain(1); b->setMasterGain(1); a->setLibrary(disk); b->setLibrary(mem);
             a->noteOn(note, 110); b->noteOn(note, 110);
             std::vector<float> la(480), ra(480), lb(480), rb(480); double maxd = 0, peak = 0; const long miss0 = a->streamMisses(); int streaming = 0;
-            for (int blk = 0; blk < 500; ++blk) {   // 5 s, about five times faster than real time
+            for (int blk = 0; blk < (looped ? 1200 : 500); ++blk) {   // 5 s (12 s for loops: several rounds), about five times faster than real time
                 std::fill(la.begin(), la.end(), 0.f); std::fill(ra.begin(), ra.end(), 0.f); std::fill(lb.begin(), lb.end(), 0.f); std::fill(rb.begin(), rb.end(), 0.f);
                 a->render(la.data(), ra.data(), 480); b->render(lb.data(), rb.data(), 480); streaming = std::max(streaming, a->streamingVoices());
                 for (int i = 0; i < 480; ++i) { maxd = std::max(maxd, (double) std::max(std::fabs(la[i] - lb[i]), std::fabs(ra[i] - rb[i]))); peak = std::max(peak, (double) std::fabs(lb[i])); }
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
-            CHECK(streaming == 1 && maxd < 1e-5 && peak > .1 && a->streamMisses() == miss0, "%s note %d: streamed audio matches memory (max difference %.2g, %ld late reads)", name, note, maxd, a->streamMisses() - miss0);
+            CHECK(streaming == (looped && note >= 91 ? 0 : 1) && maxd < 1e-5 && peak > .1 && a->streamMisses() == miss0, "%s note %d: streamed audio matches memory (max difference %.2g, %ld late reads)", name, note, maxd, a->streamMisses() - miss0);
         }
     }
 }
@@ -470,8 +471,67 @@ static void testFx() {
     }
 }
 
+// Backwards compatibility: libraries made by earlier versions (tests/compat, never changed or removed) must keep loading
+// and sound the same. compat.json holds each file's loudness every 100 ms for a few notes, recorded when the file was added.
+// VISU_COMPAT_WRITE=1 records files that have no fingerprint yet (it never overwrites an existing one).
+static std::vector<double> compatPrint(const std::shared_ptr<Library>& lib, int note) {
+    auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setMasterGain(1.f); e.setLibrary(lib); e.noteOn(note, 100);
+    std::vector<float> l(800), r(800); std::vector<double> out; double sq = 0;
+    for (int b = 0; b < 72; ++b) {   // 1.2 s: held 0.8 s, then released
+        if (b == 48) e.noteOff(note);
+        std::fill(l.begin(), l.end(), 0.f); std::fill(r.begin(), r.end(), 0.f); e.render(l.data(), r.data(), 800);
+        for (int i = 0; i < 800; ++i) sq += (double) l[i] * l[i] + (double) r[i] * r[i];
+        if (b % 6 == 5) { out.push_back(std::sqrt(sq / 9600.0)); sq = 0; }
+    }
+    return out;
+}
+static void testCompat() {
+    const std::string dir = COMPAT_DIR, jp = dir + "/compat.json"; std::string txt = readText(jp);
+    Json db = txt.empty() ? Json() : Json::parse(txt.data(), txt.size());
+    const bool write = std::getenv("VISU_COMPAT_WRITE") != nullptr;
+    const int notes[] = { 36, 48, 60, 72, 84 };
+    std::vector<std::string> files; for (const char* f : { "2026-11-04-golden.vsamp", "2026-11-04-rompler-demo.vsamp", "2026-11-05-fx.vsamp", "2026-11-05b-fx.vsamp", "2026-11-06-fx.vsamp", "2026-11-06-maker-features.vsamp" }) files.push_back(f);
+    std::string outJson = "{\n"; bool added = false;
+    for (size_t fi = 0; fi < files.size(); ++fi) {
+        const std::string& name = files[fi]; std::string err; auto lib = Library::load(dir + "/" + name, err, 48000);
+        CHECK(lib != nullptr, "compat: %s still loads %s", name.c_str(), err.c_str());
+        const Json& rec = db[name.c_str()];
+        std::string line = "  \"" + name + "\": [";
+        int worst = -1; double worstD = 0; bool same = true;
+        for (size_t k = 0; k < 5; ++k) {
+            const std::vector<double> got = lib ? compatPrint(lib, notes[k]) : std::vector<double>();
+            line += (k ? ", [" : "[");
+            for (size_t j = 0; j < got.size(); ++j) { char b[32]; std::snprintf(b, sizeof b, "%s%.6g", j ? ", " : "", got[j]); line += b; }
+            line += "]";
+            if (!rec.isNull()) for (size_t j = 0; j < got.size() && j < rec[k].size(); ++j) {
+                const double want = rec[k][j].num(), d = std::fabs(got[j] - want) / std::max(1e-4, std::fabs(want));
+                if (d > worstD) { worstD = d; worst = notes[k]; } if (d > 2e-3) same = false;
+            }
+        }
+        line += "]"; outJson += line + (fi + 1 < files.size() ? ",\n" : "\n");
+        if (rec.isNull()) { added = true; CHECK(write, "compat: %s has a fingerprint (run with VISU_COMPAT_WRITE=1 once when adding a file)", name.c_str()); }
+        else CHECK(same, "compat: %s sounds the same as when it was frozen (largest change %.2g%% at note %d)", name.c_str(), worstD * 100, worst);
+    }
+    outJson += "}\n";
+    if (write && added) {   // only new files get a fingerprint; existing ones stay as recorded
+        std::string merged = "{\n"; size_t p = outJson.find('\n') + 1;
+        for (size_t fi = 0; fi < files.size(); ++fi) {
+            const size_t e = outJson.find('\n', p); std::string line = outJson.substr(p, e - p); p = e + 1;
+            const Json& rec = db[files[fi].c_str()];
+            if (!rec.isNull()) {   // keep the recorded values
+                std::string keep = "  \"" + files[fi] + "\": [";
+                for (size_t k = 0; k < rec.size(); ++k) { keep += k ? ", [" : "["; for (size_t j = 0; j < rec[k].size(); ++j) { char b[32]; std::snprintf(b, sizeof b, "%s%.6g", j ? ", " : "", rec[k][j].num()); keep += b; } keep += "]"; }
+                line = keep + "]" + (fi + 1 < files.size() ? "," : "");
+            }
+            merged += line + "\n";
+        }
+        merged += "}\n"; std::FILE* f = std::fopen(jp.c_str(), "wb"); if (f) { std::fwrite(merged.data(), 1, merged.size(), f); std::fclose(f); }
+        std::printf("compat: wrote fingerprints for new files to %s\n", jp.c_str());
+    }
+}
+
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testCompat();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

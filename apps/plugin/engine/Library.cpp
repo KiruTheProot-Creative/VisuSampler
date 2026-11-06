@@ -57,7 +57,14 @@ static void prepareAudio(Zone& z, const Sample& s, const Json& zj) {
     if (s.streamSrc >= 0) {   // streamed: the head is in memory, the rest comes from disk
         ZoneAudio& a = z.audio; const long total = (long) s.frames;
         a.len = zj["end"].num() > 0 ? std::min(total, std::max(64L, (long) std::lround(zj["end"].num() / 1000.0 * s.sr))) : total;
-        a.ch[0] = s.ch[0].data(); a.ch[1] = s.chn > 1 ? s.ch[1].data() : nullptr; a.streamSrc = s.streamSrc; a.head = (long) s.headFrames; return;
+        a.ch[0] = s.ch[0].data(); a.ch[1] = s.chn > 1 ? s.ch[1].data() : nullptr; a.streamSrc = s.streamSrc; a.head = (long) s.headFrames;
+        const Json& L = zj["loop"]; const long ls = (long) L["s"].num(), le = (long) L["e"].num();
+        if (L["on"].boolean() && !z.rev && le - ls > 64 && le <= a.len) {   // a looped stream: the disk thread unrolls the loop (same rules as below)
+            const long len = le - ls, pp = L["pp"].boolean() ? 1 : 0; const std::string cv = L["xcurve"].str("power");
+            a.xf = std::min((long) L["xf"].num(), std::min(ls, len >> 1)); a.le = le; a.pp = pp != 0; a.curve = cv == "linear" ? 1 : cv == "s" ? 2 : 0;
+            a.len = pp ? le + len : le; a.loop = true; a.loopS = ls; a.loopE = a.len;
+        }
+        return;
     }
     long total = (long) s.frames; ZoneAudio& a = z.audio;
     long endAbs = zj["end"].num() > 0 ? std::min(total, std::max(64L, (long) std::lround(zj["end"].num() / 1000.0 * s.sr))) : total;
@@ -148,10 +155,14 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
     }
     /* which samples can stream: played straight through (no loop, not reversed) in sampler or slicer mode,
        and long enough that keeping only the start in memory saves something */
-    std::map<std::string, double> maxStartMs; std::map<std::string, bool> needAll;
+    /* loops stream too: the start (up to where the first loop's crossfade begins) must fit in the head */
+    std::map<std::string, double> maxStartMs; std::map<std::string, bool> needAll; std::map<std::string, long> loopFrom;
     for (size_t i = 0; i < m["zones"].size(); ++i) {
         const Json& zj = m["zones"][i]; const std::string sid = zj["sample"].str();
-        if (zj["loop"]["on"].boolean() || zj["rev"].boolean()) needAll[sid] = true;
+        if (zj["rev"].boolean()) needAll[sid] = true;
+        { const Json& L = zj["loop"]; const long ls = (long) L["s"].num(), le = (long) L["e"].num();
+          if (L["on"].boolean() && le - ls > 64) { const long x = std::min((long) L["xf"].num(), std::min(ls, (le - ls) >> 1)), from = le - x;
+            auto it = loopFrom.find(sid); if (it == loopFrom.end() || from < it->second) loopFrom[sid] = from; } }
         maxStartMs[sid] = std::max(maxStartMs[sid], zj["start"].num() + std::max(0.0, zj["vstart"].num()) + std::max(0.0, zj["hum"]["start"].num()));
     }
     std::map<std::string, int> sidx;
@@ -179,7 +190,8 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         src.frames = (uint64_t) sj["frames"].num(0);
         const bool canStream = f.lazy() && !src.chunks.empty() && src.frames > 0 && (src.chunks.size() > 1) && (s.mode == "sampler" || s.mode == "slicer") && !needAll[s.id];
         const size_t head = std::min<size_t>((size_t) src.frames, kPreloadFrames + (size_t) std::ceil(maxStartMs[s.id] / 1000.0 * s.sr));
-        const bool stream = canStream && head + (size_t) src.chunkFrames < (size_t) src.frames;
+        bool stream = canStream && head + (size_t) src.chunkFrames < (size_t) src.frames;
+        { auto lf = loopFrom.find(s.id); if (lf != loopFrom.end() && (long) head > lf->second) stream = false; }   // a loop that starts inside the head: keep it all
         std::vector<float> all[8];
         for (size_t k = 0; k < src.chunks.size(); ++k) {   // decode all chunks, or only those covering the head
             if (stream && k * (size_t) src.chunkFrames >= head) break;

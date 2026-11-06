@@ -1,5 +1,7 @@
 # Roadmap
 
+> Hard rule: every library ever exported keeps loading and sounding the same in every later player. See [COMPATIBILITY.md](COMPATIBILITY.md).
+
 ## Done
 - **Core library** (`packages/core`), **VisuMaker** (Sound, Interface, Effects, Export tabs, projects), **VisuPlayer** (VST3 + standalone, library browser, the library's own interface).
 - **One shared engine** (`apps/plugin/engine`, plain C++): native in the VST, WebAssembly in the Maker. Sampler, slicer, keep-speed, granular, wavetable; mono/legato/glide, bend range, voice limit, CPU guard; per-group ADSR and knobs on group volume/pan/tune; FX graph with modulators, macros and on/off buttons.

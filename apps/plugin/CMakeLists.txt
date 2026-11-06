@@ -23,7 +23,7 @@ if(VISU_BUILD_TESTS)
   enable_testing()
   add_executable(engine_test tests/engine_test.cpp)
   target_link_libraries(engine_test PRIVATE visu_engine)
-  target_compile_definitions(engine_test PRIVATE TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden" EXAMPLES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../examples")
+  target_compile_definitions(engine_test PRIVATE TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden" COMPAT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/compat" EXAMPLES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../examples")
   add_test(NAME engine COMMAND engine_test)
 endif()
 

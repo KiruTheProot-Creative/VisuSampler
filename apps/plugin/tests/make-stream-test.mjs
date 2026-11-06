@@ -14,4 +14,16 @@ for(const [file,compress,bits] of [['stream.vsamp',false,16],['stream-z.vsamp',t
   const manifest={format:'vsamp',formatVersion:1,lib:{id:'stream',name:'Stream test'},banner:{images:{}},project:{gset:{G:{mode:'normal'}},bpm:120},samples,zones};
   writeFileSync(new URL(file,dir),writeVsamp(manifest,pack));
 }
+/* stream-loop.vsamp: looped zones (crossfade, ping-pong) on the long sample stream too; a loop that starts inside the
+   in-memory head keeps its sample fully in memory */
+{ const pack=new Pack(),chunks=[],chunks2=[];
+  for(let a=0;a<N;a+=CH)chunks.push(await pack.add(encodePCM([L.subarray(a,Math.min(N,a+CH)),R.subarray(a,Math.min(N,a+CH))],16),{compress:false}));
+  for(let a=0;a<N;a+=CH)chunks2.push(await pack.add(encodePCM([L.subarray(a,Math.min(N,a+CH)),R.subarray(a,Math.min(N,a+CH))],16),{compress:false}));
+  const samples=[{id:'long',name:'long',sr:SR,chn:2,frames:N,root:60,fine:0,loop:null,bits:16,chunkFrames:CH,chunks},
+                 {id:'early',name:'early',sr:SR,chn:2,frames:N,root:60,fine:0,loop:null,bits:16,chunkFrames:CH,chunks:chunks2}];
+  const zones=[zone({id:'z1',sample:'long',lo:0,hi:63,root:60,loop:{on:true,s:SR*2.5,e:SR*4,xf:4800,xcurve:'power',pp:false}}),
+               zone({id:'z2',sample:'long',lo:64,hi:90,root:72,loop:{on:true,s:SR*1.5,e:SR*2.25,xf:2400,xcurve:'linear',pp:true}}),
+               zone({id:'z3',sample:'early',lo:91,hi:127,root:96,loop:{on:true,s:2000,e:9000,xf:500,xcurve:'s',pp:false}})];
+  const manifest={format:'vsamp',formatVersion:1,lib:{id:'streamloop',name:'Stream loop test'},banner:{images:{}},project:{gset:{G:{mode:'normal'}},bpm:120},samples,zones};
+  writeFileSync(new URL('stream-loop.vsamp',dir),writeVsamp(manifest,pack)); }
 console.log('stream test libraries written');

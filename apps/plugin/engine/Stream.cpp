@@ -2,6 +2,7 @@
 #include "Inflate.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <list>
@@ -72,11 +73,11 @@ Streamer::Streamer() : slots_(new Slot[kSlots]) {
 }
 Streamer::~Streamer() { running_ = false; if (thread_.joinable()) thread_.join(); }
 
-int Streamer::open(int source, int64_t fromFrame) {
+int Streamer::open(int source, int64_t fromFrame, const StreamLoop* loop) {
     for (int i = 0; i < kSlots; ++i) {
         Slot& s = slots_[(size_t) i];
         if (s.state.load(std::memory_order_acquire) != Free) continue;
-        s.source = source; s.start = fromFrame;
+        s.source = source; s.start = fromFrame; s.loop = loop ? *loop : StreamLoop();
         s.filled.store(fromFrame, std::memory_order_relaxed); s.readPos.store(fromFrame, std::memory_order_relaxed);
         s.state.store(Request, std::memory_order_release);
         return i;
@@ -92,8 +93,9 @@ int Streamer::busy() const { int n = 0; for (int i = 0; i < kSlots; ++i) if (slo
 
 /* ---- disk thread ---- */
 namespace {
+struct ChunkCacheEntry { int src; size_t k; std::vector<float> ch[2]; };
 struct ChunkCache {   // decoded chunks, shared by voices playing the same sample
-    struct E { int src; size_t k; std::vector<float> ch[2]; };
+    using E = ChunkCacheEntry;
     std::list<E> lru; std::map<std::string, std::FILE*> files;
     ~ChunkCache() { for (auto& f : files) if (f.second) std::fclose(f.second); }
     const E* get(int srcId, const StreamSource& s, size_t k) {
@@ -109,7 +111,41 @@ struct ChunkCache {   // decoded chunks, shared by voices playing the same sampl
 thread_local ChunkCache* tCache = nullptr;
 }
 
+static double fadeCurveS(double t, int c) { t = std::min(1.0, std::max(0.0, t)); return c == 1 ? t : c == 2 ? t * t * (3 - 2 * t) : std::sin(t * 3.14159265358979323846 / 2); }
+
+// a looped stream: frame k of the endless timeline, built from the file's frames (prepareAudio's rules)
+bool Streamer::fillLoop(Slot& s) {
+    const StreamLoop& L = s.loop;
+    const int64_t f = s.filled.load(std::memory_order_relaxed), r = s.readPos.load(std::memory_order_acquire);
+    const int64_t room = r + kRing - 512 - f; if (room < 1024) return false;
+    const int64_t n = std::min<int64_t>(room, 8192), len = L.le - L.ls, body = L.outLen - L.ls;
+    const size_t cf = (size_t) std::max(1, s.src.chunkFrames);
+    struct Cur { const void* e = nullptr; size_t k = (size_t) -1; } cur[2];
+    auto frame = [&](int64_t i, int which, float out[2]) {   // a frame of the file, through the chunk cache
+        if (i < 0 || i >= (int64_t) s.src.frames) { out[0] = out[1] = 0; return; }
+        const size_t k = (size_t) i / cf, off = (size_t) i % cf; Cur& c = cur[which];
+        if (c.k != k) { c.e = tCache->get(s.source, s.src, k); c.k = k; }
+        const auto* e = static_cast<const ChunkCacheEntry*>(c.e);
+        if (!e || off >= e->ch[0].size()) { out[0] = out[1] = 0; return; }
+        out[0] = e->ch[0][off]; out[1] = e->ch[1][off];
+    };
+    for (int64_t j = 0; j < n; ++j) {
+        const int64_t k = f + j; int64_t p = k < L.outLen ? k : L.ls + (k - L.ls) % body;
+        if (L.pp && p >= L.le) p = L.le - 1 - (p - L.le);
+        float a[2], b[2];
+        frame(p, 0, a);
+        if (L.x > 0 && p >= L.le - L.x && p < L.le) {   // the crossfade into the loop start
+            frame(p - len, 1, b); const double t = (p - (L.le - L.x) + .5) / (double) L.x, ga = fadeCurveS(1 - t, L.curve), gb = fadeCurveS(t, L.curve);
+            a[0] = (float) (a[0] * ga + b[0] * gb); a[1] = (float) (a[1] * ga + b[1] * gb);
+        }
+        s.ring[0][(size_t) (k & (kRing - 1))] = a[0]; s.ring[1][(size_t) (k & (kRing - 1))] = a[1];
+    }
+    s.filled.store(f + n, std::memory_order_release);
+    return true;
+}
+
 bool Streamer::fill(Slot& s) {
+    if (s.loop.on) return fillLoop(s);
     const int64_t f = s.filled.load(std::memory_order_relaxed), r = s.readPos.load(std::memory_order_acquire);
     const int64_t room = r + kRing - 512 - f, end = (int64_t) s.src.frames;
     if (room < 1024 || f >= end) return false;

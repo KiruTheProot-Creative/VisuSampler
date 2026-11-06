@@ -165,7 +165,12 @@ void Engine::startZone(const Zone& z, int note, int vel, bool fromRelease, float
             else { v->wph = 0; v->wms = 0; v->wfade = 0; v->wf = 440.0 * std::pow(2.0, (z.root - 69) / 12.0) * v->pitch; }
         }
 #ifndef VISU_NO_FILES
-        v->slot = z.audio.streamSrc >= 0 && streamer_ ? streamer_->open(z.audio.streamSrc, z.audio.head) : -1;   // a long sample: the rest comes from disk
+        v->loops = 0;
+        if (z.audio.streamSrc >= 0 && streamer_) {
+            StreamLoop sl; const ZoneAudio& za = z.audio;
+            if (za.loop) { sl.on = true; sl.pp = za.pp; sl.ls = za.loopS; sl.le = za.le; sl.outLen = za.loopE; sl.x = za.xf; sl.curve = za.curve; }
+            v->slot = streamer_->open(za.streamSrc, za.head, za.loop ? &sl : nullptr);
+        } else v->slot = -1;   // a long sample: the rest comes from disk
 #endif
         v->fenv = 0; v->fRel = 0; v->fstage = 0; std::memset(v->fz, 0, sizeof(v->fz)); v->lfoPh = 0; v->lfoAge = 0;
         v->gmul = -1; v->stolen = false; v->vel = vel; v->glide = z.keytrack ? glideFrom : 0.f; v->glideStep = glideStepFor(v->glide);
@@ -366,15 +371,17 @@ static inline double lanczos(double x, double a) { if (x == 0) return 1; if (x <
 struct Reader {
     const float* d; long n; bool loop; long ls, le;
     long head = -1;   // streamed: frames from head on come from the disk stream (or silence when there is none)
+    int64_t voff = 0; // streamed loop: the stream's frame count is the position plus this (the rounds already played)
 #ifndef VISU_NO_FILES
     const Streamer* st = nullptr; int slot = -1, c = 0;
 #endif
     inline float at(long i) const {
+        const long i0 = i;
         if (loop && i >= le) i = ls + (i - ls) % (le - ls);
         if (i < 0 || i >= n) return 0.f;
         if (head >= 0 && i >= head) {
 #ifndef VISU_NO_FILES
-            return slot >= 0 ? st->at(slot, c, i) : 0.f;
+            return slot >= 0 ? st->at(slot, c, (int64_t) i0 + voff) : 0.f;
 #else
             return 0.f;
 #endif
@@ -411,7 +418,8 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
             r0.head = r1.head = a.head;
 #ifndef VISU_NO_FILES
             r0.st = r1.st = streamer_.get(); r0.slot = r1.slot = v.slot; r0.c = 0; r1.c = a.ch[1] ? 1 : 0;
-            if (streamer_) streamer_->setRead(v.slot, (int64_t) v.pos - 160);   // keep a little history for interpolation
+            r0.voff = r1.voff = a.loop ? v.loops * (int64_t) (a.loopE - a.loopS) : 0;
+            if (streamer_) streamer_->setRead(v.slot, (int64_t) v.pos + r0.voff - 160);   // keep a little history for interpolation
 #endif
         }
         // pitch on top of the note: glide still to go plus the pitch wheel
@@ -539,7 +547,7 @@ int Engine::renderVoices(float* L, float* R, int n, float gainScale) {
             else if (vpan <= 0) { oL = l + rr * gL; oR = rr * gR; } else { oL = l * gL; oR = rr + l * gR; }
             gm += gmStep; const float e = g * v.env * gm; dL[i] += oL * e; dR[i] += oR * e;
             v.pos += v.keepSpeed ? v.k : ratio;
-            if (a.loop && v.pos >= (double) a.loopE) v.pos -= (double) (a.loopE - a.loopS);
+            if (a.loop && v.pos >= (double) a.loopE) { v.pos -= (double) (a.loopE - a.loopS); ++v.loops; if (a.streamSrc >= 0) r0.voff = r1.voff = v.loops * (int64_t) (a.loopE - a.loopS); }
         }
         if (v.on) ++active;
     }
