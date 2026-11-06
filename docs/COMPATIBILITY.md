@@ -28,3 +28,11 @@ If a change to the engine makes an old library sound different, the build fails.
 To add a new frozen library: put the exported `.vsamp` in `tests/compat/` with the date in its name, add its file name
 to the list in `testCompat()` (`tests/engine_test.cpp`), and run `VISU_COMPAT_WRITE=1 engine_test` once. That records
 fingerprints for new files only; existing ones are never overwritten.
+
+## Bug fixes
+
+When the player did something clearly unintended, fixing it is allowed even though old libraries then sound different
+(they now sound the way they were meant to, the way the Maker describes them). Each such fix is listed here.
+
+- **2026-11-06, round robin:** "cycle" played every round-robin position at once and "random" played zero to two of
+  them; each key press now plays exactly one position. "Random" may repeat a position, "random, no repeat" never does.

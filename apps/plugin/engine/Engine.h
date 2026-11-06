@@ -86,6 +86,10 @@ private:
     void startNoteLayer(int note, int vel, float glideFrom, const Zone* const* skip, int nskip, int layer, int scope);
     bool inScope(int group, int scope) const { return scope >= 0 ? group == scope : !lib_->anyOwnMode || lib_->groups[(size_t) group].pmode == 0; }
     int layerCount() const;   // 1, or 2 when layer B plays
+public:
+    struct VoiceSpan { const Voice* b; const Voice* e; const Voice* begin() const { return b; } const Voice* end() const { return e; } };
+    VoiceSpan debugVoices() const { return { voices_, voices_ + kMaxVoices }; }   // tests
+private:
     void voiceEnv(const Voice& v, float& a, float& d, float& s, float& r) const;   // the layer's envelope when it has one, else the group's
     void monoNoteOn(int note, int vel, int previous, int scope, bool legato, float glideMs);
     // the held keys of one mono scope (the global one, or a group with its own mono/legato)

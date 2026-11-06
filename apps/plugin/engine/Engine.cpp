@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include <algorithm>
 #include <cmath>
+#include <climits>
 #include <cstring>
 #include <mutex>
 
@@ -300,20 +301,24 @@ void Engine::startNoteLayer(int note, int vel, float glideFrom, const Zone* cons
         if (z.mute || g.mute || g.mode == GroupMode::Release || z.onRelease || vel < z.vlo || vel > z.vhi || (lib_->anySolo && !g.solo) || (lib_->anyZoneSolo && !z.solo) || !groupAllowed(z.group, layer) || !inScope(z.group, scope)) continue;
         if (nh < 64) hits[nh++] = zi;
     }
-    // round robin: one sequence per group per hit
+    // round robin: each key press picks ONE position of the group's sequence (all zones at that position play)
     int chosen[64]; int nc = 0;
+    int pickedGroup[32], pickedSeq[32]; int np = 0;
     for (int i = 0; i < nh; ++i) {
         const Zone& z = lib_->zones[(size_t) hits[i]]; const GroupCfg& g = lib_->groups[(size_t) z.group];
         if (g.mode == GroupMode::Normal) { chosen[nc++] = hits[i]; continue; }
-        // collect the sequences of this group among the hits
-        int seqs[32]; int ns = 0;
-        for (int k = 0; k < nh; ++k) { const Zone& zk = lib_->zones[(size_t) hits[k]]; if (zk.group != z.group) continue; bool f = false; for (int q = 0; q < ns; ++q) if (seqs[q] == zk.seq) f = true; if (!f && ns < 32) seqs[ns++] = zk.seq; }
-        std::sort(seqs, seqs + ns);
-        int& state = rr_[std::min(255, z.group)]; int pick;
-        if (g.mode == GroupMode::RRCycle) { pick = seqs[(unsigned) state % (unsigned) ns]; state++; }
-        else {
-            int cand[32]; int nc2 = 0; for (int q = 0; q < ns; ++q) if (seqs[q] != state - 1000 || ns == 1) cand[nc2++] = seqs[q];
-            rng_ = rng_ * 1664525u + 1013904223u; pick = cand[(rng_ >> 8) % (unsigned) nc2]; state = pick + 1000;
+        int pick = INT_MIN; for (int q = 0; q < np; ++q) if (pickedGroup[q] == z.group) pick = pickedSeq[q];
+        if (pick == INT_MIN) {   // first zone of this group in this press: choose its position once
+            int seqs[32]; int ns = 0;
+            for (int k = 0; k < nh; ++k) { const Zone& zk = lib_->zones[(size_t) hits[k]]; if (zk.group != z.group) continue; bool f = false; for (int q = 0; q < ns; ++q) if (seqs[q] == zk.seq) f = true; if (!f && ns < 32) seqs[ns++] = zk.seq; }
+            std::sort(seqs, seqs + ns);
+            int& state = rr_[std::min(255, z.group)];
+            if (g.mode == GroupMode::RRCycle) { pick = seqs[(unsigned) state % (unsigned) ns]; state++; }
+            else {   // random: any position; no repeats: never the one played last
+                int cand[32]; int nc2 = 0; for (int q = 0; q < ns; ++q) if (g.mode == GroupMode::RRRandom || seqs[q] != state - 1000 || ns == 1) cand[nc2++] = seqs[q];
+                rng_ = rng_ * 1664525u + 1013904223u; pick = cand[(rng_ >> 8) % (unsigned) nc2]; state = pick + 1000;
+            }
+            if (np < 32) { pickedGroup[np] = z.group; pickedSeq[np] = pick; ++np; }
         }
         if (z.seq == pick) chosen[nc++] = hits[i];
     }

@@ -363,6 +363,32 @@ static void testGroupPatches() {
     rz->onRelease = false;
 }
 
+// round robin: each key press plays one position of the group's sequence (cycle, random, or random without repeats)
+static void testRoundRobin() {
+    std::string err; auto lib = Library::load(std::string(TEST_DATA_DIR) + "/golden.vsamp", err, 44100);
+    if (!lib) { CHECK(false, "golden loads"); return; }
+    int zi = -1; for (size_t i = 0; i < lib->zones.size(); ++i) if (72 >= lib->zones[i].lo && 72 <= lib->zones[i].hi) { zi = (int) i; break; }
+    if (zi < 0) { CHECK(false, "a zone on 72"); return; }
+    const int g = lib->zones[(size_t) zi].group; lib->zones[(size_t) zi].seq = 1;
+    for (int s = 2; s <= 3; ++s) { Zone c = lib->zones[(size_t) zi]; c.seq = s; lib->zones.push_back(c); for (int n = c.lo; n <= c.hi; ++n) lib->byNote[(size_t) n].push_back((int) lib->zones.size() - 1); }
+    for (GroupMode md : { GroupMode::RRCycle, GroupMode::RRRandom, GroupMode::RRUnique }) {
+        lib->groups[(size_t) g].mode = md;
+        auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(44100); e.setLibrary(lib);
+        std::vector<float> L(441), R(441); std::string seen; bool one = true; int repeats = 0, last = -1;
+        for (int k = 0; k < 12; ++k) {
+            e.noteOn(72, 100); e.render(L.data(), R.data(), 441);
+            int pos = -1, cnt = 0; for (const auto& v : e.debugVoices()) if (v.on && !v.releasing && v.zone && v.zone->group == g) { pos = v.zone->seq; ++cnt; }
+            if (cnt != 1) one = false;
+            seen += cnt == 1 ? std::to_string(pos) : "[" + std::to_string(cnt) + "]"; if (pos == last) ++repeats; last = pos;
+            e.noteOff(72); for (int b = 0; b < 40; ++b) e.render(L.data(), R.data(), 441);
+        }
+        const char* nm = md == GroupMode::RRCycle ? "cycle" : md == GroupMode::RRRandom ? "random" : "random, no repeats";
+        CHECK(one, "round robin (%s): every key press plays exactly one position (%s)", nm, seen.c_str());
+        if (md == GroupMode::RRCycle) CHECK(seen == "123123123123", "round robin (cycle) goes 1, 2, 3 in order (%s)", seen.c_str());
+        if (md == GroupMode::RRUnique) CHECK(repeats == 0, "round robin (no repeats) never plays the same position twice in a row (%s)", seen.c_str());
+    }
+}
+
 static void testDemo() {
     std::string err; auto lib = Library::load(std::string(EXAMPLES_DIR) + "/rompler-demo.vsamp", err);
     CHECK(lib != nullptr, "demo library loads %s", err.c_str());
@@ -531,7 +557,7 @@ static void testCompat() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testCompat();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testCompat();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }
