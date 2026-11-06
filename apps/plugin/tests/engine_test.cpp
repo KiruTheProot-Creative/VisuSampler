@@ -193,7 +193,7 @@ static void testVFilter() {
             out.push_back(std::sqrt(sq / 441)); if (zc) zc->push_back(c); }
     };
     auto avg = [](const std::vector<double>& v, int a, int b) { double s = 0; for (int i = a; i < b; ++i) s += v[(size_t) i]; return s / (b - a); };
-    std::vector<double> ref; levels(72, 127, 40, ref);
+    std::vector<double> ref; levels(72, 127, 60, ref);
     for (auto& g : lib->groups) { g.vf = {}; g.vf.on = true; g.vf.type = 1; g.vf.cutoff = 100; }
     std::vector<double> lo; levels(72, 127, 40, lo);
     CHECK(avg(lo, 20, 40) < avg(ref, 20, 40) * .02, "a 24 dB low-pass far below the note silences it (%.4f)", avg(lo, 20, 40) / avg(ref, 20, 40));

@@ -4,5 +4,6 @@ prototype/check.js
 build/
 !examples/*.vsamp
 !apps/plugin/tests/golden/*.vsamp
+!apps/plugin/tests/compat/*.vsamp
 apps/maker-desktop/www/
 apps/maker-desktop/dist/
