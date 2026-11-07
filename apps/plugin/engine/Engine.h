@@ -131,8 +131,8 @@ private:
     Voice voices_[kMaxVoices];
     unsigned long clock_ = 0; bool sustain_ = false; bool heldNotes_[128] = {}; int noteVel_[128] = {};
     int rr_[256] = {}; uint32_t rng_ = 12345;
+    std::atomic<bool> offline_{ false };   // rendering faster than real time (see setOffline)
 #ifndef VISU_NO_FILES
-    std::atomic<bool> offline_{ false };
     std::unique_ptr<Streamer> streamer_;   // made on the message thread by the first library that streams, kept from then on
 #endif
 };
