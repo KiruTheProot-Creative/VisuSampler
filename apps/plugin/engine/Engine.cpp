@@ -13,11 +13,17 @@ static const double kPi = 3.14159265358979323846;
 Engine::Engine() {}
 void Engine::prepare(double sr) { sr_ = sr; }
 
+void Engine::setOffline(bool on) {
+    offline_.store(on);
+#ifndef VISU_NO_FILES
+    if (streamer_) streamer_->setOffline(on);
+#endif
+}
 void Engine::setLibrary(std::shared_ptr<const Library> lib) {
     std::lock_guard<std::mutex> g(ownersMutex_);
     const Library* raw = lib.get();
 #ifndef VISU_NO_FILES
-    if (lib && lib->streamedSamples() > 0 && !streamer_) streamer_.reset(new Streamer());   // published to the audio thread with the library below
+    if (lib && lib->streamedSamples() > 0 && !streamer_) { streamer_.reset(new Streamer()); streamer_->setOffline(offline_.load()); }   // published to the audio thread with the library below
 #endif
     if (lib) owners_.push_back(std::move(lib));
     pending_.store(raw);

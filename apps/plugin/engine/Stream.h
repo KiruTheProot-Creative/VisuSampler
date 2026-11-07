@@ -1,6 +1,7 @@
 // Streams long samples from disk while they play (VisuPlayer). The start of each sample stays in memory (the "head");
 // a background thread reads the rest into a small ring per playing voice. The audio thread never waits, locks or reads a file:
 // if the disk falls behind, the voice plays silence for that moment and the miss is counted.
+// Offline (a DAW bouncing faster than real time, or a test): a voice that is ahead of the disk waits for it instead.
 // Not compiled into the WebAssembly build (VISU_NO_FILES): there everything is in memory.
 #pragma once
 #include "Vsamp.h"
@@ -36,9 +37,15 @@ public:
     void setRead(int slot, int64_t frame) { if (slot >= 0) slots_[(size_t) slot].readPos.store(frame, std::memory_order_release); }
     inline float at(int slot, int c, int64_t i) const {
         const Slot& s = slots_[(size_t) slot]; const int64_t f = s.filled.load(std::memory_order_acquire);
-        if (i >= f || i < s.start) { if (i >= f) misses_.fetch_add(1, std::memory_order_relaxed); return 0.f; }
+        if (i >= f || i < s.start) {
+            if (i >= f && offline_.load(std::memory_order_relaxed) && waitFor(slot, i)) return s.ring[c][(size_t) (i & (kRing - 1))];
+            if (i >= f) misses_.fetch_add(1, std::memory_order_relaxed);
+            return 0.f;
+        }
         return s.ring[c][(size_t) (i & (kRing - 1))];
     }
+    // offline rendering: wait for the disk instead of playing silence (never set while playing live)
+    void setOffline(bool on) { offline_.store(on, std::memory_order_relaxed); }
     int busy() const;
     long misses() const { return misses_.load(); }
 private:
@@ -46,16 +53,19 @@ private:
     struct Slot {
         std::atomic<int> state{ Free }; int source = -1; int64_t start = 0;
         std::atomic<int64_t> filled{ 0 }, readPos{ 0 };
+        std::atomic<int64_t> end{ INT64_MAX };         // the last frame + 1 the disk thread will deliver (set when it starts)
         std::vector<float> ring[2];
         StreamLoop loop;                               // written before the slot is handed to the disk thread
         StreamSource src; int64_t next = 0;           // disk thread only
     };
+    bool waitFor(int slot, int64_t i) const;   // offline: until frame i is in the ring (or the stream ended); false on timeout
     void run();
     bool fill(Slot& s);
     bool fillLoop(Slot& s);
     std::unique_ptr<Slot[]> slots_;
     std::atomic<bool> running_{ true };
     mutable std::atomic<long> misses_{ 0 };
+    std::atomic<bool> offline_{ false };
     std::thread thread_;
 };
 

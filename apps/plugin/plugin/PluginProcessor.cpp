@@ -394,6 +394,7 @@ void VisuProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuf
     const int n = buffer.getNumSamples();
     buffer.clear();
     engine_.setMasterGain(volume_->get());
+    engine_.setOffline(isNonRealtime());   // a bounce: streamed samples wait for the disk instead of dropping out
     if (panicRequest_.exchange(false)) engine_.allNotesOff();
     for (int i = 0; i < kMacros; ++i) if (slotDirty_[i].exchange(false)) engine_.setTagIndex(slotTagIndex_[i].load(), slotValue_[i].load());
     keyboardState.processNextMidiBuffer(midi, 0, n, true);

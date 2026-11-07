@@ -78,7 +78,7 @@ int Streamer::open(int source, int64_t fromFrame, const StreamLoop* loop) {
         Slot& s = slots_[(size_t) i];
         if (s.state.load(std::memory_order_acquire) != Free) continue;
         s.source = source; s.start = fromFrame; s.loop = loop ? *loop : StreamLoop();
-        s.filled.store(fromFrame, std::memory_order_relaxed); s.readPos.store(fromFrame, std::memory_order_relaxed);
+        s.filled.store(fromFrame, std::memory_order_relaxed); s.readPos.store(fromFrame, std::memory_order_relaxed); s.end.store(INT64_MAX, std::memory_order_relaxed);
         s.state.store(Request, std::memory_order_release);
         return i;
     }
@@ -88,6 +88,17 @@ void Streamer::close(int slot) {
     if (slot < 0) return; Slot& s = slots_[(size_t) slot];
     int st = s.state.load(std::memory_order_acquire);
     while ((st == Request || st == Run) && !s.state.compare_exchange_weak(st, Freeing, std::memory_order_acq_rel)) {}
+}
+bool Streamer::waitFor(int slot, int64_t i) const {
+    const Slot& s = slots_[(size_t) slot];
+    const auto t0 = std::chrono::steady_clock::now();
+    for (;;) {
+        if (i < s.filled.load(std::memory_order_acquire)) return true;
+        if (i >= s.end.load(std::memory_order_acquire) || !running_.load()) return false;   // past the end of the sample: really silence
+        const int st = s.state.load(std::memory_order_acquire); if (st != Request && st != Run) return false;
+        if (std::chrono::steady_clock::now() - t0 > std::chrono::seconds(5)) return false;   // a disk that hangs: give up (counts as a miss)
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
 }
 int Streamer::busy() const { int n = 0; for (int i = 0; i < kSlots; ++i) if (slots_[(size_t) i].state.load() != Free) ++n; return n; }
 
@@ -173,6 +184,7 @@ void Streamer::run() {
             Slot& s = slots_[(size_t) i]; int st = s.state.load(std::memory_order_acquire);
             if (st == Request) {
                 if (!sourceCopy(s.source, s.src)) s.src.frames = 0;
+                s.end.store(s.loop.on ? INT64_MAX : std::max<int64_t>(s.start, (int64_t) s.src.frames), std::memory_order_release);
                 int exp = Request; s.state.compare_exchange_strong(exp, Run, std::memory_order_acq_rel); busy = true;
             } else if (st == Run) { if (fill(s)) busy = true; }
             else if (st == Freeing) { s.state.store(Free, std::memory_order_release); }

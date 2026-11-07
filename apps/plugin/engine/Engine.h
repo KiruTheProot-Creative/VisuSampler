@@ -19,6 +19,8 @@ public:
     // message thread: hand over a new library (nullptr unloads). The old one is kept alive until the audio thread has let go of it.
     void setLibrary(std::shared_ptr<const Library> lib);
     void setMasterGain(float g) { master_.store(g); }
+    // rendering faster than real time (a DAW bounce): streamed samples wait for the disk instead of dropping out
+    void setOffline(bool on);
     // which list plays: -1 = every group, -2 = the list the library was saved with
     void setList(int index) { list_.store(index); }
     // true once after a keyswitch note changed the list (the player then updates its interface)
@@ -130,6 +132,7 @@ private:
     unsigned long clock_ = 0; bool sustain_ = false; bool heldNotes_[128] = {}; int noteVel_[128] = {};
     int rr_[256] = {}; uint32_t rng_ = 12345;
 #ifndef VISU_NO_FILES
+    std::atomic<bool> offline_{ false };
     std::unique_ptr<Streamer> streamer_;   // made on the message thread by the first library that streams, kept from then on
 #endif
 };

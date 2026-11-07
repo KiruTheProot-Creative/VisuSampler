@@ -267,6 +267,20 @@ static void testStreaming() {
             }
             CHECK(streaming == (looped && note >= 91 ? 0 : 1) && maxd < 1e-5 && peak > .1 && a->streamMisses() == miss0, "%s note %d: streamed audio matches memory (max difference %.2g, %ld late reads)", name, note, maxd, a->streamMisses() - miss0);
         }
+        /* offline (a DAW bounce): as fast as the CPU goes, with no pauses, the stream waits for the disk and never drops out */
+        {
+            const int note = looped ? 63 : 79;
+            auto a = std::make_unique<Engine>(), b = std::make_unique<Engine>();
+            a->prepare(48000); b->prepare(48000); a->setMasterGain(1); b->setMasterGain(1); a->setOffline(true); a->setLibrary(disk); b->setLibrary(mem);
+            a->noteOn(note, 110); b->noteOn(note, 110);
+            std::vector<float> la(480), ra(480), lb(480), rb(480); double maxd = 0; const long miss0 = a->streamMisses();
+            for (int blk = 0; blk < (looped ? 1200 : 500); ++blk) {
+                std::fill(la.begin(), la.end(), 0.f); std::fill(ra.begin(), ra.end(), 0.f); std::fill(lb.begin(), lb.end(), 0.f); std::fill(rb.begin(), rb.end(), 0.f);
+                a->render(la.data(), ra.data(), 480); b->render(lb.data(), rb.data(), 480);
+                for (int i = 0; i < 480; ++i) maxd = std::max(maxd, (double) std::max(std::fabs(la[i] - lb[i]), std::fabs(ra[i] - rb[i])));
+            }
+            CHECK(maxd < 1e-5 && a->streamMisses() == miss0, "%s offline, full speed: streamed audio matches memory (max difference %.2g, %ld late reads)", name, maxd, a->streamMisses() - miss0);
+        }
     }
 }
 
@@ -518,7 +532,7 @@ static void testFx() {
 // and sound the same. compat.json holds each file's loudness every 100 ms for a few notes, recorded when the file was added.
 // VISU_COMPAT_WRITE=1 records files that have no fingerprint yet (it never overwrites an existing one).
 static std::vector<double> compatPrint(const std::shared_ptr<Library>& lib, int note) {
-    auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setMasterGain(1.f); e.setLibrary(lib); e.noteOn(note, 100);
+    auto ep = std::make_unique<Engine>(); Engine& e = *ep; e.prepare(48000); e.setMasterGain(1.f); e.setOffline(true); e.setLibrary(lib); e.noteOn(note, 100);   // offline: streamed samples never drop out, however slow the disk
     std::vector<float> l(800), r(800); std::vector<double> out; double sq = 0;
     for (int b = 0; b < 72; ++b) {   // 1.2 s: held 0.8 s, then released
         if (b == 48) e.noteOff(note);
