@@ -18,7 +18,7 @@ jobs:
         run: nuget install Microsoft.Web.WebView2 -Version 1.0.1901.177 -OutputDirectory "${{ github.workspace }}/nuget"
       - name: Configure
         shell: bash
-        run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
+        run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DVISU_BUILD_ID="${GITHUB_SHA::7}" -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
       - name: Build
         run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone --parallel 4
       - name: Package
@@ -48,6 +48,9 @@ jobs:
           mkdir -p apps/maker-desktop/native
           find nbuild -name "VisuMakerAudio.exe" -exec cp {} apps/maker-desktop/native/ \;
           ls -la apps/maker-desktop/native
+      - name: Build id (shown in VisuMaker's title, About and log)
+        shell: bash
+        run: echo "{\"build\":\"${GITHUB_SHA::7}\",\"date\":\"$(date -u +%Y-%m-%d)\"}" > apps/maker-desktop/build.json && cat apps/maker-desktop/build.json
       - run: npm run dist
         working-directory: apps/maker-desktop
         env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }

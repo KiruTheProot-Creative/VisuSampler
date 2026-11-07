@@ -14,7 +14,12 @@ const app=await openApp({width:1500,height:860},{
     const join=parts=>{const o=new Uint8Array(parts.reduce((n,d)=>n+d.length,0));let p=0;for(const d of parts){o.set(d,p);p+=d.length;}return o;};
     window.__saves=[];
     window.visuDesktop={
-      saveProject:async(name,parts,file,saveAs)=>{window.__saves.push({file,saveAs});return file||('C:/Projects/'+name+'.vmproj');},
+      saveProject:async(name,parts,file,saveAs)=>{window.__saves.push({file,saveAs});window.__lastProj=join(parts);return file||('C:/Projects/'+name+'.vmproj');},
+      info:async()=>({version:'0.0.1',build:'abc1234',date:'2026-11-07',os:'Windows_NT 10.0.22631 (x64)',electron:'33.2.1',logFile:'C:/Users/me/Documents/VisuSampler/Logs/VisuMaker.log'}),
+      log:(level,msg)=>{(window.__logs=window.__logs||[]).push(level+' '+msg);},
+      openLogs:async()=>{window.__openedLogs=true;},
+      takeOpenRequest:async()=>{const r=window.__openReq;window.__openReq=null;return r||null;},
+      onOpenRequest:cb=>{window.__onOpenReq=cb;},
       autosave:async(parts,meta)=>window.__fsAuto(b64(join(parts)),JSON.stringify(meta)),
       autosaveInfo:async()=>{const s=await window.__fsInfo();return s?JSON.parse(s):null;},
       autosaveRead:async()=>{const s=atob(await window.__fsRead()),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;},
@@ -75,5 +80,36 @@ await p.evaluate(()=>{window.__vs.S.zones[0].vol=-2;});await p.waitForTimeout(25
 await p.reload();await p.waitForTimeout(1500);
 await p.click('#autoRestore button.danger');await p.waitForTimeout(500);
 ok(!store.meta&&!(await p.$('#autoRestore')),'Discard removes the backup');
+/* About: version, build, log folder */
+await p.click('#aboutBtn');await p.waitForTimeout(300);
+const about=await p.textContent('#aboutBox');
+ok(/0\.0\.1/.test(about)&&/abc1234/.test(about)&&/Windows/.test(about),'About shows the version, build and system');
+await p.click('#aboutBox >> text=Open log folder');
+ok(await p.evaluate(()=>window.__openedLogs===true),'About opens the log folder');
+await p.keyboard.press('Escape');ok(!(await p.$('#aboutBox')),'Escape closes About');
+/* failures shown to the user also go into the log */
+/* a project double-clicked in Explorer */
+const req=await p.evaluate(async()=>{   /* save "From Explorer" as a file, then switch to another clean project */
+  const v=window.__vs;v.S.lib.name='From Explorer';v.S.zones[0].vol=-1.5;
+  document.dispatchEvent(new KeyboardEvent('keydown',{key:'s',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,1200));
+  const bytes=window.__lastProj;v.S.lib.name='Something Else';v.S.zones[0].vol=-20;
+  document.dispatchEvent(new KeyboardEvent('keydown',{key:'s',ctrlKey:true,bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,1200));
+  window.__openReq={file:'C:/Projects/Other/From Explorer.vmproj',bytes};window.__onOpenReq();await new Promise(r=>setTimeout(r,1500));
+  const n=window.__saves.length;document.dispatchEvent(new KeyboardEvent('keydown',{key:'s',ctrlKey:true,bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,1200));
+  return{name:v.S.lib.name,vol:v.S.zones[0].vol,saved:window.__saves.slice(n)};});
+ok(req.name==='From Explorer'&&req.vol===-1.5&&req.saved.length===1&&req.saved[0].file==='C:/Projects/Other/From Explorer.vmproj','a project opened from Explorer opens, and Ctrl+S saves it to its own file ('+JSON.stringify(req)+')');
+/* opening over unsaved changes asks first */
+await p.evaluate(()=>{window.__keep=window.__lastProj;window.__vs.S.zones[0].vol=-33;});
+p.once('dialog',d=>d.dismiss());
+await p.evaluate(async()=>{window.__openReq={file:'C:/x.vmproj',bytes:window.__keep};window.__onOpenReq();await new Promise(r=>setTimeout(r,1200));});
+ok(await p.evaluate(()=>window.__vs.S.zones[0].vol===-33),'unsaved changes: opening another project asks, and Cancel keeps the work');
+p.once('dialog',d=>d.accept());
+await p.evaluate(async()=>{window.__openReq={file:'C:/x.vmproj',bytes:window.__keep};window.__onOpenReq();await new Promise(r=>setTimeout(r,1500));});
+ok(await p.evaluate(()=>window.__vs.S.zones[0].vol===-1.5),'and OK opens it');
+await p.evaluate(()=>{window.__logs=[];});
+await p.evaluate(()=>{window.__vs.S.zones[0].vol=-5;});
+await p.evaluate(async()=>{const D=window.visuDesktop,o=D.saveProject;D.saveProject=async()=>{throw new Error('disk full');};
+  document.dispatchEvent(new KeyboardEvent('keydown',{key:'s',ctrlKey:true,bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,1000));D.saveProject=o;});
+ok(await p.evaluate(()=>(window.__logs||[]).some(l=>/warn .*Could not save: disk full/.test(l))),'a failed save goes into the log ('+(await p.evaluate(()=>(window.__logs||[]).join(' | ')))+')');
 ok(app.errs.length===0,'no page errors '+app.errs.join(' | '));
 console.log(fails.length?'FAILED':'ALL OK');await app.close();process.exit(fails.length?1:0);

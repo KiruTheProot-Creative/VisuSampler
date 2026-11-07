@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(VISU_BUILD_PLUGIN "Build the VST3/AU plugin (needs JUCE, fetched automatically)" OFF)
 option(VISU_BUILD_TESTS "Build the engine tests" ON)
+set(VISU_BUILD_ID "dev" CACHE STRING "Build id shown in VisuPlayer and its log (the release workflow passes the commit)")
 option(VISU_BUILD_MAKER_AUDIO "Build VisuMakerAudio, VisuMaker's native audio (needs JUCE, fetched automatically)" OFF)
 
 add_library(visu_engine STATIC engine/Vsamp.cpp engine/Inflate.cpp engine/Library.cpp engine/Engine.cpp engine/Fx.cpp engine/Stream.cpp)

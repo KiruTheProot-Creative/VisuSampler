@@ -75,5 +75,6 @@ function autoStart(){
     if(r){AUTO.allowClose=true;window.close();}else flash('Not saved: VisuMaker stays open');
   });
   setInterval(autoTick,1000);
-  autoCheckRestore();
+  if(D.onOpenRequest)D.onOpenRequest(()=>openFromExplorer());
+  (async()=>{await autoCheckRestore();await openFromExplorer();})();   /* the backup question first, then a project double-clicked in Explorer */
 }

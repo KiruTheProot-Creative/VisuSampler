@@ -28,6 +28,9 @@ public:
 
     // library browser (message thread)
     static juce::File libraryFolder();
+    static juce::File logFolder();                         // Documents/VisuSampler/Logs (VisuPlayer.log, for bug reports)
+    static void log(const juce::String& line);             // message or loader threads only, never the audio thread
+    static juce::String versionText();                     // "0.0.1 (build abc1234)"
     void rescan();
     const std::vector<Entry>& catalog() const { return catalog_; }
     const Entry* entryById(const juce::String& id) const;

@@ -63,7 +63,9 @@ async function openProject(bytes,file){
   flash('Opened project "'+S.lib.name+'"');
 }
 async function saveClick(saveAs){flash('Saving…');await nextFrame();try{await saveProject(saveAs);}catch(e){flash('Could not save: '+e.message);}}
-async function openBytes(bytes,file){flash('Opening…');await nextFrame();try{await openProject(bytes,file);}catch(e){flash('Could not open: '+e.message);}}
+async function openBytes(bytes,file){
+  if(typeof autoD==='function'&&autoD()&&projDirty()&&!confirm('Open '+(file?file.split(/[\\/]/).pop():'this project')+'? Your unsaved changes to "'+S.lib.name+'" will be lost (the last backup stays until the next one).'))return;
+  flash('Opening…');await nextFrame();try{await openProject(bytes,file);}catch(e){flash('Could not open: '+e.message);}}
 async function openClick(){
   const D=window.visuDesktop;
   if(D&&D.openProject){const r=await D.openProject();if(r)await openBytes(r.bytes,r.file);return;}

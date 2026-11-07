@@ -12,6 +12,12 @@ contextBridge.exposeInMainWorld('visuDesktop',{
   autosaveInfo:()=>ipcRenderer.invoke('visu:autosaveInfo'),
   autosaveRead:()=>ipcRenderer.invoke('visu:autosaveRead'),
   autosaveClear:()=>ipcRenderer.invoke('visu:autosaveClear'),
+  /* version, log file, a project to open from Explorer */
+  info:()=>ipcRenderer.invoke('visu:info'),
+  log:(level,msg)=>ipcRenderer.send('visu:log',level,msg),
+  openLogs:()=>ipcRenderer.invoke('visu:openLogs'),
+  takeOpenRequest:()=>ipcRenderer.invoke('visu:takeOpenRequest'),
+  onOpenRequest:cb=>{ipcRenderer.removeAllListeners('visu:openRequest');ipcRenderer.on('visu:openRequest',()=>cb());},
   onSaveThenClose:cb=>{ipcRenderer.removeAllListeners('visu:saveThenClose');ipcRenderer.on('visu:saveThenClose',()=>cb());}
 });
 contextBridge.exposeInMainWorld('visuNative',{

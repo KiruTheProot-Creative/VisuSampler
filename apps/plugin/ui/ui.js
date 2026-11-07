@@ -56,6 +56,7 @@ function setLibs(d){libs=(d&&d.libs)||[];folder=(d&&d.folder)||'';imgV++;libs.so
 async function addLibrary(){const r=await call('addLibrary');if(r&&r.added)toast('Added '+r.added+' librar'+(r.added===1?'y':'ies'));}
 $('#btnAdd').onclick=addLibrary;$('#btnAdd2').onclick=addLibrary;
 $('#btnFolder').onclick=()=>call('openFolder');
+$('#ver').onclick=()=>call('openLogs');
 /* ---------- play mode ---------- */
 function setModeTitle(){}
 function setMode(m){
@@ -185,7 +186,7 @@ $('#btnAbout').onclick=()=>{const on=!$('#stage').classList.contains('about');$(
 buildPiano();
 (async()=>{
   setLibs(await call('getLibraries'));
-  const s=await call('getState');if(s){$('#vol').value=s.volume;$('#vol2').value=s.volume;st=s.status||{};if(s.status&&s.status.currentId){const L=libs.find(x=>x.id===s.status.currentId);if(L){cur=L;renderDetail();setMode('play');if(!st.loading)showUI();}}}
+  const s=await call('getState');if(s&&s.version)$('#ver').textContent='VisuPlayer '+s.version;if(s){$('#vol').value=s.volume;$('#vol2').value=s.volume;st=s.status||{};if(s.status&&s.status.currentId){const L=libs.find(x=>x.id===s.status.currentId);if(L){cur=L;renderDetail();setMode('play');if(!st.loading)showUI();}}}
 })().catch(e=>{console.warn(e);renderBrowse();});
 window.__ui={get libs(){return libs;},open,leave};
 

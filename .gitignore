@@ -8,3 +8,4 @@ build/
 apps/maker-desktop/www/
 apps/maker-desktop/dist/
 apps/maker-desktop/native/
+apps/maker-desktop/build.json

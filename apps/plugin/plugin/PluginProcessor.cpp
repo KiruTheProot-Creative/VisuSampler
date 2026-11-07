@@ -1,6 +1,28 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+#ifndef VISU_VERSION
+#define VISU_VERSION "0.0.1"
+#endif
+#ifndef VISU_BUILD_ID
+#define VISU_BUILD_ID "dev"
+#endif
+
+juce::String VisuProcessor::versionText() { return juce::String(VISU_VERSION) + " (build " + VISU_BUILD_ID + ")"; }
+juce::File VisuProcessor::logFolder()
+{
+    return juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("VisuSampler").getChildFile("Logs");
+}
+/* one log for every VisuPlayer in this process (several instances in a song share it); past 1 MB the old one is kept once */
+void VisuProcessor::log(const juce::String& line)
+{
+    static juce::CriticalSection lock; const juce::ScopedLock l(lock);
+    const auto dir = logFolder(); dir.createDirectory();
+    const auto f = dir.getChildFile("VisuPlayer.log");
+    if (f.getSize() > (1 << 20)) { const auto old = dir.getChildFile("VisuPlayer.old.log"); old.deleteFile(); f.moveFileTo(old); }
+    f.appendText(juce::Time::getCurrentTime().formatted("%Y-%m-%d %H:%M:%S") + "  " + line + "\n", false, false, "\n");
+}
+
 VisuProcessor::VisuProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true))
 {
@@ -13,6 +35,8 @@ VisuProcessor::VisuProcessor()
     }
     for (auto& c : ccSlot_) c = -1;
     libraryFolder().createDirectory();
+    log("---- VisuPlayer " + versionText() + " · " + juce::PluginHostType().getHostDescription() + " (" + juce::String(juce::PluginHostType::getPluginLoadedAs() == juce::AudioProcessor::wrapperType_Standalone ? "standalone" : "plugin")
+        + ") · " + juce::SystemStats::getOperatingSystemName() + (juce::SystemStats::isOperatingSystem64Bit() ? " 64-bit" : ""));
     rescan();
 }
 
@@ -40,7 +64,7 @@ void VisuProcessor::rescan()
         for (auto& f : libraryFolder().findChildFiles(juce::File::findFiles, true, "*.vsamp"))
         {
             Entry e; e.file = f; e.size = f.getSize(); std::string err;
-            if (!visu::Library::readInfo(f.getFullPathName().toStdString(), e.info, err)) continue;
+            if (!visu::Library::readInfo(f.getFullPathName().toStdString(), e.info, err)) { log("skipped " + f.getFullPathName() + ": " + juce::String(err)); continue; }
             e.id = juce::String(e.info.id.empty() ? f.getFileNameWithoutExtension().toStdString() : e.info.id);
             // two copies of the same library (e.g. two versions): keep both, make the id unique
             for (auto& o : found) if (o.id == e.id) e.id += "~" + f.getFileNameWithoutExtension();
@@ -50,7 +74,13 @@ void VisuProcessor::rescan()
         juce::MessageManager::callAsync([this, alive, found = std::move(found)]() mutable {
             if (!*alive) return;
             catalog_ = std::move(found);
-            if (pendingId_.isNotEmpty()) { auto p = pendingId_; pendingId_.clear(); loadLibrary(p, pendingKeep_); }
+            if (pendingId_.isNotEmpty()) {
+                auto p = pendingId_; pendingId_.clear(); loadLibrary(p, pendingKeep_);
+                if (!entryById(p)) {   // the song asks for a library that is not in the folder (moved, renamed or deleted)
+                    status_ = "This song uses the library \"" + p + "\", which is not in " + libraryFolder().getFullPathName() + ". Put it back there (or pick another library).";
+                    log("missing library " + p);
+                }
+            }
             sendChangeMessage();
         });
     });
@@ -71,8 +101,11 @@ void VisuProcessor::loadLibrary(const juce::String& id, bool keepTags)
     loading_ = true; currentId_ = id; status_ = "Loading…"; sendChangeMessage();
     const double sr = sampleRate_ > 0 ? sampleRate_ : 48000.0;
     juce::Thread::launch([this, alive, file, ticket, id, sr] {
-        std::string err;
+        std::string err; const auto t0 = juce::Time::getMillisecondCounterHiRes();
         std::shared_ptr<const visu::Library> lib = visu::Library::load(file.getFullPathName().toStdString(), err, sr);
+        if (!lib) log("could not load " + file.getFullPathName() + ": " + juce::String(err));
+        else log("loaded " + file.getFileName() + " in " + juce::String((int) (juce::Time::getMillisecondCounterHiRes() - t0)) + " ms · " + juce::String((int) lib->zones.size()) + " zones · "
+                 + juce::String(lib->memoryBytes() / 1048576.0, 1) + " MB in memory · " + juce::String(sr, 0) + " Hz");
         juce::MessageManager::callAsync([this, alive, file, ticket, lib, err, id] {
             if (!*alive || ticket != loadTicket_.load()) return;
             loading_ = false;
@@ -170,6 +203,7 @@ void VisuProcessor::prepareToPlay(double sampleRate, int)
 {
     engine_.prepare(sampleRate);
     const bool changed = std::abs(sampleRate - sampleRate_) > 1;
+    if (changed) { const juce::String m = "sample rate " + juce::String(sampleRate, 0) + " Hz"; juce::MessageManager::callAsync([m] { log(m); }); }
     sampleRate_ = sampleRate;
     // the effects are built for one sample rate: reload the library if the host changed it
     if (changed && current_ && currentId_.isNotEmpty()) { const auto id = currentId_; juce::MessageManager::callAsync([this, id, alive = alive_] { if (*alive) loadLibrary(id); }); }
@@ -428,7 +462,7 @@ void VisuProcessor::setStateInformation(const void* data, int size)
 {
     if (auto xml = getXmlFromBinary(data, size))
     {
-        if (!xml->hasTagName("VisuPlayerState")) return;
+        if (!xml->hasTagName("VisuPlayerState")) { log("ignored a saved state that is not VisuPlayer's"); return; }
         volume_->setValueNotifyingHost(volume_->convertTo0to1((float) xml->getDoubleAttribute("volume", 0.8)));
         list_ = xml->getIntAttribute("list", -2); listB_ = xml->getIntAttribute("listB", -2); patch_[0] = xml->getIntAttribute("patch", -2); patch_[1] = xml->getIntAttribute("patchB", -2);
         currentPreset_ = xml->getStringAttribute("preset");

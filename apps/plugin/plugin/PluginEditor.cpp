@@ -45,7 +45,7 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
         .withResourceProvider([this](const juce::String& url) { return resource(url); })
         .withNativeFunction("getLibraries", [this, reply](const juce::Array<juce::var>&, auto done) { reply(done, proc_.librariesVar()); })
         .withNativeFunction("getState", [this, reply](const juce::Array<juce::var>&, auto done) {
-            auto* o = new juce::DynamicObject(); o->setProperty("volume", proc_.volume()); o->setProperty("status", proc_.statusVar()); reply(done, juce::var(o)); })
+            auto* o = new juce::DynamicObject(); o->setProperty("volume", proc_.volume()); o->setProperty("status", proc_.statusVar()); o->setProperty("version", VisuProcessor::versionText()); reply(done, juce::var(o)); })
         .withNativeFunction("loadLibrary", [this, reply](const juce::Array<juce::var>& a, auto done) {
             const auto id = a.isEmpty() ? juce::String() : a[0].toString();
             if (!proc_.entryById(id)) { auto* o = new juce::DynamicObject(); o->setProperty("error", "library not found"); reply(done, juce::var(o)); return; }
@@ -79,6 +79,7 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
             if (!a.isEmpty()) proc_.keyboardState.noteOff(1, juce::jlimit(0, 127, (int) a[0]), 0.0f); reply(done, juce::var(true)); })
         .withNativeFunction("panic", [this, reply](const juce::Array<juce::var>&, auto done) { proc_.keyboardState.allNotesOff(1); proc_.panic(); reply(done, juce::var(true)); })
         .withNativeFunction("openFolder", [reply](const juce::Array<juce::var>&, auto done) { VisuProcessor::libraryFolder().startAsProcess(); reply(done, juce::var(true)); })
+        .withNativeFunction("openLogs", [reply](const juce::Array<juce::var>&, auto done) { VisuProcessor::logFolder().createDirectory(); VisuProcessor::logFolder().startAsProcess(); reply(done, juce::var(true)); })
         .withNativeFunction("addLibrary", [this](const juce::Array<juce::var>&, juce::WebBrowserComponent::NativeFunctionCompletion done) {
             chooser_ = std::make_unique<juce::FileChooser>("Add libraries", juce::File(), "*.vsamp;*.zip");
             chooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::canSelectMultipleItems,

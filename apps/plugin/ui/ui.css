@@ -106,3 +106,5 @@ pre.lic{white-space:pre-wrap;margin:0;font:11px/1.5 var(--f);color:var(--muted)}
 .piano .wk.ks{background:linear-gradient(#ffd9a8,#ffc27a)}
 .piano .bk.ks{background:linear-gradient(#a8651c,#d68b30)}
 .piano .ks.kson{box-shadow:inset 0 -6px 0 #ff8a1e}
+
+.ver{background:none;border:0;padding:0 0 0 12px;cursor:pointer;font:inherit;font-size:11px}.ver:hover{color:var(--fg,#eee);text-decoration:underline}
