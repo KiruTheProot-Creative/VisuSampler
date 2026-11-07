@@ -1,5 +1,5 @@
 // VisuMaker desktop: serves the web app from a private app:// scheme (so ES modules load) in one window.
-const {app,BrowserWindow,protocol,net,shell,Menu,ipcMain}=require('electron');
+const {app,BrowserWindow,protocol,net,shell,Menu,ipcMain,dialog}=require('electron');
 const fs=require('node:fs');
 const path=require('node:path');const {pathToFileURL}=require('node:url');
 const os=require('node:os');const {spawn}=require('node:child_process');
@@ -39,9 +39,28 @@ app.whenReady().then(()=>{
     return file;
   });
   ipcMain.handle('visu:libraryFolder',()=>libDir());
+  /* Projects: Save writes straight back to the file it came from (a dialog only the first time, or for Save as).
+     It writes a temp file next to it and renames it over, so a crash mid-save never leaves half a project. */
+  const projFilter=[{name:'VisuMaker project',extensions:['vmproj']}];
+  ipcMain.handle('visu:saveProject',async(e,name,bytes,file,saveAs)=>{
+    if(!file||saveAs){
+      const safe=String(name||'project').replace(/[<>:"/\\|?*\x00-\x1f]+/g,'').trim()||'project';
+      const r=await dialog.showSaveDialog(BrowserWindow.fromWebContents(e.sender),{title:'Save project',defaultPath:file||path.join(app.getPath('documents'),safe+'.vmproj'),filters:projFilter});
+      if(r.canceled||!r.filePath)return null;file=r.filePath;
+    }
+    const tmp=file+'.saving',fh=await fs.promises.open(tmp,'w');
+    try{for(const d of (Array.isArray(bytes)?bytes:[bytes]))await fh.write(Buffer.from(d.buffer,d.byteOffset,d.byteLength));}finally{await fh.close();}
+    await fs.promises.rename(tmp,file);
+    return file;
+  });
+  ipcMain.handle('visu:openProject',async e=>{
+    const r=await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender),{title:'Open project',filters:projFilter,properties:['openFile']});
+    if(r.canceled||!r.filePaths[0])return null;
+    return{file:r.filePaths[0],bytes:new Uint8Array(await fs.promises.readFile(r.filePaths[0]))};
+  });
   /* ---- native audio: VisuMakerAudio(.exe) plays the project with the VST's engine on the sound card ----
      The page talks to it with the AudioWorklet's messages; a project to load is written to a temp file first
-     (so the engine streams long samples from disk instead of holding them in memory). */
+     (the helper reads it into memory, so later loads can reuse audio it already has). */
   const NA={proc:null,win:null,buf:'',files:[],n:0,dir:path.join(os.tmpdir(),'VisuMaker')};
   const naExe=()=>process.env.VISU_NATIVE_AUDIO||(app.isPackaged?path.join(process.resourcesPath,'native','VisuMakerAudio'+(process.platform==='win32'?'.exe':'')):path.join(__dirname,'native','VisuMakerAudio'+(process.platform==='win32'?'.exe':'')));
   const naTell=m=>{if(NA.win&&!NA.win.isDestroyed())NA.win.webContents.send('visu:native',m);};

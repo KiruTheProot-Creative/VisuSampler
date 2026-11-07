@@ -29,6 +29,10 @@ public:
     static BlobRef ref(const Json& j);
     // Checks the blob CRC, unpacks if compressed. Returns false with `error` set on failure.
     bool blob(const BlobRef& r, std::vector<uint8_t>& out, std::string& error) const;
+    // Only checks a blob's CRC (no copy). Files read into memory only; a lazy file reads it.
+    bool check(const BlobRef& r, std::string& error) const;
+    // A stored (not packed) blob's bytes, straight from memory: nullptr for lazy files, packed blobs or out of range. No CRC check.
+    const uint8_t* rawPtr(const BlobRef& r) const;
     size_t sizeBytes() const { return lazy_ ? (size_t) fileSize_ : bytes_.size(); }
 
 private:
@@ -40,5 +44,7 @@ private:
 
 // interleaved little endian PCM (16, 24 or 32 = float) to per-channel floats
 void decodePCM(const uint8_t* d, size_t nbytes, int chn, int bits, std::vector<float>* out);
+// The same, written into out[k] from frame `at` on (out[k] must already hold at + frames floats). Returns the frames written.
+size_t decodePCMInto(const uint8_t* d, size_t nbytes, int chn, int bits, std::vector<float>* out, size_t at);
 
 } // namespace visu

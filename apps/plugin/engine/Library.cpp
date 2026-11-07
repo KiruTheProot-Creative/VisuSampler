@@ -200,7 +200,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
             const BlobRef d = VsampFile::ref(sj["data"]);
             if (!d.deflate) { const uint64_t cb = (uint64_t) src.chunkFrames * (uint64_t) (fch * bps);   // a raw block: virtual chunks
                 for (uint64_t o = 0; o < d.len; o += cb) { BlobRef r; r.off = d.off + o; r.len = std::min(cb, d.len - o); r.raw = r.len; r.nocrc = true; src.chunks.push_back(r); }
-                if (src.chunks.size() > 1 && !f.lazy()) { std::vector<uint8_t> all; if (!f.blob(d, all, error)) return nullptr; }   /* in memory: still check the whole block */ }
+                if (src.chunks.size() > 1 && !f.lazy() && !f.check(d, error)) return nullptr;   /* in memory: still check the whole block */ }
             else src.chunks.push_back(d);   // one packed block: cannot stream
         }
         src.frames = (uint64_t) sj["frames"].num(0);
@@ -209,11 +209,19 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         bool stream = canStream && head + (size_t) src.chunkFrames < (size_t) src.frames;
         { auto lf = loopFrom.find(s.id); if (lf != loopFrom.end() && (long) head > lf->second) stream = false; }   // a loop that starts inside the head: keep it all
         std::vector<float> all[8];
-        for (size_t k = 0; k < src.chunks.size(); ++k) {   // decode all chunks, or only those covering the head
-            if (stream && k * (size_t) src.chunkFrames >= head) break;
-            std::vector<uint8_t> raw; if (!f.blob(src.chunks[k], raw, error)) return nullptr;
-            std::vector<float> part[8]; decodePCM(raw.data(), raw.size(), fch, bits, part);
-            for (int c = 0; c < fch; ++c) all[c].insert(all[c].end(), part[c].begin(), part[c].end());
+        {   // decode all chunks, or only those covering the head, straight into the sample's buffers
+            size_t want = 0, at = 0, nk = 0;
+            for (; nk < src.chunks.size(); ++nk) { if (stream && nk * (size_t) src.chunkFrames >= head) break; want += (size_t) (src.chunks[nk].raw / (uint64_t) (fch * bps)); }
+            for (int c = 0; c < fch; ++c) all[c].resize(want);
+            std::vector<uint8_t> raw;
+            for (size_t k = 0; k < nk; ++k) {
+                const BlobRef& r = src.chunks[k]; const uint8_t* d = r.nocrc ? f.rawPtr(r) : nullptr; size_t nb = (size_t) r.len;   // in memory and already checked: no copy
+                if (!d) { if (!f.blob(r, raw, error)) return nullptr; d = raw.data(); nb = raw.size(); }
+                const size_t fr = nb / (size_t) (fch * bps);
+                if (at + fr > want) for (int c = 0; c < fch; ++c) all[c].resize(at + fr);
+                at += decodePCMInto(d, nb, fch, bits, all, at);
+            }
+            for (int c = 0; c < fch; ++c) all[c].resize(at);
         }
         s.ch[0] = std::move(all[0]); if (s.chn > 1) s.ch[1] = std::move(all[1]);
         if (stream) { s.headFrames = std::min(head, s.ch[0].size()); s.frames = (size_t) src.frames;

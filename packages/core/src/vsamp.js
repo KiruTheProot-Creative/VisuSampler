@@ -1,11 +1,27 @@
 import {clamp,bytesPer} from './util.js';
 export const MAGIC=[0x56,0x53,0x41,0x4d,0x50,0,1,0];
 export const FORMAT_VERSION=1;
-const CRCT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
-export function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRCT[(c^u8[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0;}
+const LE=new Uint8Array(new Uint16Array([1]).buffer)[0]===1;
+/* CRC-32 (zlib's), slicing by 8: eight table lookups per 8 bytes instead of one per byte */
+const CRCT=(()=>{const t=new Int32Array(256*8);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c;}
+  for(let n=0;n<256;n++){let c=t[n];for(let k=1;k<8;k++){c=t[c&255]^(c>>>8);t[k*256+n]=c;}}return t;})();
+export function crc32(u8){
+  const T=CRCT,n=u8.length;let c=-1,i=0;
+  if(n>=16){
+    const a=(4-(u8.byteOffset&3))&3;for(;i<a;i++)c=T[(c^u8[i])&255]^(c>>>8);
+    const w=new Int32Array(u8.buffer,u8.byteOffset+i,(n-i)>>3<<1),wl=w.length;   // little-endian words (every platform the Maker runs on)
+    for(let j=0;j<wl;j+=2){const x=w[j]^c,y=w[j+1];
+      c=T[1792+(x&255)]^T[1536+((x>>>8)&255)]^T[1280+((x>>>16)&255)]^T[1024+(x>>>24)]^T[768+(y&255)]^T[512+((y>>>8)&255)]^T[256+((y>>>16)&255)]^T[y>>>24];}
+    i+=wl<<2;
+  }
+  for(;i<n;i++)c=T[(c^u8[i])&255]^(c>>>8);
+  return(c^-1)>>>0;
+}
 /** Interleaved little-endian PCM. bits: 16, 24 or 32 (float). */
 export function encodePCM(ch,bits){
   const n=ch[0].length,c=ch.length,bps=bytesPer(bits),out=new Uint8Array(n*c*bps),dv=new DataView(out.buffer);
+  if(bits===32&&LE){const f=new Float32Array(out.buffer);if(c===1)f.set(ch[0]);else if(c===2){const l=ch[0],r=ch[1];for(let i=0,j=0;i<n;i++,j+=2){f[j]=l[i];f[j+1]=r[i];}}else for(let k=0;k<c;k++){const d=ch[k];for(let i=0,o=k;i<n;i++,o+=c)f[o]=d[i];}return out;}
+  if(bits===16&&LE){const q=new Int16Array(out.buffer);for(let k=0;k<c;k++){const d=ch[k];for(let i=0,o=k;i<n;i++,o+=c){const v=d[i],w=v>1?1:v<-1?-1:v;q[o]=Math.round(w*(w<0?32768:32767));}}return out;}
   for(let i=0;i<n;i++)for(let k=0;k<c;k++){
     const v=clamp(ch[k][i],-1,1),o=(i*c+k)*bps;
     if(bits===16)dv.setInt16(o,Math.round(v*(v<0?32768:32767)),true);
@@ -15,7 +31,14 @@ export function encodePCM(ch,bits){
   return out;
 }
 export function decodePCM(u8,chn,bits){
-  const bps=bytesPer(bits),n=Math.floor(u8.length/(bps*chn)),ch=[];for(let k=0;k<chn;k++)ch.push(new Float32Array(n));
+  const bps=bytesPer(bits),n=Math.floor(u8.length/(bps*chn)),ch=[];
+  if(bits===32&&LE){   // float: copy straight out (one aligned copy, then de-interleave)
+    const f=(u8.byteOffset&3)?new Float32Array(u8.slice(0,n*chn*4).buffer):new Float32Array(u8.buffer,u8.byteOffset,n*chn);
+    if(chn===1)return[f.slice(0,n)];
+    if(chn===2){const l=new Float32Array(n),r=new Float32Array(n);for(let i=0,j=0;i<n;i++,j+=2){l[i]=f[j];r[i]=f[j+1];}return[l,r];}
+    for(let k=0;k<chn;k++){const d=new Float32Array(n);for(let i=0,o=k;i<n;i++,o+=chn)d[i]=f[o];ch.push(d);}return ch;
+  }
+  for(let k=0;k<chn;k++)ch.push(new Float32Array(n));
   const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
   for(let i=0;i<n;i++)for(let k=0;k<chn;k++){
     const o=(i*chn+k)*bps;
@@ -29,19 +52,25 @@ export const inflate=u8=>pipe(u8,DecompressionStream,'deflate-raw');
 /** Collects blobs and hands back the manifest reference for each. */
 export class Pack{
   constructor(){this.parts=[];this.size=0;}
-  async add(u8,{compress=false}={}){
+  /** crc: the CRC of u8 when the caller already knows it (only used when u8 is stored as it is) */
+  async add(u8,{compress=false,crc=null}={}){
     let enc='raw',data=u8;
     if(compress){const d=await deflate(u8);if(d&&d.length<u8.length*.95){data=d;enc='deflate';}}
-    const e={off:this.size,len:data.length,raw:u8.length,crc:crc32(data),enc};
+    const e={off:this.size,len:data.length,raw:u8.length,crc:enc==='raw'&&crc!=null?crc:crc32(data),enc};
     this.parts.push(data);this.size+=data.length;return e;
   }
 }
 /** Put manifest + blobs into one file. */
 export function writeVsamp(manifest,pack){
-  const mj=new TextEncoder().encode(JSON.stringify(manifest)),out=new Uint8Array(16+mj.length+pack.size),dv=new DataView(out.buffer);
-  out.set(MAGIC,0);dv.setUint32(8,mj.length,true);dv.setUint32(12,crc32(mj),true);out.set(mj,16);
-  let p=16+mj.length;for(const d of pack.parts){out.set(d,p);p+=d.length;}
+  const parts=vsampParts(manifest,pack),out=new Uint8Array(parts.reduce((n,d)=>n+d.length,0));
+  let p=0;for(const d of parts){out.set(d,p);p+=d.length;}
   return out;
+}
+/** The same file as a list of pieces to write one after another (no copy of the whole file in memory). */
+export function vsampParts(manifest,pack){
+  const mj=new TextEncoder().encode(JSON.stringify(manifest)),head=new Uint8Array(16+mj.length),dv=new DataView(head.buffer);
+  head.set(MAGIC,0);dv.setUint32(8,mj.length,true);dv.setUint32(12,crc32(mj),true);head.set(mj,16);
+  return[head,...pack.parts];
 }
 /** Open a file. Throws on a bad header or manifest. Returns {manifest, blob(ref)->Promise<Uint8Array>} (blob checks its CRC). */
 export function readVsamp(bytes){

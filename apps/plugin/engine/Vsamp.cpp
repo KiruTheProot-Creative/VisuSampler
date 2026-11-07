@@ -32,14 +32,20 @@ static int visu_fseek(std::FILE* f, long long o) { return fseeko(f, (off_t) o, S
 #endif
 #endif
 
-static const uint32_t* crcTable() {
-    static uint32_t t[256]; static bool init = false;
-    if (!init) { for (uint32_t n = 0; n < 256; ++n) { uint32_t c = n; for (int k = 0; k < 8; ++k) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1; t[n] = c; } init = true; }
-    return t;
-}
+/* CRC-32 (zlib's), slicing by 8: the same numbers as the byte-at-a-time version, several times faster */
+struct CrcTables { uint32_t t[8][256];
+    CrcTables() { for (uint32_t n = 0; n < 256; ++n) { uint32_t c = n; for (int k = 0; k < 8; ++k) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1; t[0][n] = c; }
+                  for (uint32_t n = 0; n < 256; ++n) for (int k = 1; k < 8; ++k) t[k][n] = t[0][t[k - 1][n] & 255] ^ (t[k - 1][n] >> 8); } };
+static const CrcTables& crcTables() { static const CrcTables T; return T; }
 uint32_t crc32(const uint8_t* d, size_t n) {
-    const uint32_t* t = crcTable(); uint32_t c = 0xFFFFFFFFu;
-    for (size_t i = 0; i < n; ++i) c = t[(c ^ d[i]) & 255] ^ (c >> 8);
+    const auto& T = crcTables().t; uint32_t c = 0xFFFFFFFFu;
+    while (n >= 8) {
+        const uint32_t a = c ^ ((uint32_t) d[0] | (uint32_t) d[1] << 8 | (uint32_t) d[2] << 16 | (uint32_t) d[3] << 24),
+                       b = (uint32_t) d[4] | (uint32_t) d[5] << 8 | (uint32_t) d[6] << 16 | (uint32_t) d[7] << 24;
+        c = T[7][a & 255] ^ T[6][(a >> 8) & 255] ^ T[5][(a >> 16) & 255] ^ T[4][a >> 24] ^ T[3][b & 255] ^ T[2][(b >> 8) & 255] ^ T[1][(b >> 16) & 255] ^ T[0][b >> 24];
+        d += 8; n -= 8;
+    }
+    while (n--) c = T[0][(c ^ *d++) & 255] ^ (c >> 8);
     return c ^ 0xFFFFFFFFu;
 }
 
@@ -126,17 +132,32 @@ bool VsampFile::blob(const BlobRef& r, std::vector<uint8_t>& out, std::string& e
     return true;
 }
 
-void decodePCM(const uint8_t* d, size_t nbytes, int chn, int bits, std::vector<float>* out) {
-    int bps = bits == 24 ? 3 : bits == 32 ? 4 : 2;
-    size_t n = nbytes / (size_t) (bps * chn);
-    for (int k = 0; k < chn; ++k) out[k].assign(n, 0.f);
-    for (size_t i = 0; i < n; ++i) for (int k = 0; k < chn; ++k) {
-        const uint8_t* p = d + (i * (size_t) chn + (size_t) k) * (size_t) bps; float v;
-        if (bits == 16) v = (float) (int16_t) (p[0] | (p[1] << 8)) / 32768.f;
-        else if (bits == 24) { int32_t q = (int32_t) ((uint32_t) p[0] << 8 | (uint32_t) p[1] << 16 | (uint32_t) p[2] << 24) >> 8; v = (float) q / 8388608.f; }
-        else { uint32_t u = rd32(p); memcpy(&v, &u, 4); }
-        out[k][i] = v;
+bool VsampFile::check(const BlobRef& r, std::string& error) const {
+    if (lazy_) { std::vector<uint8_t> tmp; return blob(r, tmp, error); }
+    if (base_ + r.off + r.len > bytes_.size()) { error = "A data block runs past the end of the file."; return false; }
+    if (!r.nocrc && crc32(&bytes_[base_ + r.off], (size_t) r.len) != r.crc) { error = "A data block failed its checksum."; return false; }
+    return true;
+}
+const uint8_t* VsampFile::rawPtr(const BlobRef& r) const {
+    if (lazy_ || r.deflate || base_ + r.off + r.len > bytes_.size()) return nullptr;
+    return &bytes_[base_ + r.off];
+}
+size_t decodePCMInto(const uint8_t* d, size_t nbytes, int chn, int bits, std::vector<float>* out, size_t at) {
+    const int bps = bits == 24 ? 3 : bits == 32 ? 4 : 2;
+    const size_t n = nbytes / (size_t) (bps * chn), step = (size_t) (bps * chn);
+    for (int k = 0; k < chn; ++k) {   // one channel at a time, one format per loop (same numbers as before, just faster)
+        float* o = out[k].data() + at; const uint8_t* p = d + (size_t) k * (size_t) bps;
+        if (bits == 16) for (size_t i = 0; i < n; ++i, p += step) o[i] = (float) (int16_t) (p[0] | (p[1] << 8)) / 32768.f;
+        else if (bits == 24) for (size_t i = 0; i < n; ++i, p += step) { int32_t q = (int32_t) ((uint32_t) p[0] << 8 | (uint32_t) p[1] << 16 | (uint32_t) p[2] << 24) >> 8; o[i] = (float) q / 8388608.f; }
+        else for (size_t i = 0; i < n; ++i, p += step) { uint32_t u = rd32(p); memcpy(&o[i], &u, 4); }
     }
+    return n;
+}
+void decodePCM(const uint8_t* d, size_t nbytes, int chn, int bits, std::vector<float>* out) {
+    const int bps = bits == 24 ? 3 : bits == 32 ? 4 : 2;
+    const size_t n = nbytes / (size_t) (bps * chn);
+    for (int k = 0; k < chn; ++k) out[k].assign(n, 0.f);
+    decodePCMInto(d, nbytes, chn, bits, out, 0);
 }
 
 } // namespace visu

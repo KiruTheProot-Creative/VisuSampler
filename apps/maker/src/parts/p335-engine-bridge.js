@@ -102,6 +102,16 @@ function engineFxParam(n,q,fn){
 /* which audio a sample holds: edits always put new arrays in the buffer, so the array itself tells versions apart */
 const AUDIO_IDS=new WeakMap();let audioIdN=0;
 function audioKey(s,b){let k=AUDIO_IDS.get(b.ch[0]);if(!k){k=++audioIdN;AUDIO_IDS.set(b.ch[0],k);}return s.id+'@'+k+'/'+b.sr+'/'+b.ch.length+'/'+b.ch[0].length;}
+/* A sample's audio as 32-bit float file bytes, with its CRC. The CRC is remembered until the audio changes
+   (edits always put in new arrays), and a project that was just opened hands over the CRCs from its file. */
+const PCM_CRC=new WeakMap(),PCM_LE=new Uint8Array(new Uint16Array([1]).buffer)[0]===1;
+function pcmKnownCrc(ch,crc){PCM_CRC.set(ch[0],{ch:ch.slice(),crc});}
+function pcmPart(b){
+  const ch=b.ch,u8=ch.length===1&&PCM_LE?new Uint8Array(ch[0].buffer,ch[0].byteOffset,ch[0].byteLength):encodePCM(ch,32);   /* mono float is already the file's bytes */
+  const c=PCM_CRC.get(ch[0]);
+  if(c&&c.ch.length===ch.length&&c.ch.every((x,i)=>x===ch[i]))return{u8,crc:c.crc};
+  const crc=crc32(u8);pcmKnownCrc(ch,crc);return{u8,crc};
+}
 /* held: the audio the engine already has. Those samples go without audio ("keep") and the engine reuses what it holds,
    so an edit no longer re-packs every sample (that was the lag in the Sound tab with many sounds) */
 async function engineBytes(held,sent){
@@ -110,7 +120,7 @@ async function engineBytes(held,sent){
     if(!keep.has(s.id))continue;const b=BUF.get(s.id);if(!b)continue;
     const key=audioKey(s,b),meta={id:s.id,name:s.name,sr:b.sr,chn:b.ch.length,frames:b.ch[0].length,root:s.root,fine:s.fine||0,loop:s.loop||null,sm:s.sm,bits:32,key};
     if(sent)sent.add(key);
-    if(held&&held.has(key))meta.keep=true;else meta.data=await pack.add(encodePCM(b.ch,32),{});
+    if(held&&held.has(key))meta.keep=true;else{const pc=pcmPart(b);meta.data=await pack.add(pc.u8,{crc:pc.crc});}
     smeta.push(meta);
   }
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
