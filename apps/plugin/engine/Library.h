@@ -29,6 +29,7 @@ struct Sample {
     bool supported() const { return mode == "sampler" || mode == "slicer" || mode == "speedkeep" || mode == "granular" || mode == "wavetable"; }
     // streaming (player only): ch holds only the first headFrames; the rest is read from disk while playing
     int streamSrc = -1; size_t headFrames = 0;
+    std::string key;   // VisuMaker live reloads: which audio this is (see Library::loadBytes)
 };
 
 struct GroupCfg {
@@ -85,6 +86,10 @@ public:
     // sampleRate: the effects are prepared for it (reload the library if the host rate changes)
     static std::shared_ptr<Library> load(const std::string& path, std::string& error, double sampleRate = 48000);
     static std::shared_ptr<Library> loadBytes(std::vector<uint8_t> bytes, std::string& error, double sampleRate = 48000);
+    // VisuMaker's live reloads: a sample marked "keep" carries no audio and takes it from `reuse` (the library playing now),
+    // matched by its "key". A missing one fails with kKeepMiss and the Maker sends everything again. Shipped files never use this.
+    static std::shared_ptr<Library> loadBytes(std::vector<uint8_t> bytes, std::string& error, double sampleRate, const Library* reuse);
+    static constexpr const char* kKeepMiss = "keepMiss";
     // How much audio sits in memory, and how many samples stream from disk (shown in the player).
     size_t memoryBytes() const; int streamedSamples() const;
     static constexpr size_t kPreloadFrames = 16384;   // in memory per streamed sample, plus the furthest zone start
@@ -124,7 +129,7 @@ public:
     std::unique_ptr<fx::System> fx;       // the library's effect chains (state changes while playing)
     double sampleRate = 48000;
 private:
-    static std::shared_ptr<Library> fromFile(const VsampFile& f, std::string& error, double sampleRate);
+    static std::shared_ptr<Library> fromFile(const VsampFile& f, std::string& error, double sampleRate, const Library* reuse = nullptr);
 };
 
 } // namespace visu

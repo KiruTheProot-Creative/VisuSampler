@@ -30,5 +30,25 @@ const z0=st.zones;
 await p.evaluate(()=>{const v=window.__vs;v.S.zones.pop();v.touchMap();});await p.waitForTimeout(1500);
 st=await p.evaluate(()=>window.__visuEngine());
 ok(st.zones===z0-1,'edits reach the native engine ('+z0+' → '+st.zones+' zones)');
+/* edits send no audio again: the engine keeps what it has (this was the Sound-tab lag with many samples) */
+await p.evaluate(()=>{const E=window.__vs.ENG,port=E.node.port,o=port.postMessage.bind(port);window.__loads=[];port.postMessage=(m,t)=>{if(m.t==='load')window.__loads.push(m.bytes.byteLength);return o(m,t);};
+  window.__vs.ENG.lastLoaded=null;});
+const full=await p.evaluate(async()=>(await window.__vs.engineBytes()).length);
+await p.evaluate(()=>{const v=window.__vs;v.S.zones[0].vol=-3;v.touchMap();});await p.waitForTimeout(1500);
+let L=await p.evaluate(()=>window.__loads);
+ok(L.length===1&&L[0]<full/4,'a zone edit sends the project without its audio ('+L[0]+' of '+full+' bytes)');
+st=await p.evaluate(()=>window.__visuEngine());
+ok(st.zones===z0-1&&!st.loadError,'the engine reloaded with the audio it already had ('+st.zones+' zones'+(st.loadError?', '+st.loadError:'')+')');
+await p.evaluate(()=>window.__vs.noteOn(60,110));await p.waitForTimeout(400);
+st=await p.evaluate(()=>window.__visuEngine());await p.evaluate(()=>window.__vs.noteOff(60));
+ok(st.voices>0,'and it still plays ('+st.voices+' voices)');
+/* new audio in a sample (an edit in the sample editor) is sent again */
+await p.evaluate(()=>{const v=window.__vs,z=v.S.zones[0],b=v.BUF.get(z.sample);b.ch=b.ch.map(c=>c.slice().reverse());v.touchMap();window.__loads=[];});await p.waitForTimeout(1500);
+L=await p.evaluate(()=>window.__loads);st=await p.evaluate(()=>window.__visuEngine());
+ok(L.length===1&&L[0]>4096&&!st.loadError,'changed audio is sent again ('+L[0]+' bytes'+(st.loadError?', '+st.loadError:'')+')');
+/* if the engine lacks audio (it restarted, say), the Maker sends everything again */
+await p.evaluate(()=>{window.__vs.ENG.node.port.postMessage({t:'unload'});window.__vs.S.zones[0].vol=-4;window.__vs.touchMap();window.__loads=[];});await p.waitForTimeout(2200);
+L=await p.evaluate(()=>window.__loads);st=await p.evaluate(()=>window.__visuEngine());
+ok(L.length>=2&&L[L.length-1]>=full*.9&&st.zones===z0-1&&!st.loadError,'missing audio is noticed and everything is sent again ('+L.join(', ')+')');
 ok(app.errs.length===0,'no page errors '+app.errs.join(' | '));
 await app.close();console.log(fails.length?'FAILED '+fails.length:'ALL OK');process.exit(fails.length?1:0);

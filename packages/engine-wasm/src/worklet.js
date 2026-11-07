@@ -9,7 +9,7 @@ class VisuEngine extends AudioWorkletProcessor{
     this.port.onmessage=({data:m})=>{try{this.handle(m);}catch(err){this.port.postMessage({t:'error',error:String(err&&err.message||err)});}};
   }
   handle(m){const e=this.e;
-      if(m.t==='load'){const err=e.load(new Uint8Array(m.bytes));this.port.postMessage({t:'loaded',error:err,zones:e.zones,unsupportedZones:e.unsupportedZones});}
+      if(m.t==='load'){const err=e.load(new Uint8Array(m.bytes));this.port.postMessage({t:'loaded',error:err,zones:e.zones,unsupportedZones:e.unsupportedZones,keep:!!e.canKeep});}
       else if(m.t==='on')e.noteOn(m.n,m.v);else if(m.t==='off')e.noteOff(m.n);else if(m.t==='sustain')e.sustain(m.d);
       else if(m.t==='alloff')e.allOff();else if(m.t==='list')e.setList(m.i);else if(m.t==='listB')e.setListB(m.i);else if(m.t==='patch')e.setPatch(m.l,m.i);else if(m.t==='fxp'){if(!e.setFxParam(m.n,m.k,m.v,m.ps))this.port.postMessage({t:'fxpMiss'});}else if(m.t==='gain')e.setGain(m.g);else if(m.t==='tag')e.setTag(m.name,m.v);else if(m.t==='cc')e.controller(m.cc,m.v);else if(m.t==='bend')e.pitchBend(m.v);else if(m.t==='unload')e.unload();
   }

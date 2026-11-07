@@ -35,6 +35,8 @@ function wrap(inst){
   let maxFrames=0;
   return{
     exports:x,
+    /** true when loads can mark samples "keep" (VisuMaker live reloads; older builds lack it) */
+    canKeep:typeof x.visu_reuses_audio==='function',
     prepare(sampleRate,frames=512){maxFrames=frames;x.visu_prepare(sampleRate,frames);},
     /** Loads a .vsamp. Returns null on success, or the error text. */
     load(bytes){const p=x.visu_alloc(bytes.length);new Uint8Array(x.memory.buffer,p,bytes.length).set(bytes);return x.visu_load(p,bytes.length)?null:str(x.visu_error());},

@@ -28,7 +28,7 @@ void visu_prepare(double sampleRate, int maxFrames) {
 // Takes ownership of the bytes (they are freed). Returns 1 on success.
 int visu_load(uint8_t* bytes, int length) {
     std::vector<uint8_t> v(bytes, bytes + length); std::free(bytes);
-    std::string err; auto lib = Library::loadBytes(std::move(v), err, g_sr);
+    std::string err; auto lib = Library::loadBytes(std::move(v), err, g_sr, g_lib.get());   // the Maker's live reloads reuse the audio already here
     if (!lib) { g_error = err; return 0; }
     g_lib = lib; eng().setLibrary(lib); g_error.clear();
     return 1;
@@ -63,6 +63,7 @@ void visu_render(int frames) {
 float* visu_left() { return g_left.data(); }
 float* visu_right() { return g_right.data(); }
 int visu_voices() { return eng().activeVoices(); }
+int visu_reuses_audio() { return 1; }   // loads can take unchanged audio from the library playing now ("keep")
 int visu_zones() { return g_lib ? (int) g_lib->zones.size() : 0; }
 int visu_unsupported_zones() { return g_lib ? g_lib->unsupportedZones : 0; }
 

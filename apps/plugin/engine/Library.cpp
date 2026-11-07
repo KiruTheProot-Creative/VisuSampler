@@ -126,8 +126,12 @@ std::shared_ptr<Library> Library::loadBytes(std::vector<uint8_t> bytes, std::str
     VsampFile f; if (!f.openBytes(std::move(bytes), error)) return nullptr;
     return fromFile(f, error, sampleRate);
 }
+std::shared_ptr<Library> Library::loadBytes(std::vector<uint8_t> bytes, std::string& error, double sampleRate, const Library* reuse) {
+    VsampFile f; if (!f.openBytes(std::move(bytes), error)) return nullptr;
+    return fromFile(f, error, sampleRate, reuse);
+}
 
-std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& error, double sampleRate) {
+std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& error, double sampleRate, const Library* reuse) {
     const Json& m = f.manifest();
     if (m["format"].str() != "vsamp") { error = "Not a library file."; return nullptr; }
     auto L = std::make_shared<Library>();
@@ -174,6 +178,18 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
         { const Json& g = sj["sm"]["gr"]; s.grSize = (float) g["size"].num(90); s.grDensity = (float) g["density"].num(28); s.grPos = (float) g["pos"].num(45); s.grSpread = (float) g["spread"].num(15);
           s.grJitter = (float) g["jitter"].num(0); const std::string sh = g["shape"].str("hann"); s.grShape = sh == "tri" ? 1 : sh == "rect" ? 2 : 0; }
         { const Json& w = sj["sm"]["wt"]; s.wtFrame = std::max(32, w["frame"].integer(2048)); s.wtPos = (float) w["pos"].num(0); s.wtPos2 = (float) w["pos2"].num(-1); s.wtSweep = (float) w["sweep"].num(2500); s.wtTagId = w["tag"].str(""); }
+        s.key = sj["key"].str("");
+        if (sj["keep"].boolean()) {   // VisuMaker: the audio is already here, in the library playing now
+            const Sample* old = nullptr;
+            if (reuse && !s.key.empty()) for (const auto& o : reuse->samples) if (o.key == s.key && o.streamSrc < 0) { old = &o; break; }
+            if (!old || old->chn != s.chn || old->frames != (size_t) sj["frames"].num(0)) { error = kKeepMiss; return nullptr; }
+            s.ch[0] = old->ch[0]; s.ch[1] = old->ch[1]; s.frames = old->frames; s.wtFrames = old->wtFrames; s.wtGain = old->wtGain;
+            if (s.mode == "wavetable") { s.wtFrames = std::max(1, (int) (s.frames / (size_t) s.wtFrame)); float pk = 0;
+                for (size_t i = 0; i < std::min(s.frames, (size_t) s.wtFrames * s.wtFrame); ++i) pk = std::max(pk, std::fabs(s.ch[0][i]));
+                s.wtGain = pk > 0 ? .8f / pk : 1.f; }
+            sidx[s.id] = (int) L->samples.size(); L->samples.push_back(std::move(s));
+            continue;
+        }
         const int fch = std::max(1, sj["chn"].integer(1)), bits = sj["bits"].integer(16);
         if (fch > 8) { error = "Too many channels."; return nullptr; }
         /* the audio: chunks (new exports) or one block; chunks can be read one by one */

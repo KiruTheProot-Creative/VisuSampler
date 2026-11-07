@@ -72,7 +72,9 @@ async function engineStart(){
   ENG.starting=false;
 }
 function engineMessage(m){
-  if(m.t==='loaded'){ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';ENG.memory=m.memory;ENG.streamed=m.streamed;if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;ENG.lastListB=-9;ENG.lastPatch=[-9,-9];ENG.scopeSent=null;engineSendState();updVoices();}
+  if(m.t==='loaded'&&m.error==='keepMiss'){ENG.held=null;ENG.sig='';return;}   /* the engine lacked some audio: send everything next time */
+  if(m.t==='loaded'&&m.error)ENG.held=null;
+  if(m.t==='loaded'){ENG.canKeep=!!m.keep;ENG.loaded=!m.error;ENG.zones=m.zones;ENG.loadError=m.error||'';ENG.memory=m.memory;ENG.streamed=m.streamed;if(m.error)flash('The shared engine could not load the project: '+m.error);ENG.lastList=-2;ENG.lastListB=-9;ENG.lastPatch=[-9,-9];ENG.scopeSent=null;engineSendState();updVoices();}
   else if(m.t==='voices'){ENG.voices=m.n;updVoices();}
   else if(m.t==='fxpMiss'){ENG.sig='';}   /* the engine could not change it live: send the whole project again */
   else if(m.t==='error'){if(ENG.lastErr!==m.error){ENG.lastErr=m.error;flash('Engine error: '+m.error);console.warn('engine',m.error);}}
@@ -97,11 +99,19 @@ function engineFxParam(n,q,fn){
   ENG.sig=engineSig();
 }
 /* a light .vsamp of the current project: float audio, no compression, no banner or images */
-async function engineBytes(){
+/* which audio a sample holds: edits always put new arrays in the buffer, so the array itself tells versions apart */
+const AUDIO_IDS=new WeakMap();let audioIdN=0;
+function audioKey(s,b){let k=AUDIO_IDS.get(b.ch[0]);if(!k){k=++audioIdN;AUDIO_IDS.set(b.ch[0],k);}return s.id+'@'+k+'/'+b.sr+'/'+b.ch.length+'/'+b.ch[0].length;}
+/* held: the audio the engine already has. Those samples go without audio ("keep") and the engine reuses what it holds,
+   so an edit no longer re-packs every sample (that was the lag in the Sound tab with many sounds) */
+async function engineBytes(held,sent){
   const pack=new Pack(),keep=new Set(S.zones.map(z=>z.sample).concat(fxKeep())),smeta=[];
   for(const s of S.samples){
     if(!keep.has(s.id))continue;const b=BUF.get(s.id);if(!b)continue;
-    smeta.push({id:s.id,name:s.name,sr:b.sr,chn:b.ch.length,frames:b.ch[0].length,root:s.root,fine:s.fine||0,loop:s.loop||null,sm:s.sm,bits:32,data:await pack.add(encodePCM(b.ch,32),{})});
+    const key=audioKey(s,b),meta={id:s.id,name:s.name,sr:b.sr,chn:b.ch.length,frames:b.ch[0].length,root:s.root,fine:s.fine||0,loop:s.loop||null,sm:s.sm,bits:32,key};
+    if(sent)sent.add(key);
+    if(held&&held.has(key))meta.keep=true;else meta.data=await pack.add(encodePCM(b.ch,32),{});
+    smeta.push(meta);
   }
   const sn=snapshot();delete sn.samples;delete sn.zones;delete sn.lib;
   sn.interp=S.map.interp;{const cl=curList();sn.currentList=cl?S.lists.indexOf(cl):-1;const cb=curListB();sn.currentListB=cb?S.lists.indexOf(cb):-1;sn.currentPatch=patchIdx(0);sn.currentPatchB=patchIdx(1);if(sn.play)sn.play.patchMode=patchModeOn()?'group':'list';}
@@ -116,7 +126,8 @@ async function engineSync(force){
   const sig=engineSig();
   if(!force&&(sig===ENG.sig||engBusy)) return;
   engBusy=true;ENG.sig=sig;
-  try{const bytes=await engineBytes();ENG.node.port.postMessage({t:'load',bytes:bytes.buffer},[bytes.buffer]);}
+  if(force||!ENG.held||!ENG.canKeep)ENG.held=new Set();   /* an engine that cannot keep audio (an older engine.wasm) gets it all */
+  try{const sent=new Set(),bytes=await engineBytes(ENG.held,sent);ENG.node.port.postMessage({t:'load',bytes:bytes.buffer},[bytes.buffer]);ENG.held=sent;}
   catch(err){console.warn('engine sync',err);}
   engBusy=false;
 }

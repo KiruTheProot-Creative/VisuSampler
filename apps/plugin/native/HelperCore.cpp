@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 
 namespace visu {
 
@@ -23,10 +24,13 @@ void HelperCore::prepare(double sampleRate, int) {
 
 void HelperCore::reload() {
     if (path_.empty()) return;
-    std::string err; auto lib = Library::load(path_, err, sr_.load());
+    std::string err; std::shared_ptr<Library> lib;
+    /* read it all into memory: the Maker's reloads take unchanged audio from the library playing now (no streaming from temp files) */
+    { std::ifstream in(path_, std::ios::binary | std::ios::ate); if (!in) err = "could not open the file";
+      else { std::vector<uint8_t> b((size_t) in.tellg()); in.seekg(0); in.read((char*) b.data(), (std::streamsize) b.size()); lib = Library::loadBytes(std::move(b), err, sr_.load(), lib_.get()); } }
     if (!lib) { out("{\"t\":\"loaded\",\"error\":\"" + esc(err) + "\",\"zones\":0,\"unsupportedZones\":0}"); return; }
     lib_ = lib; engine_.setLibrary(lib);
-    out("{\"t\":\"loaded\",\"error\":null,\"zones\":" + std::to_string(lib->zones.size()) + ",\"unsupportedZones\":" + std::to_string(lib->unsupportedZones)
+    out("{\"t\":\"loaded\",\"error\":null,\"keep\":true,\"zones\":" + std::to_string(lib->zones.size()) + ",\"unsupportedZones\":" + std::to_string(lib->unsupportedZones)
         + ",\"memory\":" + std::to_string(lib->memoryBytes()) + ",\"streamed\":" + std::to_string(lib->streamedSamples()) + "}");
 }
 
