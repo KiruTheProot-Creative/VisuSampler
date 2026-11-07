@@ -23,7 +23,18 @@ function createWindow(){
     }catch(e){console.log('VISU-ENGINE error '+e.message);app.exit(2);}
   });
   win.webContents.setWindowOpenHandler(({url})=>{if(/^https?:/.test(url))shell.openExternal(url);return{action:'deny'};});
+  /* closing with unsaved changes: the page holds the close back, and we ask */
+  win.webContents.on('will-prevent-unload',e=>{
+    if(process.argv.includes('--smoke')){e.preventDefault();return;}
+    const c=dialog.showMessageBoxSync(win,{type:'warning',title:'VisuMaker',message:'Save the changes to your project before closing?',
+      detail:'If you close without saving, the last backup is kept and offered the next time you start VisuMaker.',
+      buttons:['Save','Close without saving','Cancel'],defaultId:0,cancelId:2,noLink:true});
+    if(c===0)win.webContents.send('visu:saveThenClose');   /* the page saves, then closes itself */
+    else if(c===1)e.preventDefault();                       /* close anyway */
+  });
 }
+/* Autosave: one backup of the open project in the app's own folder, offered back after a crash or a close without saving. */
+const autoDir=()=>path.join(app.getPath('userData'),'autosave'),autoFile=()=>path.join(autoDir(),'backup.vmproj'),autoMeta=()=>path.join(autoDir(),'backup.json');
 app.whenReady().then(()=>{
   protocol.handle('app',req=>{
     const p=decodeURIComponent(new URL(req.url).pathname),file=path.normalize(path.join(WWW,p));
@@ -53,6 +64,19 @@ app.whenReady().then(()=>{
     await fs.promises.rename(tmp,file);
     return file;
   });
+  ipcMain.handle('visu:autosave',async(e,parts,meta)=>{
+    await fs.promises.mkdir(autoDir(),{recursive:true});
+    const tmp=autoFile()+'.saving',fh=await fs.promises.open(tmp,'w');
+    try{for(const d of parts)await fh.write(Buffer.from(d.buffer,d.byteOffset,d.byteLength));}finally{await fh.close();}
+    await fs.promises.rename(tmp,autoFile());
+    await fs.promises.writeFile(autoMeta(),JSON.stringify(Object.assign({},meta,{time:Date.now()})));
+    return true;
+  });
+  ipcMain.handle('visu:autosaveInfo',async()=>{
+    try{const m=JSON.parse(await fs.promises.readFile(autoMeta(),'utf8')),st=await fs.promises.stat(autoFile());return Object.assign(m,{size:st.size});}catch(err){return null;}
+  });
+  ipcMain.handle('visu:autosaveRead',async()=>new Uint8Array(await fs.promises.readFile(autoFile())));
+  ipcMain.handle('visu:autosaveClear',async()=>{for(const f of [autoMeta(),autoFile()])await fs.promises.rm(f,{force:true});return true;});
   ipcMain.handle('visu:openProject',async e=>{
     const r=await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender),{title:'Open project',filters:projFilter,properties:['openFile']});
     if(r.canceled||!r.filePaths[0])return null;

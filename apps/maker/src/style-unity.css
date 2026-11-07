@@ -330,3 +330,4 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 .ksrow .ksnote{min-width:70px;font-weight:600}
 .ksrow .btn.on{background:var(--sel);color:#fff}
 .ic.graph{border:2px solid var(--muted);border-radius:3px;background:linear-gradient(160deg,transparent 46%,var(--accent) 46% 58%,transparent 58%)}
+#projSave.dirty::after{content:" •";color:var(--accent,#e8a33a)}

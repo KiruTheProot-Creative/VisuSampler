@@ -75,5 +75,5 @@ document.addEventListener('keydown',e=>{
   if(k==='y'||e.shiftKey)redo();else undo();
 },true);
 /* a new project or preset starts a fresh history */
-{const op0=openProject;openProject=async function(b){const r=await op0(b);histClear();return r;};}
+{const op0=openProject;openProject=async function(b,file){const r=await op0(b,file);histClear();return r;};}
 {const lp0=loadPreset;loadPreset=function(k){const r=lp0(k);histClear();return r;};}

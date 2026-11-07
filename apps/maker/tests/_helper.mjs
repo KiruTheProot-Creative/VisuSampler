@@ -12,6 +12,8 @@ export async function openApp(viewport,opts){
   const p=await b.newPage({viewport:viewport||{width:1500,height:860}}),errs=[];
   p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error'&&!/ERR_TUNNEL|fonts\.g/.test(m.text()))errs.push(m.text());});
   await p.addInitScript(()=>{window.__VSTEST=1;});
+  if(opts.expose)for(const k of Object.keys(opts.expose))await p.exposeFunction(k,opts.expose[k]);
+  if(opts.init)await p.addInitScript(opts.init);
   let proc=null;
   if(opts.native){
     const {spawn}=await import('node:child_process'),fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path');

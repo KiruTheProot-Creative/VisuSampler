@@ -1,4 +1,4 @@
-// Gives the Maker page its desktop abilities: save a library into VisuPlayer's folder, find or open that folder, save and open projects,
+// Gives the Maker page its desktop abilities: save a library into VisuPlayer's folder, find or open that folder, save and open projects, autosave,
 // and native audio (VisuMakerAudio plays the project on the sound card with the VST's engine).
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('visuDesktop',{
@@ -6,7 +6,13 @@ contextBridge.exposeInMainWorld('visuDesktop',{
   libraryFolder:()=>ipcRenderer.invoke('visu:libraryFolder'),
   openLibraryFolder:()=>ipcRenderer.invoke('visu:openLibraryFolder'),
   saveProject:(name,bytes,file,saveAs)=>ipcRenderer.invoke('visu:saveProject',name,bytes,file,saveAs),
-  openProject:()=>ipcRenderer.invoke('visu:openProject')
+  openProject:()=>ipcRenderer.invoke('visu:openProject'),
+  /* autosave (a backup of the open project, offered back after a crash) */
+  autosave:(parts,meta)=>ipcRenderer.invoke('visu:autosave',parts,meta),
+  autosaveInfo:()=>ipcRenderer.invoke('visu:autosaveInfo'),
+  autosaveRead:()=>ipcRenderer.invoke('visu:autosaveRead'),
+  autosaveClear:()=>ipcRenderer.invoke('visu:autosaveClear'),
+  onSaveThenClose:cb=>{ipcRenderer.removeAllListeners('visu:saveThenClose');ipcRenderer.on('visu:saveThenClose',()=>cb());}
 });
 contextBridge.exposeInMainWorld('visuNative',{
   start:()=>ipcRenderer.invoke('visu:nativeStart'),
