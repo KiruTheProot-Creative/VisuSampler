@@ -1,5 +1,10 @@
 # VisuSampler
 
+> **Disclaimer: this project is AI-coded.** Nearly all of the code, tests and documentation in this repository were
+> written by an AI (Claude, by Anthropic), directed, tested and reviewed by a human. It is checked by automated tests
+> on Linux and Windows and tried in real DAWs, but it has not been reviewed line by line by an experienced audio
+> developer. Treat it as early, experimental software: keep backups of your projects, and please report bugs.
+
 A lighter, friendlier Kontakt alternative, for Windows.
 
 Nothing here plays on the web: VisuMaker is a Windows desktop app (`.exe`) and VisuPlayer is a VST3. The Maker exports a library straight into the VST's library folder (`Documents\\VisuSampler\\Libraries`).

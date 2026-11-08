@@ -15,6 +15,10 @@ Where things go
 
 Uninstalling removes the programs and the plugin, never your libraries, projects or presets.
 
+Made with AI
+Nearly all of VisuSampler was written by an AI (Claude, by Anthropic), directed, tested and reviewed by a human.
+It is early, experimental software: keep backups of your projects, and please report bugs.
+
 License
 VisuSampler is free software under the GNU General Public License, version 3 or later (next page).
 Libraries you make with VisuMaker are yours: you may share or sell them under any terms you like.

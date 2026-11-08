@@ -9,6 +9,11 @@ Free Software Foundation, either version 3 of the License, or (at your option) a
 It is distributed in the hope that it will be useful, but **without any warranty**; without even the implied warranty
 of merchantability or fitness for a particular purpose. See the GNU General Public License for more details.
 
+## AI-coded
+
+Nearly all of VisuSampler's code, tests and documentation were written by an AI (Claude, by Anthropic), directed,
+tested and reviewed by a human. Please treat it as early, experimental software and report bugs.
+
 ## Your libraries are yours
 
 Sound libraries (`.vsamp`) and projects (`.vmproj`) that you make with VisuMaker belong to you. They hold your samples,
