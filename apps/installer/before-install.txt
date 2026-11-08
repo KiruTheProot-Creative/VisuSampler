@@ -1,0 +1,22 @@
+Welcome to VisuSampler!
+
+This installs:
+
+  * VisuMaker  - build your own sample libraries (instruments, interface, effects).
+  * VisuPlayer - plays them: a VST3 plugin for your DAW, and a standalone app.
+
+You can pick which parts to install on the next pages.
+
+Where things go
+  * VisuMaker and the standalone VisuPlayer: the folder you choose (Program Files by default).
+  * The VisuPlayer VST3 plugin: C:\Program Files\Common Files\VST3, where every DAW looks for plugins.
+  * Your libraries: Documents\VisuSampler\Libraries (made the first time you start VisuMaker or VisuPlayer).
+  * Log files for bug reports: Documents\VisuSampler\Logs.
+
+Uninstalling removes the programs and the plugin, never your libraries, projects or presets.
+
+License
+VisuSampler is free software under the GNU General Public License, version 3 or later (next page).
+Libraries you make with VisuMaker are yours: you may share or sell them under any terms you like.
+
+This is an early version (0.0.1). It is not code-signed, so Windows may have asked whether to run it.

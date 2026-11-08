@@ -28,10 +28,14 @@ jobs:
           $vst = Get-ChildItem build -Recurse -Directory -Filter "VisuPlayer.vst3" | Select-Object -First 1
           Compress-Archive -Path $vst.FullName -DestinationPath out/VisuPlayer-VST3-Windows.zip
           $exe = Get-ChildItem build -Recurse -Filter "VisuPlayer.exe" | Where-Object { $_.FullName -match "Standalone" } | Select-Object -First 1
-          Copy-Item $exe.FullName out/VisuPlayer-Standalone.exe
-          Get-ChildItem out
+          New-Item -ItemType Directory -Force parts | Out-Null
+          Copy-Item $exe.FullName parts/VisuPlayer.exe
+          Copy-Item $vst.FullName parts/VisuPlayer.vst3 -Recurse
+          Get-ChildItem out, parts
       - uses: actions/upload-artifact@v4
         with: { name: player, path: out }
+      - uses: actions/upload-artifact@v4
+        with: { name: player-parts, path: parts }
   maker:
     runs-on: windows-latest
     steps:
@@ -51,19 +55,57 @@ jobs:
       - name: Build id (shown in VisuMaker's title, About and log)
         shell: bash
         run: echo "{\"build\":\"${GITHUB_SHA::7}\",\"date\":\"$(date -u +%Y-%m-%d)\"}" > apps/maker-desktop/build.json && cat apps/maker-desktop/build.json
-      - run: npm run dist
+      - name: Build the app folder (the combined installer packs it)
+        run: npm run copy && npx electron-builder --win dir --publish never
         working-directory: apps/maker-desktop
         env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
-      - name: Package
+      - uses: actions/upload-artifact@v4
+        with: { name: maker-app, path: apps/maker-desktop/dist/win-unpacked }
+  installer:
+    needs: [player, maker]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: maker-app, path: dl/maker }
+      - uses: actions/download-artifact@v4
+        with: { name: player-parts, path: dl/player }
+      - name: Inno Setup
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force out | Out-Null
-          $exe = Get-ChildItem apps/maker-desktop/dist -Filter "*.exe" | Select-Object -First 1
-          Copy-Item $exe.FullName out/VisuMaker-Setup.exe
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup is missing" }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Build VisuSampler-Setup.exe
+        shell: pwsh
+        run: |
+          $b = "$env:GITHUB_SHA".Substring(0,7); $w = "$env:GITHUB_WORKSPACE"
+          & $env:ISCC "/DVersion=0.0.1" "/DBuild=$b" "/DRoot=$w" "/DMakerDir=$w\dl\maker" "/DVst3Dir=$w\dl\player\VisuPlayer.vst3" "/DStandaloneExe=$w\dl\player\VisuPlayer.exe" "/DOutDir=$w\out" apps\installer\VisuSampler.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+          Get-ChildItem out
+      - name: Install it, try it, uninstall it
+        shell: pwsh
+        run: |
+          $p = Start-Process out\VisuSampler-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=install.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; throw "setup exit code $($p.ExitCode)" }
+          $app = "$env:ProgramFiles\VisuSampler"; $vst = "$env:CommonProgramFiles\VST3\VisuPlayer.vst3"
+          foreach ($f in "$app\VisuMaker\VisuMaker.exe", "$app\VisuMaker\resources\native\VisuMakerAudio.exe", "$app\VisuPlayer\VisuPlayer.exe", "$app\LICENSE.txt", $vst) {
+            if (-not (Test-Path $f)) { throw "missing after install: $f" } else { "installed: $f" } }
+          if ((Get-ChildItem $vst -Recurse -Filter *.vst3 -File).Count -lt 1) { throw "the VST3 bundle has no plugin binary" }
+          $cls = (Get-ItemProperty "HKLM:\Software\Classes\.vmproj").'(default)'
+          if ($cls -ne 'VisuMaker.Project') { throw ".vmproj is not linked to VisuMaker ($cls)" } else { ".vmproj opens with VisuMaker" }
+          $m = Start-Process "$app\VisuMaker\VisuMaker.exe" -ArgumentList '--smoke' -Wait -PassThru
+          if ($m.ExitCode -ne 0) { throw "the installed VisuMaker did not start (exit $($m.ExitCode))" } else { "the installed VisuMaker starts and plays" }
+          $u = Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          Start-Sleep -Seconds 3
+          foreach ($f in "$app\VisuMaker\VisuMaker.exe", $vst) { if (Test-Path $f) { throw "still there after uninstall: $f" } }
+          if (Test-Path "HKLM:\Software\Classes\VisuMaker.Project") { throw "the .vmproj file type is still registered" }
+          "uninstalled cleanly"
       - uses: actions/upload-artifact@v4
-        with: { name: maker, path: out }
+        with: { name: installer, path: out }
   publish:
-    needs: [player, maker]
+    needs: [player, installer]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -78,11 +120,12 @@ jobs:
           cat > notes.md <<'MD'
           Windows builds of VisuSampler.
 
-          - **VisuMaker-Setup.exe**: installs VisuMaker, the library designer.
-          - **VisuPlayer-VST3-Windows.zip**: unzip and put `VisuPlayer.vst3` into `C:\Program Files\Common Files\VST3`.
-          - **VisuPlayer-Standalone.exe**: VisuPlayer without a DAW (pick your audio and MIDI device in its settings).
+          - **VisuSampler-Setup.exe**: installs VisuMaker (the library designer), the VisuPlayer VST3 plugin and the standalone VisuPlayer; pick the parts you want. Uninstall from Windows Settings, your libraries stay.
+          - **VisuPlayer-VST3-Windows.zip**: only the plugin, for installing by hand: put `VisuPlayer.vst3` into `C:\Program Files\Common Files\VST3`.
+
+          VisuSampler is free software under the GNU GPL v3 (or later). Libraries you make with VisuMaker are yours.
 
           Libraries exported from VisuMaker go to `Documents\VisuSampler\Libraries`, where VisuPlayer finds them.
           The builds are not code-signed, so Windows SmartScreen may ask before the first start ("More info", then "Run anyway").
           MD
-          gh release create "$TAG" dl/player/* dl/maker/* --repo "$REPO" --target "${GITHUB_SHA}" --title "VisuSampler 0.0.1 (${TAG})" --notes-file notes.md --prerelease
+          gh release create "$TAG" dl/installer/* dl/player/* --repo "$REPO" --target "${GITHUB_SHA}" --title "VisuSampler 0.0.1 (${TAG})" --notes-file notes.md --prerelease
