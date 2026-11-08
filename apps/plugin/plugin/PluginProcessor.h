@@ -49,6 +49,12 @@ public:
     int currentPatch(int layer) const { const int p = patch_[layer & 1]; return p == -2 && current_ ? current_->defaultPatch[layer & 1] : p; }
     bool pollKeyswitch() { if (!engine_.takeKeyswitchChange()) return false; list_ = engine_.list(); sendChangeMessage(); return true; }
     void panic() { panicRequest_ = true; }
+    // the window's pitch and mod wheels (0..1; pitch 0.5 = middle): sent into the next block like MIDI from the keyboard
+    void setUiBend(float v) { uiBend_.store(juce::jlimit(0, 16383, (int) std::lround(v * 16383.0f))); }
+    void setUiMod(float v) { uiMod_.store(juce::jlimit(0, 127, (int) std::lround(v * 127.0f))); }
+    // where the wheels are now (from the window or from MIDI), for the window to show
+    int wheelBend() const { return lastBend_.load(); }
+    int wheelMod() const { return lastMod_.load(); }
     void setTag(const juce::String& name, float value);   // a knob in the library's interface moved
     void setVolume(float v) { volume_->setValueNotifyingHost(volume_->convertTo0to1(v)); }
     float volume() const { return volume_->get(); }
@@ -77,6 +83,7 @@ public:
     int currentListB() const { return listB_ == -2 && current_ ? (current_->layerB ? current_->defaultListB : -3) : listB_; }
 
     juce::MidiKeyboardState keyboardState;
+    std::atomic<int> uiBend_{ -1 }, uiMod_{ -1 }, lastBend_{ 8192 }, lastMod_{ 0 };
     int activeVoices() const { return engine_.activeVoices(); }
 
     // AudioProcessor

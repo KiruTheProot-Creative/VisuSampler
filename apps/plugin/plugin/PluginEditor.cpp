@@ -77,6 +77,8 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
             if (a.size() >= 2) proc_.keyboardState.noteOn(1, juce::jlimit(0, 127, (int) a[0]), juce::jlimit(1, 127, (int) a[1]) / 127.0f); reply(done, juce::var(true)); })
         .withNativeFunction("noteOff", [this, reply](const juce::Array<juce::var>& a, auto done) {
             if (!a.isEmpty()) proc_.keyboardState.noteOff(1, juce::jlimit(0, 127, (int) a[0]), 0.0f); reply(done, juce::var(true)); })
+        .withNativeFunction("pitchBend", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setUiBend((float) (double) a[0]); reply(done, juce::var(true)); })
+        .withNativeFunction("modWheel", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setUiMod((float) (double) a[0]); reply(done, juce::var(true)); })
         .withNativeFunction("panic", [this, reply](const juce::Array<juce::var>&, auto done) { proc_.keyboardState.allNotesOff(1); proc_.panic(); reply(done, juce::var(true)); })
         .withNativeFunction("openFolder", [reply](const juce::Array<juce::var>&, auto done) { VisuProcessor::libraryFolder().startAsProcess(); reply(done, juce::var(true)); })
         .withNativeFunction("openLogs", [reply](const juce::Array<juce::var>&, auto done) { VisuProcessor::logFolder().createDirectory(); VisuProcessor::logFolder().startAsProcess(); reply(done, juce::var(true)); })
@@ -146,6 +148,9 @@ void VisuEditor::timerCallback()
     {   const double b = proc_.hostBpm(); const int s = proc_.hostSig();   // the DAW's tempo, for texts like {bpm} and synced readouts
         if (b > 0 && (std::abs(b - lastBpm_) > 1e-3 || s != lastSig_)) { lastBpm_ = b; lastSig_ = s;
             auto* o = new juce::DynamicObject(); o->setProperty("bpm", b); o->setProperty("n", s / 100); o->setProperty("d", s % 100); browser_.emitEventIfBrowserIsVisible("tempo", juce::var(o)); } }
+    {   const int b = proc_.wheelBend(), m = proc_.wheelMod();   // a MIDI keyboard's wheels move the ones on screen
+        if (b != lastBend_ || m != lastMod_) { lastBend_ = b; lastMod_ = m;
+            auto* o = new juce::DynamicObject(); o->setProperty("bend", b / 16383.0); o->setProperty("mod", m / 127.0); browser_.emitEventIfBrowserIsVisible("wheels", juce::var(o)); } }
     const float vol = proc_.volume();
     if (std::abs(vol - lastVol_) > 1e-4f) { lastVol_ = vol; browser_.emitEventIfBrowserIsVisible("volume", vol); }
 }

@@ -398,6 +398,8 @@ void VisuProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuf
     if (panicRequest_.exchange(false)) engine_.allNotesOff();
     for (int i = 0; i < kMacros; ++i) if (slotDirty_[i].exchange(false)) engine_.setTagIndex(slotTagIndex_[i].load(), slotValue_[i].load());
     keyboardState.processNextMidiBuffer(midi, 0, n, true);
+    if (const int b = uiBend_.exchange(-1); b >= 0) midi.addEvent(juce::MidiMessage::pitchWheel(1, b), 0);          // the window's wheels
+    if (const int m = uiMod_.exchange(-1); m >= 0) midi.addEvent(juce::MidiMessage::controllerEvent(1, 1, m), 0);
     // the host's tempo and time signature drive tempo-synced effects and LFOs (no tempo from the host: the library's own)
     if (auto* ph = getPlayHead()) if (auto pos = ph->getPosition()) {
         double bpm = 0; int sn = 4, sd = 4;
@@ -421,8 +423,9 @@ void VisuProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuf
             if (learning_.load() && cc != 64 && cc != 120 && cc != 121 && cc != 123) { learnedCc_ = cc; learning_ = false; }
             else if (const int s = ccSlot_[juce::jlimit(0, 127, cc)].load(); s >= 0) macros_[s]->setValueNotifyingHost(val / 127.0f);   // a learned controller moves its knob
             engine_.controller(cc, val);
+            if (cc == 1) lastMod_.store(val);
         }
-        else if (m.isPitchWheel()) engine_.pitchBend(m.getPitchWheelValue() / 16383.0f);
+        else if (m.isPitchWheel()) { engine_.pitchBend(m.getPitchWheelValue() / 16383.0f); lastBend_.store(m.getPitchWheelValue()); }
         else if (m.isChannelPressure()) engine_.aftertouch(m.getChannelPressureValue() / 127.0f);
         else if (m.isAftertouch()) engine_.aftertouch(m.getAfterTouchValue() / 127.0f);
         else if (m.isAllNotesOff() || m.isAllSoundOff()) engine_.allNotesOff();

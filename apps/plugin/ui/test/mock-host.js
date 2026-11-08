@@ -28,7 +28,7 @@ const fns={
   midiLearn:n=>{state.maps=state.maps||{};state.maps.__learning=n;return Object.assign({},state.maps);},
   midiCancel:()=>{if(state.maps)delete state.maps.__learning;return Object.assign({},state.maps||{});},
   midiForget:n=>{if(state.maps&&state.maps[n])state.maps[n].cc=null;return Object.assign({},state.maps||{});},
-  noteOn:(n,v)=>true,noteOff:n=>true,panic:()=>true,setTag:(n,v)=>{(state.tags=state.tags||{})[n]=v;return true;},openFolder:()=>true,addLibrary:()=>({added:0})
+  pitchBend:v=>{state.bend=v;return true;},modWheel:v=>{state.mod=v;return true;},noteOn:(n,v)=>true,noteOff:n=>true,panic:()=>true,setTag:(n,v)=>{(state.tags=state.tags||{})[n]=v;return true;},openFolder:()=>true,addLibrary:()=>({added:0})
 };
 window.__JUCE__={initialisationData:{__juce__functions:Object.keys(fns)},backend:{
   addEventListener(ev,fn){if(!listeners.has(ev))listeners.set(ev,[]);listeners.get(ev).push(fn);},

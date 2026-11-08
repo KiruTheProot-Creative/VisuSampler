@@ -55,7 +55,8 @@ button,input{font:inherit;color:inherit}
 pre.lic{white-space:pre-wrap;margin:0;font:11px/1.5 var(--f);color:var(--muted)}
 .keys{background:#232325;border-top:1px solid var(--line)}
 .kbar{display:flex;gap:14px;align-items:center;padding:6px 10px;font-size:12px}
-.piano{position:relative;height:110px;margin:0 10px 8px;user-select:none;touch-action:none}
+.krow{display:flex;align-items:stretch;gap:6px;margin:0 10px 8px}
+.piano{position:relative;flex:1;height:110px;user-select:none;touch-action:none}
 .wk,.bk{position:absolute;top:0;cursor:pointer}
 .wk{background:#e8e8e8;border:1px solid #111;height:100%;border-radius:0 0 3px 3px;z-index:1}
 .bk{background:#222;border:1px solid #000;height:62%;z-index:2;border-radius:0 0 2px 2px}
@@ -108,3 +109,15 @@ pre.lic{white-space:pre-wrap;margin:0;font:11px/1.5 var(--f);color:var(--muted)}
 .piano .ks.kson{box-shadow:inset 0 -6px 0 #ff8a1e}
 
 .ver{background:none;border:0;padding:0 0 0 12px;cursor:pointer;font:inherit;font-size:11px}.ver:hover{color:var(--fg,#eee);text-decoration:underline}
+
+/* pitch and mod wheels */
+.wheels{display:flex;gap:6px;flex:0 0 auto;padding-right:2px}
+.whcol{display:flex;flex-direction:column;align-items:center;gap:3px}
+.whcol span{font-size:10px;line-height:1;color:var(--muted,#9a9a9a)}
+.whl{--v:0;position:relative;flex:1;width:22px;border-radius:6px;cursor:ns-resize;touch-action:none;outline:none;overflow:hidden;
+  background:linear-gradient(90deg,#141414,#2c2c2c 30%,#3a3a3a 50%,#2c2c2c 70%,#141414);border:1px solid #0e0e0e;box-shadow:inset 0 3px 5px rgba(0,0,0,.6),inset 0 -3px 5px rgba(0,0,0,.6)}
+.whl::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 6px,rgba(255,255,255,.05) 6px 7px);background-position:0 calc(var(--v) * -70px);pointer-events:none}
+.whl i{position:absolute;left:2px;right:2px;height:5px;border-radius:2px;bottom:calc(var(--v) * (100% - 9px) + 2px);background:#d0d0d0;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.whl[data-wk="bend"]::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.12);pointer-events:none}
+.whl.moved i,.whl.drag i{background:var(--accent,#4e9fe0);box-shadow:0 0 7px var(--accent,#4e9fe0)}
+.whl:focus-visible{box-shadow:0 0 0 2px var(--accent,#4e9fe0)}

@@ -97,6 +97,34 @@ function buildPiano(){
   for(let n=LO;n<=HI;n++)if(isBlack(n)){const i=whites.indexOf(n-1);h+='<div class="bk" data-n="'+n+'" style="left:'+((i+1)*w-w*.3)+'%;width:'+w*.6+'%"></div>';}
   p.innerHTML=h;
 }
+/* ---------- pitch and mod wheels: drag like real ones; pitch springs back to the middle, mod stays ---------- */
+const WH={bend:.5,mod:0,drag:null},WDEF={bend:{label:'Pitch',aria:'Pitch bend',center:.5,fn:'pitchBend'},mod:{label:'Mod',aria:'Mod wheel',center:0,fn:'modWheel'}};
+function wheelShow(k,v){
+  WH[k]=v;const el=$('#wheels [data-wk="'+k+'"]');if(!el)return;
+  el.style.setProperty('--v',v);el.classList.toggle('moved',Math.abs(v-WDEF[k].center)>.004);
+  el.setAttribute('aria-valuenow',k==='bend'?Math.round((v-.5)*200):Math.round(v*127));
+  el.setAttribute('aria-valuetext',k==='bend'?(Math.abs(v-.5)<.004?'centre':(v>.5?'up ':'down ')+Math.round(Math.abs(v-.5)*200)+'%'):Math.round(v*127)+' of 127');
+}
+function wheelSend(k,v){v=Math.min(1,Math.max(0,v));if(k==='bend'&&Math.abs(v-.5)<.008)v=.5;if(v===WH[k]&&WH.drag!==k)return;wheelShow(k,v);call(WDEF[k].fn,v);}
+function buildWheels(){
+  const w=$('#wheels');if(!w)return;
+  w.innerHTML=Object.keys(WDEF).map(k=>'<div class="whcol"><div class="whl" data-wk="'+k+'" role="slider" tabindex="0" aria-label="'+WDEF[k].aria+'" aria-valuemin="0" aria-valuemax="127" title="'+WDEF[k].aria+(k==='bend'?': drag, springs back when let go':': drag, stays where you leave it')+' · double-click resets"><i></i></div><span>'+WDEF[k].label+'</span></div>').join('');
+  w.addEventListener('pointerdown',e=>{
+    const el=e.target.closest('.whl');if(!el)return;e.preventDefault();el.focus();
+    const k=el.dataset.wk,r=el.getBoundingClientRect(),y0=e.clientY,v0=WH[k];WH.drag=k;el.classList.add('drag');try{el.setPointerCapture(e.pointerId);}catch(_){}
+    const mv=ev=>wheelSend(k,v0+(y0-ev.clientY)/Math.max(30,r.height-8));
+    const up=()=>{el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);el.removeEventListener('pointercancel',up);WH.drag=null;el.classList.remove('drag');if(k==='bend')wheelSend('bend',.5);};
+    el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
+  });
+  w.addEventListener('dblclick',e=>{const el=e.target.closest('.whl');if(el)wheelSend(el.dataset.wk,WDEF[el.dataset.wk].center);});
+  w.addEventListener('keydown',e=>{const el=e.target.closest('.whl');if(!el)return;const k=el.dataset.wk,s=e.shiftKey?.01:.05;let v=null;
+    if(e.key==='ArrowUp'||e.key==='ArrowRight')v=WH[k]+s;else if(e.key==='ArrowDown'||e.key==='ArrowLeft')v=WH[k]-s;else if(e.key==='Home')v=WDEF[k].center;else if(e.key==='PageUp')v=1;else if(e.key==='PageDown')v=0;
+    if(v==null)return;e.preventDefault();e.stopPropagation();wheelSend(k,v);});
+  w.addEventListener('keyup',e=>{const el=e.target.closest('.whl');if(el&&el.dataset.wk==='bend'&&/^Arrow/.test(e.key))wheelSend('bend',.5);});
+  wheelShow('bend',.5);wheelShow('mod',0);
+}
+buildWheels();
+on('wheels',d=>{if(!d)return;if(WH.drag!=='bend')wheelShow('bend',+d.bend);if(WH.drag!=='mod')wheelShow('mod',+d.mod);});   /* a MIDI keyboard's wheels */
 function lit(n,on){const e=$('#piano [data-n="'+n+'"]');if(e)e.classList.toggle('on',on);}
 function on_(n,v){if(down.has(n))return;down.add(n);lit(n,true);call('noteOn',n,v||100);}
 function off(n){if(!down.delete(n))return;lit(n,false);call('noteOff',n);}

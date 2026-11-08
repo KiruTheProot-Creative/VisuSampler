@@ -413,8 +413,8 @@ if(navigator.requestMIDIAccess){
     const hook=()=>a.inputs.forEach(i=>{i.onmidimessage=m=>{
       const [s,d1,d2]=m.data,c=s&240;ensureAudio();
       if(c===144&&d2>0)noteOn(d1,d2);else if(c===128||(c===144&&d2===0))noteOff(d1);
-      else if(c===176){if(d1===1)FXM.mod=d2/127;else if(d1===11)FXM.expr=d2/127;if(engineOn())ENG.node.port.postMessage({t:'cc',cc:d1,v:d2});}
-      else if(c===208)FXM.at=d1/127;else if(c===224){FXM.bend=((d2<<7)|d1)/16383;if(engineOn())ENG.node.port.postMessage({t:'bend',v:FXM.bend});}
+      else if(c===176){if(d1===1){FXM.mod=d2/127;if(WH.drag!=='mod')wheelShow('mod',FXM.mod);}else if(d1===11)FXM.expr=d2/127;if(engineOn())ENG.node.port.postMessage({t:'cc',cc:d1,v:d2});}
+      else if(c===208)FXM.at=d1/127;else if(c===224){FXM.bend=((d2<<7)|d1)/16383;if(WH.drag!=='bend')wheelShow('bend',FXM.bend);if(engineOn())ENG.node.port.postMessage({t:'bend',v:FXM.bend});}
     };});
     hook();a.onstatechange=hook;
   }).catch(()=>{});

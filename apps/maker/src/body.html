@@ -99,7 +99,7 @@
         <label>Time sig <span class="sigrow"><select id="sigN" aria-label="Beats per bar"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option></select><b>/</b><select id="sigD" aria-label="Note value"><option>2</option><option>4</option><option>8</option><option>16</option></select></span></label>
         <button type="button" class="btn" id="resetVals">Reset values</button>
       </div>
-      <div class="kb" id="kb" aria-label="Test keyboard"></div>
+      <div class="kbrow"><div class="wheels tall" id="kbWheels" role="group" aria-label="Pitch and mod wheels"></div><div class="kb" id="kb" aria-label="Test keyboard"></div></div>
     </div>
   </main>
 
@@ -198,7 +198,7 @@
     </div>
     <div class="mapmain">
       <div id="mapWrap"><canvas id="mapCanvas" tabindex="0" aria-label="Zone map: keys across, velocity up"></canvas></div>
-      <canvas id="mapPiano" aria-label="Piano. Click to play, height sets velocity."></canvas>
+      <div class="mapkeys"><div class="wheels" id="mapWheels" role="group" aria-label="Pitch and mod wheels"></div><canvas id="mapPiano" aria-label="Piano. Click to play, height sets velocity."></canvas></div>
       <input type="range" id="mapScroll" min="0" max="0" value="0" aria-label="Scroll the keyboard">
       <div class="mapfoot"><span id="mapInfo" class="muted"></span><span class="muted">Click to select · drag to move or resize · diamonds drag crossfades · play keys with the piano or A–K</span></div>
     </div>

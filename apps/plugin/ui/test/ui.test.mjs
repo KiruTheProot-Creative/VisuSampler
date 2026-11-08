@@ -76,6 +76,18 @@ await p.waitForTimeout(150);
 ok(await p.locator('#piano [data-n="24"].ks.kson').count()===1&&await p.locator('#piano [data-n="25"].ks').count()===1,'keyswitch keys are coloured on the keyboard (it reaches down to them)');
 await p.evaluate(()=>{const st=Object.assign({},window.__mock.state.status,{list:1});window.__mock.state.status=st;window.__mock.emit('status',st);});await p.waitForTimeout(150);
 ok(await p.locator('#piano [data-n="25"].kson').count()===1,'the active keyswitch is marked');
+/* pitch and mod wheels next to the keyboard */
+{const bx=await (await p.$('#wheels .whl[data-wk="bend"]')).boundingBox();
+ await p.mouse.move(bx.x+bx.width/2,bx.y+bx.height/2);await p.mouse.down();await p.mouse.move(bx.x+bx.width/2,bx.y-20,{steps:5});
+ const upv=await p.evaluate(()=>window.__mock.state.bend);await p.mouse.up();await p.waitForTimeout(50);
+ ok(upv>.9&&await p.evaluate(()=>window.__mock.state.bend)===.5,'pitch wheel: drag up bends ('+upv+'), letting go springs back');
+ const mx=await (await p.$('#wheels .whl[data-wk="mod"]')).boundingBox();
+ await p.mouse.move(mx.x+mx.width/2,mx.y+mx.height-4);await p.mouse.down();await p.mouse.move(mx.x+mx.width/2,mx.y+mx.height/2,{steps:5});await p.mouse.up();
+ const mv=await p.evaluate(()=>window.__mock.state.mod);ok(mv>.3&&mv<.8,'mod wheel: drag sets it and it stays ('+mv.toFixed(2)+')');
+ await p.evaluate(()=>window.__mock.emit('wheels',{bend:.25,mod:.9}));await p.waitForTimeout(50);
+ const cs=await p.evaluate(()=>[getComputedStyle(document.querySelector('#wheels [data-wk="bend"]')).getPropertyValue('--v'),getComputedStyle(document.querySelector('#wheels [data-wk="mod"]')).getPropertyValue('--v')]);
+ ok(Math.abs(parseFloat(cs[0])-.25)<.01&&Math.abs(parseFloat(cs[1])-.9)<.01,'a MIDI keyboard\'s wheels move them on screen');
+ await p.screenshot({path:'/tmp/claude-0/-home-claude/a30fc208-8447-5909-8f35-21df8f80b96b/scratchpad/pwheels.png'});}
 await p.click('#btnAbout');await p.waitForTimeout(100);
 const nl=await p.locator('[data-list]').count();ok(nl>1,'About shows the info page with the lists ('+nl+')');
 await p.click('[data-list="2"]');ok(await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='setList'&&c[1]===2)),'choosing a list tells the plugin');
