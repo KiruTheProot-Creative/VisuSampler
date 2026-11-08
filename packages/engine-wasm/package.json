@@ -5,5 +5,5 @@
   "type": "module",
   "main": "src/engine.js",
   "scripts": { "test": "node --test test/engine.test.js" },
-  "license": "UNLICENSED"
+  "license": "GPL-3.0-or-later"
 }

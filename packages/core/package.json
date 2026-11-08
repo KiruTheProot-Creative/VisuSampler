@@ -6,5 +6,5 @@
   "main": "src/index.js",
   "exports": { ".": "./src/index.js" },
   "scripts": { "test": "node --test test/core.test.js" },
-  "license": "UNLICENSED"
+  "license": "GPL-3.0-or-later"
 }

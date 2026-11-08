@@ -7,6 +7,11 @@ Nothing here plays on the web: VisuMaker is a Windows desktop app (`.exe`) and V
 - **VisuMaker** builds libraries: Samples, Mapping, Designer, FX Designer, Export.
 - **VisuPlayer** plays them. A library is one `.vsamp` file. No scripting.
 
+## License
+
+VisuSampler is free software under the **GNU GPL v3** (or later), see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+**Libraries you make with VisuMaker are yours**: share or sell them under any terms you like.
+
 ## Layout
 
 - `packages/core`: the engine and the `.vsamp` format (done, tested, `npm test`)
