@@ -76,6 +76,8 @@ await p.waitForTimeout(150);
 ok(await p.locator('#piano [data-n="24"].ks.kson').count()===1&&await p.locator('#piano [data-n="25"].ks').count()===1,'keyswitch keys are coloured on the keyboard (it reaches down to them)');
 await p.evaluate(()=>{const st=Object.assign({},window.__mock.state.status,{list:1});window.__mock.state.status=st;window.__mock.emit('status',st);});await p.waitForTimeout(150);
 ok(await p.locator('#piano [data-n="25"].kson').count()===1,'the active keyswitch is marked');
+await p.click('#btnCommunity');await p.waitForTimeout(50);
+ok(await p.evaluate(()=>window.__mock.state.community===1),'the Discord button asks the player to open the KCS server');
 /* pitch and mod wheels next to the keyboard */
 {const bx=await (await p.$('#wheels .whl[data-wk="bend"]')).boundingBox();
  await p.mouse.move(bx.x+bx.width/2,bx.y+bx.height/2);await p.mouse.down();await p.mouse.move(bx.x+bx.width/2,bx.y-20,{steps:5});

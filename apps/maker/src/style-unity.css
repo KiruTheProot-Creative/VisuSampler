@@ -348,3 +348,6 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 .kbrow{display:flex;align-items:stretch;gap:6px}
 .kbrow .kb{flex:1}
 .wheels.tall{--whw:56px;height:84px}
+
+.community{display:inline-flex;align-items:center;gap:5px}
+.community .ico{opacity:.85}

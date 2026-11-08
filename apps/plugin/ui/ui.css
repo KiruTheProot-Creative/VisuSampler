@@ -121,3 +121,6 @@ pre.lic{white-space:pre-wrap;margin:0;font:11px/1.5 var(--f);color:var(--muted)}
 .whl[data-wk="bend"]::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.12);pointer-events:none}
 .whl.moved i,.whl.drag i{background:var(--accent,#4e9fe0);box-shadow:0 0 7px var(--accent,#4e9fe0)}
 .whl:focus-visible{box-shadow:0 0 0 2px var(--accent,#4e9fe0)}
+
+.community{display:inline-flex;align-items:center;gap:5px}
+.community .ico{opacity:.85}

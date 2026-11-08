@@ -12,6 +12,10 @@ Nothing here plays on the web: VisuMaker is a Windows desktop app (`.exe`) and V
 - **VisuMaker** builds libraries: Samples, Mapping, Designer, FX Designer, Export.
 - **VisuPlayer** plays them. A library is one `.vsamp` file. No scripting.
 
+## Community
+
+Questions, bug reports, libraries and news: **[Kiru's Creative Suite (KCS) on Discord](https://discord.gg/JFnu6HTwgs)**.
+
 ## License
 
 VisuSampler is free software under the **GNU GPL v3** (or later), see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).

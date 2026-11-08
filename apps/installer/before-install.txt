@@ -15,6 +15,10 @@ Where things go
 
 Uninstalling removes the programs and the plugin, never your libraries, projects or presets.
 
+Community
+Questions, bug reports, libraries and news: Kiru's Creative Suite (KCS) on Discord, https://discord.gg/JFnu6HTwgs
+(there is a Discord button in VisuMaker and VisuPlayer too).
+
 Made with AI
 Nearly all of VisuSampler was written by an AI (Claude, by Anthropic), directed, tested and reviewed by a human.
 It is early, experimental software: keep backups of your projects, and please report bugs.

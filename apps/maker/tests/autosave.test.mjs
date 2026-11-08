@@ -80,6 +80,9 @@ await p.evaluate(()=>{window.__vs.S.zones[0].vol=-2;});await p.waitForTimeout(25
 await p.reload();await p.waitForTimeout(1500);
 await p.click('#autoRestore button.danger');await p.waitForTimeout(500);
 ok(!store.meta&&!(await p.$('#autoRestore')),'Discard removes the backup');
+/* the community button opens the KCS Discord */
+{const r=await p.evaluate(()=>{const o=window.open;let got=null;window.open=(u)=>{got=u;return null;};document.querySelector('#communityBtn').click();window.open=o;return{got,label:document.querySelector('#communityBtn').textContent.trim()};});
+ ok(r.got==='https://discord.gg/JFnu6HTwgs'&&r.label==='Discord','the Discord button opens the KCS server ('+r.got+')');}
 /* About: version, build, log folder */
 await p.click('#aboutBtn');await p.waitForTimeout(300);
 const about=await p.textContent('#aboutBox');

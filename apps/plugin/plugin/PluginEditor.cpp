@@ -81,6 +81,7 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
         .withNativeFunction("modWheel", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setUiMod((float) (double) a[0]); reply(done, juce::var(true)); })
         .withNativeFunction("panic", [this, reply](const juce::Array<juce::var>&, auto done) { proc_.keyboardState.allNotesOff(1); proc_.panic(); reply(done, juce::var(true)); })
         .withNativeFunction("openFolder", [reply](const juce::Array<juce::var>&, auto done) { VisuProcessor::libraryFolder().startAsProcess(); reply(done, juce::var(true)); })
+        .withNativeFunction("openCommunity", [reply](const juce::Array<juce::var>&, auto done) { juce::URL(VisuProcessor::communityUrl()).launchInDefaultBrowser(); reply(done, juce::var(true)); })   // only this one fixed address
         .withNativeFunction("openLogs", [reply](const juce::Array<juce::var>&, auto done) { VisuProcessor::logFolder().createDirectory(); VisuProcessor::logFolder().startAsProcess(); reply(done, juce::var(true)); })
         .withNativeFunction("addLibrary", [this](const juce::Array<juce::var>&, juce::WebBrowserComponent::NativeFunctionCompletion done) {
             chooser_ = std::make_unique<juce::FileChooser>("Add libraries", juce::File(), "*.vsamp;*.zip");

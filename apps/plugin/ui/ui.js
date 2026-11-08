@@ -57,6 +57,7 @@ async function addLibrary(){const r=await call('addLibrary');if(r&&r.added)toast
 $('#btnAdd').onclick=addLibrary;$('#btnAdd2').onclick=addLibrary;
 $('#btnFolder').onclick=()=>call('openFolder');
 $('#ver').onclick=()=>call('openLogs');
+$('#btnCommunity').onclick=()=>call('openCommunity');
 /* ---------- play mode ---------- */
 function setModeTitle(){}
 function setMode(m){
