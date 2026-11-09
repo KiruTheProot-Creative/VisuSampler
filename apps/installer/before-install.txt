@@ -23,8 +23,11 @@ Made with AI
 Nearly all of VisuSampler was written by an AI (Claude, by Anthropic), directed, tested and reviewed by a human.
 It is early, experimental software: keep backups of your projects, and please report bugs.
 
-License
-VisuSampler is free software under the GNU General Public License, version 3 or later (next page).
-Libraries you make with VisuMaker are yours: you may share or sell them under any terms you like.
+Terms of use (short version; the full text is installed as TERMS.txt)
+  * What you make is yours: instruments, libraries, projects, samples and songs. Share, sell or keep them,
+    under any terms you like. No royalties, no credit required.
+  * Only use samples, images and fonts you have the right to use. Other people's libraries belong to them.
+  * No data is collected or sent. Logs and backups stay on your computer.
+  * Free software under the GNU General Public License, version 3 or later (next page), without warranty.
 
 This is an early version (0.0.1). It is not code-signed, so Windows may have asked whether to run it.

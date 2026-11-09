@@ -28,7 +28,7 @@ async function aboutOpen(){
   row.prepend(mk('Discord','',openCommunity));
   const c=mk('Close','primary',close);row.append(c);
   const lic=document.createElement('div');lic.style.cssText='color:var(--muted,#aaa);font-size:11px;line-height:1.5;margin:-6px 0 14px';
-  lic.textContent='Free software under the GNU GPL v3 (or later), with no warranty. Libraries you make with VisuMaker are yours: share or sell them under any terms you like.';
+  lic.textContent='Free software under the GNU GPL v3 (or later), with no warranty. What you make is yours: share or sell your instruments and libraries under any terms you like. Nothing is collected or sent; logs and backups stay on your computer.';
   box.append(h,b,p,n,lic,row);ov.append(box);document.body.append(ov);c.focus();
   ov.addEventListener('keydown',e=>{if(e.key==='Escape')close();});ov.addEventListener('click',e=>{if(e.target===ov)close();});
 }

@@ -22,7 +22,8 @@ Questions, bug reports, libraries and news: **[Kiru's Creative Suite (KCS) on Di
 
 ## License
 
-VisuSampler is free software under the **GNU GPL v3** (or later), see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+VisuSampler is free software under the **GNU GPL v3** (or later), see [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and the
+short, plain [terms of use](TERMS.md).
 **Libraries you make with VisuMaker are yours**: share or sell them under any terms you like.
 
 ## Layout

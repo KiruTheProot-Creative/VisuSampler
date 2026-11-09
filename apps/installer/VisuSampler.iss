@@ -56,11 +56,13 @@ Source: "{#Vst3Dir}\*"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; Components
 Source: "{#StandaloneExe}"; DestDir: "{app}\VisuPlayer"; DestName: "VisuPlayer.exe"; Components: standalone; Flags: ignoreversion
 Source: "{#Root}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "{#Root}\NOTICE.md"; DestDir: "{app}"; DestName: "NOTICE.txt"; Flags: ignoreversion
+Source: "{#Root}\TERMS.md"; DestDir: "{app}"; DestName: "TERMS.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\VisuMaker"; Filename: "{app}\VisuMaker\VisuMaker.exe"; Components: maker
 Name: "{group}\VisuPlayer"; Filename: "{app}\VisuPlayer\VisuPlayer.exe"; Components: standalone
 Name: "{group}\License"; Filename: "{app}\LICENSE.txt"
+Name: "{group}\Terms of use"; Filename: "{app}\TERMS.txt"
 Name: "{group}\Uninstall VisuSampler"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\VisuMaker"; Filename: "{app}\VisuMaker\VisuMaker.exe"; Components: maker; Tasks: desktopicon
 Name: "{autodesktop}\VisuPlayer"; Filename: "{app}\VisuPlayer\VisuPlayer.exe"; Components: standalone; Tasks: desktopicon
