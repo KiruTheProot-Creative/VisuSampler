@@ -12,6 +12,10 @@ Nothing here plays on the web: VisuMaker is a Windows desktop app (`.exe`) and V
 - **VisuMaker** builds libraries: Samples, Mapping, Designer, FX Designer, Export.
 - **VisuPlayer** plays them. A library is one `.vsamp` file. No scripting.
 
+## Guides
+
+- **[Tags: the guide for library makers](docs/tags.md)**: knobs, buttons, texts, effects and DAW automation, all through tags.
+
 ## Community
 
 Questions, bug reports, libraries and news: **[Kiru's Creative Suite (KCS) on Discord](https://discord.gg/JFnu6HTwgs)**.
