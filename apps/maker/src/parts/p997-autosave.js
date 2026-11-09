@@ -5,10 +5,11 @@
    a close without saving) is offered back. Closing with unsaved changes asks first (Save / Close without saving / Cancel). */
 const AUTO={savedKey:null,autoKey:null,every:60000,lastAt:0,busy:false,pending:false,allowClose:false,on:false};
 const autoD=()=>{const D=window.visuDesktop;return D&&D.autosave?D:null;};
-function projKey(){histCheck();return HIST.last?HIST.last.key:'';}
+function projKeyNow(){const k=typeof insKeyNow==='function'?insKeyNow():'';return k||(HIST.last?HIST.last.key:'');}   /* a library: every instrument's token (the one being edited included) */
+function projKey(){histCheck();return projKeyNow();}
 function projDirty(){return projKey()!==AUTO.savedKey;}
 function markSaved(){AUTO.savedKey=AUTO.autoKey=projKey();autoDot();}
-function autoDot(){const b=$('#projSave');if(b)b.classList.toggle('dirty',AUTO.savedKey!=null&&HIST.last!=null&&HIST.last.key!==AUTO.savedKey);}
+function autoDot(){const b=$('#projSave');if(b)b.classList.toggle('dirty',AUTO.savedKey!=null&&HIST.last!=null&&projKeyNow()!==AUTO.savedKey);}
 async function autosaveNow(){
   const D=autoD();if(!D||AUTO.busy||AUTO.pending)return false;
   const key=projKey();if(key===AUTO.savedKey||key===AUTO.autoKey)return false;
@@ -26,7 +27,7 @@ function autoTick(){
 /* saving, opening and presets set the "saved" point */
 {const sp0=saveProject;saveProject=async function(saveAs){const r=await sp0(saveAs);if(r){markSaved();const D=autoD();if(D)D.autosaveClear().catch(()=>{});}return r;};}
 {const op0=openProject;openProject=async function(b,file){const r=await op0(b,file);markSaved();return r;};}
-{const lp0=loadPreset;loadPreset=function(k){const r=lp0(k);markSaved();return r;};}
+{const lp0=loadPreset;loadPreset=function(k){const r=lp0(k);if(typeof INS!=='undefined'&&INS.list.length<2)insInit(S.lib&&S.lib.name);markSaved();return r;};}
 {const hu0=histUI;histUI=function(){hu0();autoDot();};}
 
 /* the backup from last time */

@@ -716,6 +716,23 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 .community{display:inline-flex;align-items:center;gap:5px}
 .community .ico{opacity:.85}
 
+/* instruments of a library (top bar) */
+.insw{position:relative;margin-left:10px}
+#insBtn{display:inline-flex;align-items:center;gap:5px;max-width:260px}
+#insBtn .ilabel{color:var(--muted,#9a9a9a);font-size:11px}
+#insBtn b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+#insBtn .icount:not(:empty){background:#2f4b6a;color:#dbe8f6;border-radius:8px;font-size:10px;padding:0 6px;line-height:15px}
+.insmenu{left:0;right:auto;width:320px}
+.inslist{max-height:330px;overflow:auto;padding:0 2px}
+.insbank{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#9a9a9a);margin:8px 8px 2px}
+.insit[aria-current="true"]{background:#2e4258;color:#fff}
+.insacts{display:flex;gap:4px;flex-wrap:wrap;padding:6px 4px;border-top:1px solid #2a2a2a;margin-top:4px}
+.insacts .btn{padding:3px 8px}
+.insacts .danger{margin-left:auto;color:#ffb3a8}
+.insform{display:grid;gap:6px;padding:4px 6px 6px}
+.insform label{display:grid;gap:2px;font-size:11px;color:var(--muted,#9a9a9a)}
+.insform input{width:100%;box-sizing:border-box}
+
 </style>
 </head><body>
 <div class="app">
@@ -727,6 +744,10 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
       <button type="button" data-view="fx">Effects</button>
       <button type="button" data-view="export">Export</button>
     </nav>
+    <div class="insw">
+      <button type="button" class="btn" id="insBtn" aria-haspopup="true" aria-expanded="false" aria-controls="insMenu"><span class="ilabel">Instrument</span> <b id="insName"></b><span class="icount" id="insCount"></span> ▾</button>
+      <div class="menu insmenu" id="insMenu" hidden role="dialog" aria-label="Instruments in this library"></div>
+    </div>
     <div class="pre">
       <button type="button" class="btn ghost" id="tipsBtn" aria-pressed="false" title="Show or hide the explanations">Tips</button>
       <button type="button" class="btn" id="projOpen" title="Open a saved project (.vmproj, Ctrl+O)">Open</button>

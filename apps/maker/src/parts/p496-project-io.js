@@ -18,6 +18,7 @@ async function projectParts(){
   }
   for(const fam of Object.keys(S.fonts)){const f=S.fonts[fam];if(f.buf)fonts[fam]={size:f.size,lic:f.lic,data:await pack.add(new Uint8Array(f.buf),{compress:true})};}
   const manifest={format:'visumaker-project',formatVersion:1,created:new Date().toISOString(),snapshot:sn,audio,assets,fonts};
+  if(typeof insProjectWrite==='function')await insProjectWrite(manifest,pack,sn);   /* the other instruments of a library */
   return vsampParts(manifest,pack);
 }
 function joinParts(parts){const out=new Uint8Array(parts.reduce((n,d)=>n+d.length,0));let p=0;for(const d of parts){out.set(d,p);p+=d.length;}return out;}
@@ -56,7 +57,8 @@ async function openProject(bytes,file){
   Object.keys(S.assets).forEach(k=>{if(k.indexOf('tex_')!==0)delete S.assets[k];});Object.assign(S.assets,assets);
   S.fonts=fonts;IMGC.clear();BUF.clear();bufs.forEach((v,k)=>BUF.set(k,v));
   restore(m.snapshot);
-  let mx=uid;JSON.stringify(m.snapshot).replace(/"[a-z]+(\d+)"/g,(_,n)=>{mx=Math.max(mx,+n+1);return'';});uid=mx;
+  if(typeof insProjectRead==='function')await insProjectRead(m,blob);   /* a library: its other instruments */
+  let mx=uid;JSON.stringify([m.snapshot,m.instruments||null]).replace(/"[a-z]+(\d+)"/g,(_,n)=>{mx=Math.max(mx,+n+1);return'';});uid=mx;
   S.smp.sel=null;S.smp.a=S.smp.b=null;S.build.last=null;S.build.report=null;S.build.verify=null;S.prevSnap=null;
   PROJ_FILE=file||null;
   afterLoad();setView(S.view);

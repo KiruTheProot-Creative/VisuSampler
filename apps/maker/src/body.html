@@ -7,6 +7,10 @@
       <button type="button" data-view="fx">Effects</button>
       <button type="button" data-view="export">Export</button>
     </nav>
+    <div class="insw">
+      <button type="button" class="btn" id="insBtn" aria-haspopup="true" aria-expanded="false" aria-controls="insMenu"><span class="ilabel">Instrument</span> <b id="insName"></b><span class="icount" id="insCount"></span> ▾</button>
+      <div class="menu insmenu" id="insMenu" hidden role="dialog" aria-label="Instruments in this library"></div>
+    </div>
     <div class="pre">
       <button type="button" class="btn ghost" id="tipsBtn" aria-pressed="false" title="Show or hide the explanations">Tips</button>
       <button type="button" class="btn" id="projOpen" title="Open a saved project (.vmproj, Ctrl+O)">Open</button>
