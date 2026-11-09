@@ -99,10 +99,21 @@ static void fillInfo(const Json& lib, LibraryInfo& i) {
 
 #ifndef VISU_NO_FILES
 bool Library::readInfo(const std::string& path, LibraryInfo& info, std::string& error) {
-    VsampFile f; if (!f.openFile(path, error)) return false;
+    VsampFile f; if (!f.openFileLazy(path, error)) return false;   // only the manifest and the banner images are read
     const Json& m = f.manifest();
-    if (m["format"].str() != "vsamp") { error = m["format"].str() == "visumaker-project" ? "This is a VisuMaker project, not a finished library." : "Not a library file."; return false; }
+    const std::string fmt = m["format"].str();
+    if (fmt != "vsamp" && fmt != "vslib") { error = fmt == "visumaker-project" ? "This is a VisuMaker project, not a finished library." : "Not a library file."; return false; }
     fillInfo(m["lib"], info);
+    if (fmt == "vslib") {
+        info.collection = true;
+        const uint64_t base = f.base();
+        for (const Json& b : m["banks"].a) for (const Json& in : b["instruments"].a) {
+            InstrumentRef r; r.id = in["id"].str(); r.name = in["name"].str("Untitled"); r.bank = b["name"].str(); r.desc = in["desc"].str();
+            r.start = base + (uint64_t) in["data"]["off"].num(); r.length = (uint64_t) in["data"]["len"].num();
+            if (!r.id.empty() && r.length >= 16) info.instruments.push_back(r);
+        }
+        if (info.instruments.empty()) { error = "This library has no instruments."; return false; }
+    }
     auto img = [&](const char* k, std::string& dst) { const Json& r = m["banner"]["images"][k]; if (r.isNull()) return; std::vector<uint8_t> b; std::string e; if (f.blob(VsampFile::ref(r), b, e)) dst.assign(b.begin(), b.end()); };
     img("wide", info.bannerWide); img("tile", info.bannerTile); img("icon", info.bannerIcon);
     return true;
@@ -117,7 +128,19 @@ const std::vector<std::string>& supportedFeatures() {
 
 #ifndef VISU_NO_FILES
 std::shared_ptr<Library> Library::load(const std::string& path, std::string& error, double sampleRate) {
+    return load(path, std::string(), error, sampleRate);
+}
+std::shared_ptr<Library> Library::load(const std::string& path, const std::string& instrumentId, std::string& error, double sampleRate) {
     VsampFile f; if (!f.openFileLazy(path, error)) return nullptr;   // audio is read as needed, long samples stream
+    if (f.manifest()["format"].str() == "vslib") {   // a library: open the instrument stored inside it
+        LibraryInfo li; if (!readInfo(path, li, error)) return nullptr;
+        const InstrumentRef* pick = nullptr;
+        for (const auto& r : li.instruments) if (instrumentId.empty() || r.id == instrumentId) { pick = &r; break; }
+        if (!pick) { error = "This library has no instrument \"" + instrumentId + "\"."; return nullptr; }
+        VsampFile g; if (!g.openFileLazy(path, error, pick->start, pick->length)) return nullptr;
+        if (g.manifest()["format"].str() != "vsamp") { error = "An instrument in this library is damaged."; return nullptr; }
+        return fromFile(g, error, sampleRate);
+    }
     return fromFile(f, error, sampleRate);
 }
 #endif

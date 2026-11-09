@@ -21,7 +21,10 @@ public:
     private:
         juce::String label_; juce::SpinLock lock_;
     };
-    struct Entry { juce::String id; juce::File file; visu::LibraryInfo info; juce::int64 size = 0; };
+    // one playable instrument: a .vsins / .vsamp file, or one instrument of a .vslib (then `instrument` is its id inside,
+    // `collection*` name the library and `bank` its bank; info holds the library's details with the instrument's name)
+    struct Entry { juce::String id; juce::File file; visu::LibraryInfo info; juce::int64 size = 0;
+                   juce::String instrument, collectionId, collectionName, bank; int order = 0; };
 
     VisuProcessor();
     ~VisuProcessor() override;
@@ -30,11 +33,13 @@ public:
     static juce::File libraryFolder();
     static juce::File logFolder();                         // Documents/VisuSampler/Logs (VisuPlayer.log, for bug reports)
     static void log(const juce::String& line);             // message or loader threads only, never the audio thread
-    static juce::String versionText();
-    static juce::String communityUrl() { return "https://discord.gg/JFnu6HTwgs"; }   // Kiru's Creative Suite (KCS) on Discord                     // "0.0.1 (build abc1234)"
+    static juce::String versionText();                     // "0.0.1 (build abc1234)"
+    static juce::String communityUrl() { return "https://discord.gg/JFnu6HTwgs"; }   // Kiru's Creative Suite (KCS) on Discord
     void rescan();
     const std::vector<Entry>& catalog() const { return catalog_; }
     const Entry* entryById(const juce::String& id) const;
+    // a banner image of an entry ("wide", "tile" or "icon"); a library's instruments share the library's
+    const std::string& banner(const Entry& e, const juce::String& kind) const;
     void loadLibrary(const juce::String& id, bool keepTags = false);   // keepTags: restoring a saved project, so the knob values stay
     void unloadLibrary();
     int addLibraryFiles(const juce::Array<juce::File>& files);

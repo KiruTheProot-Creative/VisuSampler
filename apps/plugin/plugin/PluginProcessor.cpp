@@ -61,16 +61,32 @@ void VisuProcessor::rescan()
     auto alive = alive_;
     juce::Thread::launch([this, alive] {
         std::vector<Entry> found;
-        for (auto& f : libraryFolder().findChildFiles(juce::File::findFiles, true, "*.vsamp"))
+        // instruments (.vsins, and .vsamp from earlier versions) and libraries of instruments (.vslib)
+        for (auto& f : libraryFolder().findChildFiles(juce::File::findFiles, true, "*.vsamp;*.vsins;*.vslib"))
         {
-            Entry e; e.file = f; e.size = f.getSize(); std::string err;
-            if (!visu::Library::readInfo(f.getFullPathName().toStdString(), e.info, err)) { log("skipped " + f.getFullPathName() + ": " + juce::String(err)); continue; }
-            e.id = juce::String(e.info.id.empty() ? f.getFileNameWithoutExtension().toStdString() : e.info.id);
+            visu::LibraryInfo info; std::string err;
+            if (!visu::Library::readInfo(f.getFullPathName().toStdString(), info, err)) { log("skipped " + f.getFullPathName() + ": " + juce::String(err)); continue; }
+            juce::String base = juce::String(info.id.empty() ? f.getFileNameWithoutExtension().toStdString() : info.id);
             // two copies of the same library (e.g. two versions): keep both, make the id unique
-            for (auto& o : found) if (o.id == e.id) e.id += "~" + f.getFileNameWithoutExtension();
-            found.push_back(std::move(e));
+            for (auto& o : found) if ((o.collectionId.isNotEmpty() ? o.collectionId : o.id) == base && o.file != f) { base += "~" + f.getFileNameWithoutExtension(); break; }
+            if (!info.collection) { Entry e; e.file = f; e.size = f.getSize(); e.info = std::move(info); e.id = base; found.push_back(std::move(e)); continue; }
+            int order = 0;
+            for (const auto& in : info.instruments)
+            {
+                Entry e; e.file = f; e.size = (juce::int64) in.length; e.info = info; e.info.instruments.clear();
+                if (order > 0) { e.info.bannerWide.clear(); e.info.bannerTile.clear(); e.info.bannerIcon.clear(); }   // kept once, on the first (see banner())
+                e.info.name = in.name; e.info.desc = in.desc.empty() ? info.desc : in.desc;
+                e.instrument = juce::String(in.id); e.collectionId = base; e.collectionName = juce::String(info.name); e.bank = juce::String(in.bank); e.order = order++;
+                e.id = base + "/" + e.instrument;
+                found.push_back(std::move(e));
+            }
         }
-        std::sort(found.begin(), found.end(), [](const Entry& a, const Entry& b) { return a.info.name < b.info.name; });
+        // by library (or instrument) name; a library's instruments keep their own order
+        std::sort(found.begin(), found.end(), [](const Entry& a, const Entry& b) {
+            const juce::String ka = a.collectionId.isNotEmpty() ? a.collectionName : juce::String(a.info.name), kb = b.collectionId.isNotEmpty() ? b.collectionName : juce::String(b.info.name);
+            if (ka != kb) return ka < kb;
+            if (a.collectionId != b.collectionId) return a.collectionId < b.collectionId;
+            return a.order < b.order; });
         juce::MessageManager::callAsync([this, alive, found = std::move(found)]() mutable {
             if (!*alive) return;
             catalog_ = std::move(found);
@@ -86,6 +102,12 @@ void VisuProcessor::rescan()
     });
 }
 
+const std::string& VisuProcessor::banner(const Entry& e, const juce::String& kind) const
+{
+    const Entry* src = &e;
+    if (e.collectionId.isNotEmpty() && e.order > 0) for (auto& o : catalog_) if (o.collectionId == e.collectionId && o.file == e.file && o.order == 0) { src = &o; break; }
+    return kind.startsWith("wide") ? src->info.bannerWide : kind.startsWith("icon") ? src->info.bannerIcon : src->info.bannerTile;
+}
 const VisuProcessor::Entry* VisuProcessor::entryById(const juce::String& id) const
 {
     for (auto& e : catalog_) if (e.id == id) return &e;
@@ -97,14 +119,15 @@ void VisuProcessor::loadLibrary(const juce::String& id, bool keepTags)
     if (!keepTags && id != currentId_) { const juce::ScopedLock l(tagLock_); tagState_.clear(); ccOfTag_.clear(); currentPreset_.clear(); }   // another library: start from its own knob values
     const auto* e = entryById(id);
     if (!e) { pendingId_ = id; pendingKeep_ = true; return; }   // the scan has not finished yet
-    auto alive = alive_; const int ticket = ++loadTicket_; const juce::File file = e->file;
+    auto alive = alive_; const int ticket = ++loadTicket_; const juce::File file = e->file; const std::string instrument = e->instrument.toStdString();
     loading_ = true; currentId_ = id; status_ = "Loading…"; sendChangeMessage();
     const double sr = sampleRate_ > 0 ? sampleRate_ : 48000.0;
-    juce::Thread::launch([this, alive, file, ticket, id, sr] {
+    juce::Thread::launch([this, alive, file, ticket, id, sr, instrument] {
         std::string err; const auto t0 = juce::Time::getMillisecondCounterHiRes();
-        std::shared_ptr<const visu::Library> lib = visu::Library::load(file.getFullPathName().toStdString(), err, sr);
-        if (!lib) log("could not load " + file.getFullPathName() + ": " + juce::String(err));
-        else log("loaded " + file.getFileName() + " in " + juce::String((int) (juce::Time::getMillisecondCounterHiRes() - t0)) + " ms · " + juce::String((int) lib->zones.size()) + " zones · "
+        std::shared_ptr<const visu::Library> lib = visu::Library::load(file.getFullPathName().toStdString(), instrument, err, sr);
+        const juce::String what = file.getFileName() + (instrument.empty() ? juce::String() : " / " + juce::String(instrument));
+        if (!lib) log("could not load " + what + ": " + juce::String(err));
+        else log("loaded " + what + " in " + juce::String((int) (juce::Time::getMillisecondCounterHiRes() - t0)) + " ms · " + juce::String((int) lib->zones.size()) + " zones · "
                  + juce::String(lib->memoryBytes() / 1048576.0, 1) + " MB in memory · " + juce::String(sr, 0) + " Hz");
         juce::MessageManager::callAsync([this, alive, file, ticket, lib, err, id] {
             if (!*alive || ticket != loadTicket_.load()) return;
@@ -175,7 +198,12 @@ juce::var VisuProcessor::librariesVar() const
         o->setProperty("version", juce::String(i.version)); o->setProperty("category", juce::String(i.category)); o->setProperty("tags", juce::String(i.tags));
         o->setProperty("desc", juce::String(i.desc)); o->setProperty("web", juce::String(i.web)); o->setProperty("licence", juce::String(i.licence));
         o->setProperty("changelog", juce::String(i.changelog)); o->setProperty("accent", juce::String(i.accent));
-        o->setProperty("hasTile", !i.bannerTile.empty()); o->setProperty("hasWide", !i.bannerWide.empty()); o->setProperty("size", (double) e.size);
+        o->setProperty("hasTile", !banner(e, "tile").empty()); o->setProperty("hasWide", !banner(e, "wide").empty()); o->setProperty("size", (double) e.size);
+        if (e.collectionId.isNotEmpty()) {   // an instrument of a .vslib
+            o->setProperty("collection", e.collectionId); o->setProperty("collectionName", e.collectionName);
+            o->setProperty("bank", e.bank); o->setProperty("instrument", e.instrument); o->setProperty("order", e.order);
+        }
+        o->setProperty("file", e.file.getFileName());
         libs.add(juce::var(o));
     }
     auto* r = new juce::DynamicObject();
@@ -294,7 +322,10 @@ static juce::String safeName(juce::String s) { s = s.removeCharacters("\\/:*?\"<
 juce::File VisuProcessor::presetFolder() const
 {
     const juce::String lib = current_ ? juce::String(current_->info.name.empty() ? current_->info.id : current_->info.name) : juce::String("Library");
-    return libraryFolder().getParentDirectory().getChildFile("Presets").getChildFile(safeName(lib));
+    const auto root = libraryFolder().getParentDirectory().getChildFile("Presets");
+    if (const auto* e = entryById(currentId_)) if (e->collectionId.isNotEmpty())   // an instrument of a library: Presets/<library>/<instrument>
+        return root.getChildFile(safeName(e->collectionName)).getChildFile(safeName(e->info.name));
+    return root.getChildFile(safeName(lib));
 }
 juce::var VisuProcessor::presetsVar() const
 {

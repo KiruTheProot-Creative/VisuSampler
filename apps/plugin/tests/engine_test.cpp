@@ -542,6 +542,39 @@ static std::vector<double> compatPrint(const std::shared_ptr<Library>& lib, int 
     }
     return out;
 }
+/* .vslib: a library holding instruments. Each instrument inside plays exactly like its own file, streaming included. */
+static void testVslib() {
+    const std::string dir = TEST_DATA_DIR, lib = dir + "/lib.vslib";
+    LibraryInfo li; std::string err;
+    const bool ok = Library::readInfo(lib, li, err);
+    CHECK(ok && li.collection && li.name == "Test Library" && li.instruments.size() == 3, "vslib: the library and its 3 instruments are listed (%s)", err.c_str());
+    if (!ok || li.instruments.size() != 3) return;
+    CHECK(li.instruments[0].bank == "01. Keys" && li.instruments[1].id == "fxplay" && li.instruments[1].desc == "macros and bypass" && li.instruments[2].bank == "02. Long",
+          "vslib: banks, ids and descriptions come through");
+    CHECK(li.bannerTile.size() == 8 && (uint8_t) li.bannerTile[0] == 0x89, "vslib: the library's banner image comes through");
+    LibraryInfo gi; CHECK(Library::readInfo(dir + "/golden.vsamp", gi, err) && !gi.collection && gi.instruments.empty(), "an instrument file is not a collection");
+    struct C { const char* id; const char* file; int note; };
+    for (const C c : { C{ "golden", "golden.vsamp", 60 }, C{ "fxplay", "fx-play.vsamp", 0 }, C{ "stream", "stream.vsamp", 72 } }) {
+        auto a = Library::load(lib, c.id, err, 48000); std::string e2; auto b = Library::load(dir + "/" + c.file, e2, 48000);
+        if (!a || !b) { CHECK(false, "vslib: %s loads (%s%s)", c.id, err.c_str(), e2.c_str()); continue; }
+        int note = c.note; if (!note && !b->zones.empty()) note = b->zones[0].lo;
+        auto ea = std::make_unique<Engine>(), eb = std::make_unique<Engine>();
+        for (Engine* e : { ea.get(), eb.get() }) { e->prepare(48000); e->setMasterGain(1); e->setOffline(true); }
+        ea->setLibrary(a); eb->setLibrary(b); ea->noteOn(note, 110); eb->noteOn(note, 110);
+        std::vector<float> la(512), ra(512), lb(512), rb(512); double maxd = 0, peak = 0;
+        for (int blk = 0; blk < 300; ++blk) {
+            std::fill(la.begin(), la.end(), 0.f); std::fill(ra.begin(), ra.end(), 0.f); std::fill(lb.begin(), lb.end(), 0.f); std::fill(rb.begin(), rb.end(), 0.f);
+            ea->render(la.data(), ra.data(), 512); eb->render(lb.data(), rb.data(), 512);
+            for (int i = 0; i < 512; ++i) { maxd = std::max(maxd, (double) std::fabs(la[i] - lb[i]) + std::fabs(ra[i] - rb[i])); peak = std::max(peak, (double) std::fabs(lb[i])); }
+        }
+        CHECK(maxd == 0 && peak > .01 && a->zones.size() == b->zones.size() && a->streamedSamples() == b->streamedSamples(),
+              "vslib: instrument \"%s\" plays exactly like its own file (difference %.3g, peak %.2f, %d streamed)", c.id, maxd, peak, (int) a->streamedSamples());
+    }
+    auto first = Library::load(lib, "", err, 48000);
+    CHECK(first && first->info.name == Library::load(dir + "/golden.vsamp", err, 48000)->info.name, "vslib: no instrument named loads the first one");
+    std::string e3; CHECK(!Library::load(lib, "nope", e3, 48000) && e3.find("nope") != std::string::npos, "vslib: an instrument that is not there is reported (%s)", e3.c_str());
+}
+
 static void testCompat() {
     const std::string dir = COMPAT_DIR, jp = dir + "/compat.json"; std::string txt = readText(jp);
     Json db = txt.empty() ? Json() : Json::parse(txt.data(), txt.size());
@@ -588,7 +621,7 @@ static void testCompat() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testCompat();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testCompat();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

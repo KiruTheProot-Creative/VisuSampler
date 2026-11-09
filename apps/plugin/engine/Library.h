@@ -75,9 +75,13 @@ struct ListDef { std::string name; int bank = 0; std::vector<int> groups; int ks
 // Features this engine can play (see docs/vsamp-format.md).
 const std::vector<std::string>& supportedFeatures();
 
+// an instrument inside a .vslib: where its .vsins lies in the library file
+struct InstrumentRef { std::string id, name, bank, desc; uint64_t start = 0, length = 0; };
 struct LibraryInfo {
     std::string id, name, author, version, desc, tags, category, web, licence, changelog, accent;
     std::string bannerWide, bannerTile, bannerIcon;   // PNG bytes
+    bool collection = false;                       // a .vslib (several instruments) rather than one instrument
+    std::vector<InstrumentRef> instruments;        // a .vslib's instruments, bank by bank in the library's order
 };
 
 class Library {
@@ -85,6 +89,8 @@ public:
     // Reads and fully decodes a library. Returns null and sets `error` on failure.
     // sampleRate: the effects are prepared for it (reload the library if the host rate changes)
     static std::shared_ptr<Library> load(const std::string& path, std::string& error, double sampleRate = 48000);
+    // An instrument of a .vslib (by id; empty: the first). For an instrument file (.vsins / .vsamp) the id is ignored.
+    static std::shared_ptr<Library> load(const std::string& path, const std::string& instrumentId, std::string& error, double sampleRate = 48000);
     static std::shared_ptr<Library> loadBytes(std::vector<uint8_t> bytes, std::string& error, double sampleRate = 48000);
     // VisuMaker's live reloads: a sample marked "keep" carries no audio and takes it from `reuse` (the library playing now),
     // matched by its "key". A missing one fails with kKeepMiss and the Maker sends everything again. Shipped files never use this.

@@ -119,3 +119,44 @@ export async function verifyVsamp(bytes){
   out.info={blobs:all.length,samples:m.samples.length,zones:m.zones.length,bytes:bytes.length};
   out.manifest=m;out.ok=out.errors.length===0;return out;
 }
+
+/* ---------- libraries (.vslib): several instruments in one file ----------
+   The same container as an instrument (.vsins, formerly .vsamp); its manifest says format "vslib" and lists banks of
+   instruments. Each instrument is a complete .vsins file stored as one blob, so a player can open just that one
+   (and stream from it) without reading the others. */
+export const VSLIB_FORMAT_VERSION=1;
+/**
+ * @param {{lib:object, images?:{wide?:Uint8Array,tile?:Uint8Array,icon?:Uint8Array},
+ *          banks:{name:string, instruments:{id:string,name:string,desc?:string,bytes:Uint8Array}[]}[]}} o
+ * @returns {Promise<Uint8Array[]>} the file in pieces (write them one after another)
+ */
+export async function vslibParts(o){
+  const pack=new Pack(),images={},ids=new Set();
+  for(const k of ['wide','tile','icon'])if(o.images&&o.images[k])images[k]=await pack.add(o.images[k],{});
+  const banks=[];
+  for(const b of o.banks||[]){
+    const ins=[];
+    for(const i of b.instruments||[]){
+      if(!i.id||ids.has(i.id))throw new Error('Every instrument needs its own id ('+i.id+').');ids.add(i.id);
+      const head=readVsamp(i.bytes).manifest;   // checks it is a whole instrument file
+      if(head.format!=='vsamp')throw new Error('"'+i.name+'" is not an instrument file.');
+      ins.push({id:i.id,name:i.name||head.lib&&head.lib.name||'Untitled',desc:i.desc||'',data:await pack.add(i.bytes,{})});
+    }
+    banks.push({name:b.name||'',instruments:ins});
+  }
+  if(!ids.size)throw new Error('A library needs at least one instrument.');
+  const manifest={format:'vslib',formatVersion:VSLIB_FORMAT_VERSION,lib:o.lib||{},banner:{images},banks};
+  return vsampParts(manifest,pack);
+}
+export async function writeVslib(o){
+  const parts=await vslibParts(o),out=new Uint8Array(parts.reduce((n,d)=>n+d.length,0));
+  let p=0;for(const d of parts){out.set(d,p);p+=d.length;}return out;
+}
+/** A .vslib's instruments: [{id,name,desc,bank,bytes}] (bytes: the instrument's .vsins, checked) */
+export async function readVslib(bytes){
+  const r=readVsamp(bytes);
+  if(r.manifest.format!=='vslib')throw new Error('Not a library (.vslib) file.');
+  const out=[];
+  for(const b of r.manifest.banks||[])for(const i of b.instruments||[])out.push({id:i.id,name:i.name,desc:i.desc||'',bank:b.name||'',bytes:await r.blob(i.data)});
+  return{manifest:r.manifest,instruments:out};
+}

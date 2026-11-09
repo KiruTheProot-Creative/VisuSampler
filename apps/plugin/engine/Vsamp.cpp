@@ -71,23 +71,26 @@ static std::FILE* openRead(const std::string& path) {
     return std::fopen(path.c_str(), "rb");
 #endif
 }
-bool VsampFile::openFileLazy(const std::string& path, std::string& error) {
+bool VsampFile::openFileLazy(const std::string& path, std::string& error, uint64_t start, uint64_t length) {
     std::FILE* f = openRead(path);
     if (!f) { error = "Could not open the file."; return false; }
-    std::fseek(f, 0, SEEK_END); const long long total = (long long) visu_ftell(f); std::fseek(f, 0, SEEK_SET);
+    std::fseek(f, 0, SEEK_END); const long long fileLen = (long long) visu_ftell(f);
+    if (start + length > (uint64_t) fileLen) { std::fclose(f); error = "An instrument runs past the end of the library file."; return false; }
+    const long long total = length ? (long long) (start + length) : fileLen;   // where this (inner) file ends
+    visu_fseek(f, (long long) start);
     uint8_t head[16];
-    if (total < 16 || std::fread(head, 1, 16, f) != 16) { std::fclose(f); error = "File is too short."; return false; }
+    if (total - (long long) start < 16 || std::fread(head, 1, 16, f) != 16) { std::fclose(f); error = "File is too short."; return false; }
     if (memcmp(head, kMagic, 5) != 0) { std::fclose(f); error = "Not a .vsamp file (wrong header)."; return false; }
     if (head[6] > 1) { std::fclose(f); error = "This file was made by a newer version."; return false; }
     const uint32_t ml = rd32(&head[8]), mc = rd32(&head[12]);
-    if ((uint64_t) 16 + ml > (uint64_t) total) { std::fclose(f); error = "Manifest runs past the end of the file."; return false; }
+    if (start + 16 + ml > (uint64_t) total) { std::fclose(f); error = "Manifest runs past the end of the file."; return false; }
     std::string m(ml, '\0');
     if (ml && std::fread(&m[0], 1, ml, f) != ml) { std::fclose(f); error = "Could not read the file."; return false; }
     std::fclose(f);
     if (crc32((const uint8_t*) m.data(), ml) != mc) { error = "Manifest checksum does not match."; return false; }
     try { manifest_ = Json::parse(m.data(), ml); }
     catch (const std::exception& e) { error = std::string("Manifest is not valid: ") + e.what(); return false; }
-    lazy_ = true; path_ = path; manifestStr_ = std::move(m); fileSize_ = (uint64_t) total; base_ = 16 + ml; bytes_.clear();
+    lazy_ = true; path_ = path; manifestStr_ = std::move(m); fileSize_ = (uint64_t) total; base_ = (size_t) (start + 16 + ml); bytes_.clear();
     return true;
 }
 bool VsampFile::readRaw(uint64_t off, uint64_t len, uint8_t* out) const {

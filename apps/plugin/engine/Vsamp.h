@@ -1,4 +1,5 @@
-// .vsamp container reader (see docs/vsamp-format.md)
+// VisuSampler container reader (see docs/vsamp-format.md): instruments (.vsins, and the older .vsamp) and libraries
+// (.vslib), which hold several instruments, each one a complete .vsins stored inside.
 #pragma once
 #include "Json.h"
 #include <cstdint>
@@ -16,7 +17,8 @@ public:
     // Reads the whole file. Returns false and fills `error` on any problem (bad header, checksum, JSON).
     bool openFile(const std::string& path, std::string& error);
     // Reads only the header and the manifest; blobs are read from the file when asked for (used by the player, which streams audio).
-    bool openFileLazy(const std::string& path, std::string& error);
+    // start/length: a file stored inside another one (an instrument inside a .vslib); 0/0 is the whole file
+    bool openFileLazy(const std::string& path, std::string& error, uint64_t start = 0, uint64_t length = 0);
     bool lazy() const { return lazy_; }
     const std::string& path() const { return path_; }
     uint64_t base() const { return base_; }   // file offset where blob offsets start

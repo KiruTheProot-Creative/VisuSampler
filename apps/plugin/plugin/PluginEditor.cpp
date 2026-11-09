@@ -103,7 +103,7 @@ std::optional<juce::WebBrowserComponent::Resource> VisuEditor::resource(const ju
         const auto kind = path.fromLastOccurrenceOf("/", false, false);
         if (const auto* e = proc_.entryById(id))
         {
-            const std::string& b = kind.startsWith("wide") ? e->info.bannerWide : kind.startsWith("icon") ? e->info.bannerIcon : e->info.bannerTile;
+            const std::string& b = proc_.banner(*e, kind);
             if (!b.empty()) return juce::WebBrowserComponent::Resource{ bytesOf(b.data(), b.size()), "image/png" };
         }
         return std::nullopt;
