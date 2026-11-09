@@ -14,6 +14,26 @@ ok(await p.locator('.tile[data-id]').count()===3,'browser lists the libraries fr
 await p.screenshot({path:'/tmp/ui1.png'});
 await p.fill('#q','zzz');ok(await p.locator('.tile[data-id]').count()===0,'search filters');await p.fill('#q','');
 await p.click('.fchip:has-text("Keys")');ok(await p.locator('.tile[data-id]').count()===1,'category filter');await p.click('.fchip:has-text("Keys")');
+/* a library (.vslib): one tile; its instruments by bank in the side panel; play mode steps through them */
+{ok(await p.locator('.tile[data-lib]').count()===1&&/3 instruments/.test(await p.textContent('.tile[data-lib] .badge')),'a library is one tile showing how many instruments it holds');
+ ok(/1 library · 6 instruments/.test(await p.textContent('#count')),'the count says libraries and instruments ('+(await p.textContent('#count'))+')');
+ await p.click('.tile[data-lib]');await p.waitForTimeout(100);
+ const banks=await p.$$eval('#bside h3',h=>h.map(x=>x.textContent)),ins=await p.$$eval('#bside .ins',b=>b.map(x=>x.textContent));
+ ok(!(await p.locator('#bside').isHidden())&&JSON.stringify(banks)==='["01. Keys","02. Long"]'&&JSON.stringify(ins)==='["Golden","FX Play","Streaming"]','clicking it lists its instruments bank by bank ('+banks.join(', ')+' / '+ins.join(', ')+')');
+ ok(await p.evaluate(()=>document.activeElement&&document.activeElement.classList.contains('ins')),'focus moves to the first instrument');
+ await p.fill('#q','stream');await p.waitForTimeout(50);
+ ok(/1 of 3/.test(await p.textContent('.tile[data-lib] .badge'))&&(await p.$$eval('#bside .ins',b=>b.map(x=>x.textContent))).join()==='Streaming','search finds instruments inside a library');
+ await p.fill('#q','');
+ await p.click('#bside .ins >> nth=0');await p.waitForTimeout(300);
+ ok((await p.textContent('#curTitle'))==='Test Library · Golden'&&!(await p.locator('#insNav').isHidden()),'an instrument opens in play mode, titled with its library, with previous/next');
+ await p.click('#insNext');await p.waitForTimeout(300);
+ ok((await p.textContent('#curTitle'))==='Test Library · FX Play'&&await p.evaluate(()=>window.__mock.calls.filter(c=>c[0]==='loadLibrary').pop()[1])==='testlib/fxplay','next loads the library\'s next instrument');
+ await p.click('#insPrev');await p.click('#insPrev');await p.waitForTimeout(300);
+ ok((await p.textContent('#curTitle'))==='Test Library · Streaming','previous wraps around to the last one');
+ await p.click('#btnBack');await p.waitForTimeout(150);
+ ok(!(await p.locator('#bside').isHidden())&&(await p.locator('#bside .ins').count())===3,'back in the browser, the library\'s list is still open');
+ await p.screenshot({path:'/tmp/claude-0/-home-claude/a30fc208-8447-5909-8f35-21df8f80b96b/scratchpad/browser.png'});
+ await p.click('#sideClose');ok(await p.locator('#bside').isHidden(),'the list closes');}
 await p.click('.tile[data-id] >> nth=0');await p.waitForTimeout(300);
 ok(await p.evaluate(()=>document.body.dataset.mode)==='play','clicking a tile opens play mode');
 ok(await p.evaluate(()=>window.__mock.calls.some(c=>c[0]==='loadLibrary')),'asks the plugin to load it');

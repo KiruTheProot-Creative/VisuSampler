@@ -178,9 +178,8 @@ int VisuProcessor::addLibraryFiles(const juce::Array<juce::File>& files)
     int n = 0;
     for (auto& file : files)
     {
-        if (!file.hasFileExtension("vsamp") && !file.hasFileExtension("zip")) continue;
-        auto dest = libraryFolder().getChildFile(file.getFileNameWithoutExtension().upToLastOccurrenceOf(".vsamp", false, true)
-                                                      .replace(".vsamp", "") + ".vsamp");
+        if (!file.hasFileExtension("vsamp;vsins;vslib;zip")) continue;
+        auto dest = libraryFolder().getChildFile(file.getFileName());
         if (file != dest && file.copyFileTo(dest)) ++n;
     }
     rescan();

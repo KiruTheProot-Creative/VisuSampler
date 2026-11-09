@@ -22,6 +22,7 @@ button,input{font:inherit;color:inherit}
 .chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
 .fchip{background:#2c2c2f;border:1px solid #1a1a1c;color:#bdbdc2;padding:3px 10px;cursor:pointer;font-size:12px}
 .fchip:hover{background:#38383c}.fchip[aria-pressed="true"]{background:var(--sel);color:#fff;border-color:#2c5584}
+.bmain{flex:1;min-height:0;display:flex;gap:14px}
 .grid{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:16px;align-content:start;padding:2px 2px 16px}
 .grid.busy{opacity:.6;pointer-events:none}
 .tile{position:relative;background:#2a2a2d;cursor:pointer;border:1px solid #151517;display:flex;flex-direction:column;text-align:left;padding:0;outline:0}
@@ -124,3 +125,21 @@ pre.lic{white-space:pre-wrap;margin:0;font:11px/1.5 var(--f);color:var(--muted)}
 
 .community{display:inline-flex;align-items:center;gap:5px}
 .community .ico{opacity:.85}
+
+/* libraries of instruments (.vslib): one tile, its instruments in the side panel */
+.tile.lib .art{position:relative}
+.tile.lib .badge{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.72);color:#e8e8ea;font-size:10px;padding:2px 6px;border-radius:3px;pointer-events:none}
+.tile.lib.sel{border-color:#5d86b5;box-shadow:0 0 0 1px #5d86b5}
+.tile.lib::after{content:"";position:absolute;top:6px;right:6px;width:14px;height:10px;border:2px solid rgba(255,255,255,.75);border-radius:2px;box-shadow:3px -3px 0 -1px rgba(0,0,0,.5),3px -3px 0 0 rgba(255,255,255,.45);pointer-events:none}
+.bside{flex:0 0 300px;width:300px;min-height:0;overflow:auto;background:#1d1d20;border:1px solid #151517;padding:10px 12px 14px}
+.bside .shead{display:flex;align-items:flex-start;gap:8px;position:sticky;top:-10px;background:#1d1d20;padding:2px 0 8px;margin-top:-2px;border-bottom:1px solid #2c2c31}
+.bside .shead>div{flex:1;min-width:0}
+.bside h2{font-size:14px;margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bside .x{background:none;border:0;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:0 2px}
+.bside h3{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#9aa3ad;margin:12px 0 4px;font-weight:600}
+.bside ul{list-style:none;margin:0;padding:0}
+.bside .ins{display:block;width:100%;text-align:left;background:none;border:0;color:#dcdce0;font:inherit;font-size:12px;padding:5px 6px;border-radius:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bside .ins::before{content:"";display:inline-block;width:8px;height:8px;margin-right:8px;border:1px solid #6d7682;border-radius:1px;vertical-align:-1px}
+.bside .ins:hover,.bside .ins:focus-visible{background:#2b3440;outline:0}
+.bside .ins[aria-current="true"]{background:#2e4258;color:#fff}
+.insnav{display:flex;gap:2px;margin-left:6px}

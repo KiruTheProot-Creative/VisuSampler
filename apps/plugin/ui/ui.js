@@ -17,7 +17,7 @@ function visible(){
   const q=query.trim().toLowerCase();
   return libs.filter(L=>{
     if(filters.size){const have=new Set([L.category,...tagsOf(L)].map(x=>String(x).toLowerCase()));for(const f of filters)if(!have.has(f.toLowerCase()))return false;}
-    if(q){const hay=[L.name,L.author,L.category,L.tags,L.desc].join(' ').toLowerCase();if(!q.split(/\s+/).every(w=>hay.includes(w)))return false;}
+    if(q){const hay=[L.name,L.collectionName,L.bank,L.author,L.category,L.tags,L.desc].join(' ').toLowerCase();if(!q.split(/\s+/).every(w=>hay.includes(w)))return false;}
     return true;
   });
 }
@@ -28,14 +28,52 @@ function renderChips(){
   $('#chips').innerHTML=list.length?list.map(v=>'<button type="button" class="fchip" aria-pressed="'+filters.has(v)+'" data-f="'+esc(v)+'">'+esc(v)+'</button>').join(''):'<span class="muted">Nothing to filter yet.</span>';
   document.querySelectorAll('[data-ft]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.ft===filterTab)));
 }
+/* A library (.vslib) is one tile holding its instruments; an instrument file (.vsins) is a tile of its own.
+   Clicking a library tile lists its instruments, bank by bank, in the panel on the right (like Kontakt). */
+let side=null;   /* the library whose instruments the panel shows */
+const byOrder=(a,b)=>(a.order||0)-(b.order||0);
+function cards(v){
+  const out=[],seen=new Map();
+  for(const L of v){
+    if(!L.collection){out.push({kind:'ins',L,name:L.name});continue;}
+    let c=seen.get(L.collection);
+    if(!c){c={kind:'lib',id:L.collection,name:L.collectionName||L.collection,items:[]};seen.set(L.collection,c);out.push(c);}
+    c.items.push(L);
+  }
+  out.forEach(c=>{if(c.kind==='lib'){c.items.sort(byOrder);c.first=c.items[0];c.total=libs.filter(l=>l.collection===c.id).length;}});
+  return out.sort((a,b)=>a.name.localeCompare(b.name));
+}
+const plural=(n,w)=>n+' '+w+(n===1?'':'s');
 function renderGrid(){
-  const v=visible();
-  $('#grid').innerHTML=v.map(L=>'<div class="tile" role="button" tabindex="0" data-id="'+esc(L.id)+'" aria-label="Open '+esc(L.name)+'"><div class="art">'+art(L)+'</div><div class="name" title="'+esc(L.name+' · '+(L.author||''))+'">'+esc(L.name)+'</div></div>').join('')
+  const v=visible(),cs=cards(v);
+  $('#grid').innerHTML=cs.map(c=>c.kind==='ins'
+      ?'<div class="tile" role="button" tabindex="0" data-id="'+esc(c.L.id)+'" aria-label="Open '+esc(c.L.name)+'"><div class="art">'+art(c.L)+'</div><div class="name" title="'+esc(c.L.name+' · '+(c.L.author||''))+'">'+esc(c.L.name)+'</div></div>'
+      :'<div class="tile lib'+(side===c.id?' sel':'')+'" role="button" tabindex="0" data-lib="'+esc(c.id)+'" aria-expanded="'+(side===c.id)+'" aria-controls="bside" aria-label="'+esc(c.name)+': '+plural(c.total,'instrument')+'">'
+        +'<div class="art">'+art(Object.assign({},c.first,{name:c.name}))+'<span class="badge">'+(c.items.length!==c.total?c.items.length+' of ':'')+plural(c.total,'instrument')+'</span></div>'
+        +'<div class="name" title="'+esc(c.name+' · '+(c.first.author||''))+'">'+esc(c.name)+'</div></div>').join('')
     +'<button type="button" class="tile add" id="tileAdd"><div class="art"><span>+</span></div><div class="name">Add library</div></button>';
-  $('#count').textContent='Show '+v.length+' librar'+(v.length===1?'y':'ies')+(v.length!==libs.length?' of '+libs.length:'');
+  const nl=cs.filter(c=>c.kind==='lib').length,ni=v.length;
+  $('#count').textContent='Show '+(nl?plural(nl,'library').replace('librarys','libraries')+' · ':'')+plural(ni,'instrument')+(v.length!==libs.length?' of '+libs.length:'');
+  renderSide();
   $('#emptyBox').hidden=libs.length>0;$('#grid').hidden=libs.length===0;$('#qClear').hidden=!query;
   $('#folderPath').textContent=folder?'Library folder: '+folder:'';
 }
+function renderSide(){
+  const p=$('#bside'),all=libs.filter(l=>l.collection&&l.collection===side).sort(byOrder);
+  if(!side||!all.length){p.hidden=true;p.innerHTML='';if(side&&!all.length)side=null;return;}
+  const shown=new Set(visible().map(l=>l.id)),items=all.filter(l=>shown.has(l.id)),f=all[0];
+  const banks=[];items.forEach(l=>{const b=l.bank||'';let g=banks.find(x=>x.name===b);if(!g){g={name:b,items:[]};banks.push(g);}g.items.push(l);});
+  p.hidden=false;
+  p.innerHTML='<div class="shead"><div><h2>'+esc(f.collectionName||side)+'</h2><div class="muted">'+esc(f.author||'')+(f.author?' · ':'')+plural(all.length,'instrument')+(items.length!==all.length?' · '+items.length+' match':'')+'</div></div>'
+    +'<button type="button" class="x" id="sideClose" aria-label="Close the instrument list">&times;</button></div>'
+    +(items.length?banks.map(g=>(g.name?'<h3>'+esc(g.name)+'</h3>':'')+'<ul>'+g.items.map(l=>'<li><button type="button" class="ins" data-id="'+esc(l.id)+'"'+(cur&&cur.id===l.id?' aria-current="true"':'')+(l.desc?' title="'+esc(l.desc)+'"':'')+'>'+esc(l.name)+'</button></li>').join('')+'</ul>').join('')
+      :'<p class="muted">No instrument here matches the search.</p>');
+}
+$('#bside').addEventListener('click',e=>{
+  if(e.target.closest('#sideClose')){const id=side;side=null;renderGrid();const t=document.querySelector('.tile[data-lib="'+CSS.escape(id)+'"]');if(t)t.focus();return;}
+  const b=e.target.closest('.ins[data-id]');if(b)open(b.dataset.id);
+});
+function toggleLib(id){side=side===id?null:id;renderGrid();if(side){const b=$('#bside .ins');if(b)b.focus();}}
 function renderBrowse(){renderChips();renderGrid();}
 $('#grid').addEventListener('mousemove',e=>{
   const a=e.target.closest('.art');if(!a||!a.firstElementChild||a.parentElement.classList.contains('add'))return;
@@ -45,14 +83,17 @@ $('#grid').addEventListener('mousemove',e=>{
 $('#grid').addEventListener('mouseout',e=>{const a=e.target.closest('.art');if(a&&a.firstElementChild)a.firstElementChild.style.transform='';});
 $('#grid').addEventListener('click',e=>{
   if(e.target.closest('#tileAdd')){addLibrary();return;}
+  const lt=e.target.closest('.tile[data-lib]');if(lt){toggleLib(lt.dataset.lib);return;}
   const t=e.target.closest('.tile[data-id]');if(t)open(t.dataset.id);
 });
-$('#grid').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){const t=e.target.closest('.tile[data-id]');if(t){e.preventDefault();open(t.dataset.id);}}});
+$('#grid').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){
+  const lt=e.target.closest('.tile[data-lib]');if(lt){e.preventDefault();toggleLib(lt.dataset.lib);return;}
+  const t=e.target.closest('.tile[data-id]');if(t){e.preventDefault();open(t.dataset.id);}}});
 $('#chips').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;const f=b.dataset.f;filters.has(f)?filters.delete(f):filters.add(f);renderBrowse();});
 document.querySelectorAll('[data-ft]').forEach(b=>b.addEventListener('click',()=>{filterTab=b.dataset.ft;renderChips();}));
 $('#q').addEventListener('input',e=>{query=e.target.value;renderGrid();});
 $('#qClear').addEventListener('click',()=>{$('#q').value='';query='';renderGrid();$('#q').focus();});
-function setLibs(d){libs=(d&&d.libs)||[];folder=(d&&d.folder)||'';imgV++;libs.sort((a,b)=>a.name.localeCompare(b.name));renderBrowse();if(cur){const n=libs.find(l=>l.id===cur.id);if(n){cur=n;}}}
+function setLibs(d){libs=(d&&d.libs)||[];folder=(d&&d.folder)||'';imgV++;libs.sort((a,b)=>(a.collectionName||a.name).localeCompare(b.collectionName||b.name)||byOrder(a,b));renderBrowse();if(cur){const n=libs.find(l=>l.id===cur.id);if(n){cur=n;}}}
 async function addLibrary(){const r=await call('addLibrary');if(r&&r.added)toast('Added '+r.added+' librar'+(r.added===1?'y':'ies'));}
 $('#btnAdd').onclick=addLibrary;$('#btnAdd2').onclick=addLibrary;
 $('#btnFolder').onclick=()=>call('openFolder');
@@ -64,15 +105,23 @@ function setMode(m){
   document.body.dataset.mode=m;const p=m==='play';
   if(!p)hideUI();
   $('#browse').hidden=p;$('#play').hidden=!p;$('#btnBack').hidden=!p;$('#voices').hidden=!p;$('#btnAdd').hidden=p;$('#btnFolder').hidden=p;if(!p)$('#btnAbout').hidden=true;
-  $('#curTitle').textContent=p&&cur?cur.name:'';
+  $('#curTitle').textContent=p&&cur?(cur.collection?(cur.collectionName||'')+' · ':'')+cur.name:'';
+  $('#insNav').hidden=!(p&&cur&&cur.collection&&libs.filter(l=>l.collection===cur.collection).length>1);
 }
+/* the previous / next instrument of the same library, straight from play mode */
+async function stepInstrument(d){
+  if(!cur||!cur.collection)return;const sib=libs.filter(l=>l.collection===cur.collection).sort(byOrder);
+  const i=sib.findIndex(l=>l.id===cur.id),n=sib[(i+d+sib.length)%sib.length];if(!n||n.id===cur.id)return;
+  call('scopeOn',false);releaseAll();hideUI();await open(n.id);
+}
+$('#insPrev').onclick=()=>stepInstrument(-1);$('#insNext').onclick=()=>stepInstrument(1);
 async function open(id){
   const L=libs.find(x=>x.id===id);if(!L)return;
   cur=L;renderDetail();setMode('play');$('#detail').classList.add('loading');
   const r=await call('loadLibrary',id);
   if(r&&r.error){toast('Could not load '+L.name+': '+r.error);}
 }
-async function leave(){call('scopeOn',false);releaseAll();hideUI();await call('unload');cur=null;st={};setMode('browse');}
+async function leave(){call('scopeOn',false);releaseAll();hideUI();await call('unload');if(cur&&cur.collection)side=cur.collection;cur=null;st={};setMode('browse');renderGrid();}
 $('#btnBack').onclick=leave;
 addEventListener('keydown',e=>{if(e.key==='Escape'&&!e.defaultPrevented&&!ctxOpen&&document.body.dataset.mode==='play')leave();});
 function renderDetail(){

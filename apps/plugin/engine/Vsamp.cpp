@@ -101,7 +101,7 @@ bool VsampFile::readRaw(uint64_t off, uint64_t len, uint8_t* out) const {
     std::fclose(f); return ok;
 }
 #else
-bool VsampFile::openFileLazy(const std::string&, std::string& error) { error = "No file access in this build."; return false; }
+bool VsampFile::openFileLazy(const std::string&, std::string& error, uint64_t, uint64_t) { error = "No file access in this build."; return false; }
 bool VsampFile::readRaw(uint64_t off, uint64_t len, uint8_t* out) const { if (base_ + off + len > bytes_.size()) return false; memcpy(out, &bytes_[base_ + off], (size_t) len); return true; }
 #endif
 

@@ -1,7 +1,14 @@
 /* A stand-in for the plugin, for testing the window in a normal browser. It reads real .vsamp files with the JS core. */
-import {readVsamp} from '../../../../packages/core/src/index.js';
+import {readVsamp,readVslib} from '../../../../packages/core/src/index.js';
 const calls=[];const listeners=new Map();let state={volume:.8,status:{text:'No library loaded'}},libs=[],imgs={};
 const emit=(ev,data)=>(listeners.get(ev)||[]).forEach(fn=>fn(data));
+/* a .vslib: one entry per instrument, like the plugin lists them */
+async function loadVslib(u){
+  const bytes=new Uint8Array(await (await fetch(new URL(u,import.meta.url))).arrayBuffer()),r=await readVslib(bytes),L=r.manifest.lib;
+  r.instruments.forEach((ins,order)=>{const m=readVsamp(ins.bytes).manifest;
+    libs.push({id:L.id+'/'+ins.id,name:ins.name,author:L.author,version:L.version,category:L.category,tags:L.tags,desc:ins.desc||L.desc,licence:L.licence,changelog:L.changelog,accent:L.accent,
+      hasTile:false,hasWide:false,size:ins.bytes.length,collection:L.id,collectionName:L.name,bank:ins.bank,instrument:ins.id,order,file:'test.vslib',_m:m});});
+}
 async function loadLibs(urls){
   for(const u of urls){
     const bytes=new Uint8Array(await (await fetch(new URL(u,import.meta.url))).arrayBuffer()),{manifest:m,blob}=readVsamp(bytes),L=m.lib;
@@ -39,4 +46,5 @@ window.__mock={calls,emit,libs,state};
 window.__visuImageUrl=(id,k)=>imgs[id+'/'+k]||'';
 window.__visuAssetUrl=(kind,key)=>'about:blank#'+kind+'/'+key;
 await loadLibs(['../../../../examples/rompler-demo.vsamp','../../../../examples/rompler-demo.vsamp','../../../../examples/rompler-demo.vsamp']);
+await loadVslib('../../tests/golden/lib.vslib');
 await import('../ui.js');

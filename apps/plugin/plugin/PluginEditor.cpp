@@ -84,7 +84,7 @@ juce::WebBrowserComponent::Options VisuEditor::makeOptions()
         .withNativeFunction("openCommunity", [reply](const juce::Array<juce::var>&, auto done) { juce::URL(VisuProcessor::communityUrl()).launchInDefaultBrowser(); reply(done, juce::var(true)); })   // only this one fixed address
         .withNativeFunction("openLogs", [reply](const juce::Array<juce::var>&, auto done) { VisuProcessor::logFolder().createDirectory(); VisuProcessor::logFolder().startAsProcess(); reply(done, juce::var(true)); })
         .withNativeFunction("addLibrary", [this](const juce::Array<juce::var>&, juce::WebBrowserComponent::NativeFunctionCompletion done) {
-            chooser_ = std::make_unique<juce::FileChooser>("Add libraries", juce::File(), "*.vsamp;*.zip");
+            chooser_ = std::make_unique<juce::FileChooser>("Add libraries and instruments", juce::File(), "*.vslib;*.vsins;*.vsamp;*.zip");
             chooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::canSelectMultipleItems,
                                   [this, done](const juce::FileChooser& fc) {
                                       const int n = proc_.addLibraryFiles(fc.getResults());
