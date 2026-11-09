@@ -41,6 +41,8 @@ function insSwitch(id){
   insStash();INS.cur=id;insBring(t);insUI();
   flash('Now editing "'+t.name+'"');
 }
+/* switch without the message and menu refresh (the library export walks through every instrument) */
+function insVisit(id){const t=INS.list.find(i=>i.id===id);if(!t||id===INS.cur)return;insStash();INS.cur=id;insBring(t);insUI();}
 function insNewId(){let id;do{id='ins'+(++INS.n);}while(INS.list.some(i=>i.id===id));return id;}
 function insAdd(){
   insStash();const lib=S.lib,canvas=Object.assign({},S.canvas);

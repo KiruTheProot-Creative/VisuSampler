@@ -1,7 +1,7 @@
 import {
   resample,stretchCh,stretchAll,granularRender,wavetableRender,uniVoices,smDefaults,smOf,hash01,hann,MODES as CORE_MODES,
   detectTransients as coreDetectTransients,zoneData as coreZoneData,zoneInterp as coreZoneInterp,zoneRatio as coreZoneRatio,
-  crc32,encodePCM,decodePCM,Pack,writeVsamp,vsampParts,readVsamp,verifyVsamp,fmtBytes,bytesPer,
+  crc32,encodePCM,decodePCM,Pack,writeVsamp,vsampParts,writeVslib,readVslib,readVsamp,verifyVsamp,fmtBytes,bytesPer,
   estimate as coreEstimate,chooseStep,zoneBakeReason as coreZoneBakeReason,buildExportSet as coreBuildExportSet
 } from '../../packages/core/src/index.js';
 (function(){
@@ -1253,10 +1253,10 @@ function glyphCount(font){
 function textProps(el){
   const fonts=BUILTIN_FONTS.concat(Object.keys(S.fonts));
   const emb=S.fonts[el.font];
-  const msg={ok:['ok','Embedding allowed. This font will travel inside the .vsamp.'],restricted:['bad','This font forbids embedding, so it will not be packed into the .vsamp.'],nosubset:['warn','Embeddable, but the font asks not to be subset, so the whole file is stored.'],unknown:['warn','Could not read the licence flag (WOFF is compressed). Check the font licence before shipping.']};
+  const msg={ok:['ok','Embedding allowed. This font will travel inside the instrument file.'],restricted:['bad','This font forbids embedding, so it will not be packed into the instrument file.'],nosubset:['warn','Embeddable, but the font asks not to be subset, so the whole file is stored.'],unknown:['warn','Could not read the licence flag (WOFF is compressed). Check the font licence before shipping.']};
   let fi;
   if(emb){const m=msg[emb.lic];fi='<span class="chip '+m[0]+'">'+m[1]+'</span><p class="hint">'+(emb.size/1024).toFixed(0)+' KB source · '+glyphCount(el.font)+' glyphs used</p>';}
-  else fi='<p class="hint">Preview font. On export only the glyphs you use are embedded in the .vsamp.</p>';
+  else fi='<p class="hint">Preview font. On export only the glyphs you use are embedded in the instrument file.</p>';
   let h=sec('Content',H.area('Text','text',el.text)+insRow());
   h+=sec('Font',H.sel('Font','font',el.font,fonts.map(f=>[f,f+(S.fonts[f]?' (embedded)':'')]),true)
     +'<button type="button" class="btn" data-act="font">Embed a font file…</button>'+fi
@@ -5734,8 +5734,10 @@ function libraryFeatures(set){
   Object.values(S.fx.graphs).forEach(g=>g.nodes.forEach(n=>{if(FXT[n.type]&&FXT[n.type].kind!=='io')add('fx:'+n.type);}));
   return [...f].sort();
 }
-async function buildVsamp(progress){
-  const t0=performance.now(),L=S.lib,o=L.export,say=progress||(()=>{});
+/* opt.instrument: {id,name,desc} when the project is a library: the file gets the instrument's own name and id
+   (library id + instrument id). opt.onlyUsed: pack only the images and fonts this instrument uses. */
+async function buildVsamp(progress,opt){
+  opt=opt||{};const t0=performance.now(),L=S.lib,o=L.export,say=progress||(()=>{});
   say('Planning…');await tick();
   const set=await buildExportSet(o,say);
   const pack=new Pack(),warn=[];
@@ -5756,11 +5758,12 @@ async function buildVsamp(progress){
   const layers={};
   for(const k of ['bgImg','logoImg','iconImg']){const a=banner[k]&&S.assets[banner[k]];if(a){const d=dataUrlBytes(fullUrl(banner[k]));if(d){layers[k]={mime:d.mime,name:a.name,data:await pack.add(d.bytes,{})};}}}
   /* project images */
-  const assets={};
-  for(const id of Object.keys(S.assets)){if(id.indexOf('tex_')===0)continue;const d=dataUrlBytes(fullUrl(id));if(d)assets[id]={name:S.assets[id].name,w:S.assets[id].w,h:S.assets[id].h,mime:d.mime,data:await pack.add(d.bytes,{})};}
+  const assets={},usedIn=opt.onlyUsed?JSON.stringify(snapshot()):null;
+  for(const id of Object.keys(S.assets)){if(id.indexOf('tex_')===0)continue;if(usedIn&&usedIn.indexOf('"'+id+'"')<0&&!Object.values(L.banner||{}).includes(id))continue;const d=dataUrlBytes(fullUrl(id));if(d)assets[id]={name:S.assets[id].name,w:S.assets[id].w,h:S.assets[id].h,mime:d.mime,data:await pack.add(d.bytes,{})};}
   const fonts={};
   for(const fam of Object.keys(S.fonts)){
     const f=S.fonts[fam];
+    if(usedIn&&usedIn.indexOf(fam)<0)continue;   /* a library's instrument: only the fonts it uses */
     if(f.lic==='restricted'){warn.push('Font "'+fam+'" forbids embedding and was left out.');continue;}
     if(!f.buf){warn.push('Font "'+fam+'" could not be packed.');continue;}
     fonts[fam]={lic:f.lic,data:await pack.add(new Uint8Array(f.buf),{compress:true})};
@@ -5772,6 +5775,7 @@ async function buildVsamp(progress){
   const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0,q.unit==='Hz'?1:0];});});
   const est=estimate(o),dropped=set.stats.unusedSkipped;
   const lib={id:L.id,name:L.name,author:L.author,version:L.version,desc:L.desc,tags:L.tags,category:L.category,web:L.web,licence:L.licence,changelog:L.changelog,accent:L.accent};
+  if(opt.instrument){lib.id=L.id+'-'+opt.instrument.id;lib.name=opt.instrument.name;if(opt.instrument.desc)lib.desc=opt.instrument.desc;lib.library=L.name;}
   delete banner.bgImg;delete banner.logoImg;delete banner.iconImg;
   const manifest={format:'vsamp',formatVersion:1,created:new Date().toISOString(),app:'VisuMaker prototype 4',lib,
     banner:{settings:banner,images:bi,layers},
@@ -5781,8 +5785,28 @@ async function buildVsamp(progress){
   say('Writing file…');await tick();
   const bytes=writeVsamp(manifest,pack);
   const report={bytes:bytes.length,ms:Math.round(performance.now()-t0),samples:smeta.length,zones:set.zones.length,baked:set.stats.baked,chunks:set.stats.chunks,step:set.stats.step,
-    zonesBaked:set.stats.zonesBaked,leftLive:set.stats.skipped,unusedSkipped:dropped,sourceBytes:est.before,warn,name:L.name};
+    zonesBaked:set.stats.zonesBaked,leftLive:set.stats.skipped,unusedSkipped:dropped,sourceBytes:est.before,warn,name:lib.name,kind:'vsins'};
   return{bytes,report,manifest};
+}
+/* The whole project as a library (.vslib): every instrument is built like a single export and stored inside. */
+async function buildLibrary(progress){
+  const say=progress||(()=>{}),t0=performance.now(),L=S.lib,start=INS.cur,banks=[],warn=[];let samples=0,zones=0;
+  try{
+    for(let k=0;k<INS.list.length;k++){
+      const i=INS.list[k];
+      if(i.id!==INS.cur)insVisit(i.id);
+      const r=await buildVsamp(t=>say(i.name+' ('+(k+1)+' / '+INS.list.length+'): '+t),{instrument:{id:i.id,name:i.name,desc:i.desc},onlyUsed:true});
+      samples+=r.report.samples;zones+=r.report.zones;r.report.warn.forEach(w=>warn.push(i.name+': '+w));
+      let b=banks.find(x=>x.name===i.bank);if(!b){b={name:i.bank,instruments:[]};banks.push(b);}
+      b.instruments.push({id:i.id,name:i.name,desc:i.desc,bytes:r.bytes});
+    }
+  }finally{if(INS.cur!==start)insVisit(start);}
+  say('Banner and writing the library…');await tick();
+  const images={wide:await bannerBlob('wide',1200,400),tile:await bannerBlob('tile',512,512),icon:await bannerBlob('icon',128,128)};
+  const lib={id:L.id,name:L.name,author:L.author,version:L.version,desc:L.desc,tags:L.tags,category:L.category,web:L.web,licence:L.licence,changelog:L.changelog,accent:L.accent};
+  const bytes=await writeVslib({lib,images,banks});
+  const report={bytes:bytes.length,ms:Math.round(performance.now()-t0),samples,zones,instruments:INS.list.length,banks:banks.length,warn,name:L.name,kind:'vslib',chunks:0,unusedSkipped:0,leftLive:0};
+  return{bytes,report};
 }
 const parseVsamp=bytes=>verifyVsamp(bytes);
 let LAST_DL=null;
@@ -5878,19 +5902,22 @@ function exRightHTML(){
     +xchk('Compress the audio','lib.export.compress',o.compress)+xchk('Include samples that are not mapped','lib.export.includeUnused',o.includeUnused));
   h+=sec('Size',exSizeHTML());
   h+=sec('Checks','<ul class="checks">'+exChecks().map(c=>'<li class="'+c[0]+'">'+esc(c[1])+'</li>').join('')+'</ul>');
-  h+='<div class="buildbar"><button type="button" class="btn primary" data-xa="build"'+(b.busy?' disabled':'')+'>'+(b.busy?'Building…':'Build .vsamp')+'</button>'
+  const multi=INS.list.length>1;
+  h+='<div class="buildbar"><button type="button" class="btn primary" data-xa="build"'+(b.busy?' disabled':'')+' title="'+(multi?'Only the instrument you are editing, as its own file':'The instrument file VisuPlayer plays')+'">'+(b.busy?'Building…':multi?'Build this instrument (.vsins)':'Build .vsins')+'</button>'
+    +(multi?'<button type="button" class="btn primary" data-xa="buildlib"'+(b.busy?' disabled':'')+' title="All '+INS.list.length+' instruments in one library file, by bank">Build library (.vslib)</button>':'')
     +'<button type="button" class="btn" data-xa="verify"'+(b.last&&!b.busy?'':' disabled')+'>Verify</button>'
     +(window.visuDesktop?'<button type="button" class="btn primary" data-xa="tovst"'+(b.last&&!b.busy?'':' disabled')+'>Send to VisuPlayer</button>'
       :'<button type="button" class="btn" data-xa="download"'+(b.last&&!b.busy?'':' disabled')+'>Download</button>')+'</div>'
-    +(window.visuDesktop?'<p class="hint keep">Send to VisuPlayer saves the library into Documents\\VisuSampler\\Libraries, where the VST finds it. <button type="button" class="btn ghost" data-xa="folder">Open folder</button></p>':'');
+    +(window.visuDesktop?'<p class="hint keep">Send to VisuPlayer saves the file into Documents\\VisuSampler\\Libraries, where the VST finds it. <button type="button" class="btn ghost" data-xa="folder">Open folder</button></p>':'')
+    +(multi?'':'<p class="hint">To make a library of several instruments (.vslib), add instruments with the Instrument button in the top bar.</p>');
   h+='<div class="buildlog" id="exLog" role="status">'+(b.progress?esc(b.progress):'')+'</div>'+exReportHTML();
   return h+'</div>';
 }
 function exReportHTML(){
   const r=S.build.report;if(!r)return'';
-  let h='<div class="report"><b>'+esc(r.name)+'.vsamp</b> · '+fmtBytes(r.bytes)+' · built in '+(r.ms/1000).toFixed(1)+' s<br>'+r.samples+' samples, '+r.zones+' zones'+(r.chunks?', '+r.chunks+' baked (every '+r.step+' keys)':'')+(r.unusedSkipped?', '+r.unusedSkipped+' unused left out':'')+(r.leftLive?', '+r.leftLive+' zones left live':'')+'.';
+  let h='<div class="report"><b>'+esc(r.name)+'.'+(r.kind||'vsins')+'</b> · '+fmtBytes(r.bytes)+' · built in '+(r.ms/1000).toFixed(1)+' s<br>'+(r.kind==='vslib'?r.instruments+' instruments in '+r.banks+' bank'+(r.banks===1?'':'s')+', ':'')+r.samples+' samples, '+r.zones+' zones'+(r.chunks?', '+r.chunks+' baked (every '+r.step+' keys)':'')+(r.unusedSkipped?', '+r.unusedSkipped+' unused left out':'')+(r.leftLive?', '+r.leftLive+' zones left live':'')+'.';
   (r.warn||[]).forEach(w=>{h+='<br><span class="chip warn">'+esc(w)+'</span>';});
-  if(S.build.verify)h+='<br>'+(S.build.verify.ok?'<span class="chip ok">Verified: '+S.build.verify.info.blobs+' blocks, all checksums match, audio decodes.</span>':'<span class="chip bad">'+esc(S.build.verify.errors.join(' '))+'</span>');
+  if(S.build.verify)h+='<br>'+(S.build.verify.ok?'<span class="chip ok">Verified: '+(S.build.verify.instruments?S.build.verify.instruments+' instruments, ':'')+S.build.verify.info.blobs+' blocks, all checksums match, audio decodes.</span>':'<span class="chip bad">'+esc(S.build.verify.errors.join(' '))+'</span>');
   return h+'</div>';
 }
 function exRender(){
@@ -5926,27 +5953,37 @@ $('#leftX').addEventListener('click',e=>{
   if(b.dataset.xa==='pick')pickImage(id=>{S.lib.banner[k]=id;IMGC.delete(id);const sc=$('#leftX').scrollTop;$('#leftX').innerHTML=exLeftHTML();$('#leftX').scrollTop=sc;bannerRedraw();});
   else if(b.dataset.xa==='clear'){S.lib.banner[k]=null;const sc=$('#leftX').scrollTop;$('#leftX').innerHTML=exLeftHTML();$('#leftX').scrollTop=sc;bannerRedraw();}
 });
-async function exBuild(){
+/* a library: check every instrument inside */
+async function verifyBuilt(r){
+  if(!r||r.report.kind!=='vslib')return parseVsamp(r.bytes);
+  const lib=await readVslib(r.bytes),errors=[];let blobs=0;
+  for(const i of lib.instruments){const v=await parseVsamp(i.bytes);blobs+=v.info&&v.info.blobs||0;if(!v.ok)errors.push(i.name+': '+v.errors.join(' '));}
+  return{ok:!errors.length,errors,info:{blobs},instruments:lib.instruments.length};
+}
+async function exBuild(kind){
   if(S.build.busy)return;S.build.busy=true;S.build.verify=null;exRightRefresh();
   const say=t=>{S.build.progress=t;const l=$('#exLog');if(l)l.textContent=t;};
   try{
     ensureAudio();
-    const r=await buildVsamp(say);S.build.last=r;S.build.report=r.report;S.build.progress='Done.';
-    const v=await parseVsamp(r.bytes);S.build.verify=v;
+    const c=insCur(),multi=INS.list.length>1;
+    const r=kind==='vslib'?await buildLibrary(say):await buildVsamp(say,multi?{instrument:{id:c.id,name:c.name,desc:c.desc}}:{});
+    S.build.last=r;S.build.report=r.report;S.build.progress='Done.';
+    const v=await verifyBuilt(r);S.build.verify=v;
     flash(v.ok?'Built and verified: '+fmtBytes(r.bytes.length):'Built, but the check found problems');
   }catch(err){S.build.progress='Build failed: '+(err&&err.message||err);console.error(err);}
   S.build.busy=false;exRightRefresh();
 }
 $('#rightX').addEventListener('click',async e=>{
   const b=e.target.closest('[data-xa]');if(!b)return;const a=b.dataset.xa;
-  if(a==='build')exBuild();
-  else if(a==='verify'&&S.build.last){S.build.verify=await parseVsamp(S.build.last.bytes);exRightRefresh();}
+  if(a==='build')exBuild('vsins');
+  else if(a==='buildlib')exBuild('vslib');
+  else if(a==='verify'&&S.build.last){S.build.verify=await verifyBuilt(S.build.last);exRightRefresh();}
   else if(a==='tovst'&&S.build.last&&window.visuDesktop){
-    try{const file=await window.visuDesktop.saveLibrary(S.lib.name.trim()||'library',S.build.last.bytes);flash('Sent to VisuPlayer: '+file+'. Open the library browser in the VST to play it.');}
+    try{const r=S.build.report,file=await window.visuDesktop.saveLibrary((r.name||'').trim()||'library',S.build.last.bytes,r.kind||'vsins');flash('Sent to VisuPlayer: '+file+'. Open the library browser in the VST to play it.');}
     catch(err){flash('Could not save: '+(err&&err.message||err));}
   }
   else if(a==='folder'&&window.visuDesktop){window.visuDesktop.openLibraryFolder();}
-  else if(a==='download'&&S.build.last){downloadBytes(S.build.last.bytes,(S.lib.name.trim().replace(/[^\w\-. ]+/g,'')||'library')+'.vsamp');}
+  else if(a==='download'&&S.build.last){const r=S.build.report;downloadBytes(S.build.last.bytes,((r.name||'').trim().replace(/[^\w\-. ]+/g,'')||'library')+'.'+(r.kind||'vsins'));}
 });
 
 /* ---------- save and reopen a whole project (.vmproj) ----------
@@ -6080,6 +6117,8 @@ function insSwitch(id){
   insStash();INS.cur=id;insBring(t);insUI();
   flash('Now editing "'+t.name+'"');
 }
+/* switch without the message and menu refresh (the library export walks through every instrument) */
+function insVisit(id){const t=INS.list.find(i=>i.id===id);if(!t||id===INS.cur)return;insStash();INS.cur=id;insBring(t);insUI();}
 function insNewId(){let id;do{id='ins'+(++INS.n);}while(INS.list.some(i=>i.id===id));return id;}
 function insAdd(){
   insStash();const lib=S.lib,canvas=Object.assign({},S.canvas);
@@ -6476,6 +6515,6 @@ syncToolbar(); layout(); mountAll(); renderLayers(); renderRight();
 new ResizeObserver(()=>{if(S.view==='design')layout();}).observe(vp);
 setView('sound');
 insInit();markSaved();autoStart();
-if(window.__VSTEST) window.__vs={S,buildAsset:(a,b,c,d)=>buildAsset(a,b,c,d),nid:p=>nid(p),mk:(t,o)=>mk(t,o),mkTag:(a,b,c)=>mkTag(a,b,c),loadPreset:k=>loadPreset(k),setPatchMode:(p,m)=>setPatchMode(p,m),playOf:()=>playOf(),gcfg:g=>gcfg(g),addBuffer:(n,c,r)=>addBuffer(n,c,r),addZoneFor:(s,lo,hi,o)=>addZoneFor(s,lo,hi,o),spreadRoots:(z,a,b)=>spreadRoots(z,a,b),setStep:(t,i)=>setStep(t,i),listsInBank:b=>listsInBank(b),curList:()=>curList(),snShow:()=>snShow(),HIST,deleteSamples:ids=>deleteSamples(ids),smOp:(o,a)=>smOp(o,a),ENG,engineBytes:()=>engineBytes(),setTag:(t,v)=>setTag(t,v),rerender:()=>{rerenderAll();placeSel();},ensureAudio,renderZone,touchMap,noteOn,noteOff,addBuffer,autoMapSamples,zoneConflicts,AU,SV,smOf,zoneData,uniVoices,BUF,sampleById,demoExtras,mapSlices,smOp,mkZone,detectTransients,smSample,previewOn,previewOff,PV,estimate,buildVsamp,parseVsamp,exRender,exBuild,bannerRedraw,crc32,fmtBytes,saveProject,openProject,restore,snapshot,FXT,FXA,graphOf,fxNode,mkCable,fxRender,sampBus,sampPanic,mapLeftRender,soundEnter,ENG,expand:s=>expand(s),curListB:()=>curListB(),patchToken:(s)=>expand(s),curPatch:B=>curPatch(B),INS,insSwitch,insAdd,insDuplicate,insDelete,insMove,insUI,COMMUNITY_URL,openCommunity,WH,wheelShow,wheelSend,AUTO,aboutOpen,aboutInfo,openFromExplorer,autosaveNow,autoTick,autoCheckRestore,autoStart,projDirty,fireAct:(name,verb)=>{const t=tagByName(name);if(verb==="next")stepBy(t,1);else stepBy(t,-1);}};
+if(window.__VSTEST) window.__vs={S,buildAsset:(a,b,c,d)=>buildAsset(a,b,c,d),nid:p=>nid(p),mk:(t,o)=>mk(t,o),mkTag:(a,b,c)=>mkTag(a,b,c),loadPreset:k=>loadPreset(k),setPatchMode:(p,m)=>setPatchMode(p,m),playOf:()=>playOf(),gcfg:g=>gcfg(g),addBuffer:(n,c,r)=>addBuffer(n,c,r),addZoneFor:(s,lo,hi,o)=>addZoneFor(s,lo,hi,o),spreadRoots:(z,a,b)=>spreadRoots(z,a,b),setStep:(t,i)=>setStep(t,i),listsInBank:b=>listsInBank(b),curList:()=>curList(),snShow:()=>snShow(),HIST,deleteSamples:ids=>deleteSamples(ids),smOp:(o,a)=>smOp(o,a),ENG,engineBytes:()=>engineBytes(),setTag:(t,v)=>setTag(t,v),rerender:()=>{rerenderAll();placeSel();},ensureAudio,renderZone,touchMap,noteOn,noteOff,addBuffer,autoMapSamples,zoneConflicts,AU,SV,smOf,zoneData,uniVoices,BUF,sampleById,demoExtras,mapSlices,smOp,mkZone,detectTransients,smSample,previewOn,previewOff,PV,estimate,buildVsamp,parseVsamp,exRender,exBuild,bannerRedraw,crc32,fmtBytes,saveProject,openProject,restore,snapshot,FXT,FXA,graphOf,fxNode,mkCable,fxRender,sampBus,sampPanic,mapLeftRender,soundEnter,ENG,expand:s=>expand(s),curListB:()=>curListB(),patchToken:(s)=>expand(s),curPatch:B=>curPatch(B),get LAST_DL(){return LAST_DL;},INS,insSwitch,insAdd,insDuplicate,insDelete,insMove,insUI,COMMUNITY_URL,openCommunity,WH,wheelShow,wheelSend,AUTO,aboutOpen,aboutInfo,openFromExplorer,autosaveNow,autoTick,autoCheckRestore,autoStart,projDirty,fireAct:(name,verb)=>{const t=tagByName(name);if(verb==="next")stepBy(t,1);else stepBy(t,-1);}};
 
 })();

@@ -2,7 +2,7 @@
 // and native audio (VisuMakerAudio plays the project on the sound card with the VST's engine).
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('visuDesktop',{
-  saveLibrary:(name,bytes)=>ipcRenderer.invoke('visu:saveLibrary',name,bytes),
+  saveLibrary:(name,bytes,ext)=>ipcRenderer.invoke('visu:saveLibrary',name,bytes,ext),
   libraryFolder:()=>ipcRenderer.invoke('visu:libraryFolder'),
   openLibraryFolder:()=>ipcRenderer.invoke('visu:openLibraryFolder'),
   saveProject:(name,bytes,file,saveAs)=>ipcRenderer.invoke('visu:saveProject',name,bytes,file,saveAs),

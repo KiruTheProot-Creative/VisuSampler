@@ -78,19 +78,22 @@ function exRightHTML(){
     +xchk('Compress the audio','lib.export.compress',o.compress)+xchk('Include samples that are not mapped','lib.export.includeUnused',o.includeUnused));
   h+=sec('Size',exSizeHTML());
   h+=sec('Checks','<ul class="checks">'+exChecks().map(c=>'<li class="'+c[0]+'">'+esc(c[1])+'</li>').join('')+'</ul>');
-  h+='<div class="buildbar"><button type="button" class="btn primary" data-xa="build"'+(b.busy?' disabled':'')+'>'+(b.busy?'Building…':'Build .vsamp')+'</button>'
+  const multi=INS.list.length>1;
+  h+='<div class="buildbar"><button type="button" class="btn primary" data-xa="build"'+(b.busy?' disabled':'')+' title="'+(multi?'Only the instrument you are editing, as its own file':'The instrument file VisuPlayer plays')+'">'+(b.busy?'Building…':multi?'Build this instrument (.vsins)':'Build .vsins')+'</button>'
+    +(multi?'<button type="button" class="btn primary" data-xa="buildlib"'+(b.busy?' disabled':'')+' title="All '+INS.list.length+' instruments in one library file, by bank">Build library (.vslib)</button>':'')
     +'<button type="button" class="btn" data-xa="verify"'+(b.last&&!b.busy?'':' disabled')+'>Verify</button>'
     +(window.visuDesktop?'<button type="button" class="btn primary" data-xa="tovst"'+(b.last&&!b.busy?'':' disabled')+'>Send to VisuPlayer</button>'
       :'<button type="button" class="btn" data-xa="download"'+(b.last&&!b.busy?'':' disabled')+'>Download</button>')+'</div>'
-    +(window.visuDesktop?'<p class="hint keep">Send to VisuPlayer saves the library into Documents\\VisuSampler\\Libraries, where the VST finds it. <button type="button" class="btn ghost" data-xa="folder">Open folder</button></p>':'');
+    +(window.visuDesktop?'<p class="hint keep">Send to VisuPlayer saves the file into Documents\\VisuSampler\\Libraries, where the VST finds it. <button type="button" class="btn ghost" data-xa="folder">Open folder</button></p>':'')
+    +(multi?'':'<p class="hint">To make a library of several instruments (.vslib), add instruments with the Instrument button in the top bar.</p>');
   h+='<div class="buildlog" id="exLog" role="status">'+(b.progress?esc(b.progress):'')+'</div>'+exReportHTML();
   return h+'</div>';
 }
 function exReportHTML(){
   const r=S.build.report;if(!r)return'';
-  let h='<div class="report"><b>'+esc(r.name)+'.vsamp</b> · '+fmtBytes(r.bytes)+' · built in '+(r.ms/1000).toFixed(1)+' s<br>'+r.samples+' samples, '+r.zones+' zones'+(r.chunks?', '+r.chunks+' baked (every '+r.step+' keys)':'')+(r.unusedSkipped?', '+r.unusedSkipped+' unused left out':'')+(r.leftLive?', '+r.leftLive+' zones left live':'')+'.';
+  let h='<div class="report"><b>'+esc(r.name)+'.'+(r.kind||'vsins')+'</b> · '+fmtBytes(r.bytes)+' · built in '+(r.ms/1000).toFixed(1)+' s<br>'+(r.kind==='vslib'?r.instruments+' instruments in '+r.banks+' bank'+(r.banks===1?'':'s')+', ':'')+r.samples+' samples, '+r.zones+' zones'+(r.chunks?', '+r.chunks+' baked (every '+r.step+' keys)':'')+(r.unusedSkipped?', '+r.unusedSkipped+' unused left out':'')+(r.leftLive?', '+r.leftLive+' zones left live':'')+'.';
   (r.warn||[]).forEach(w=>{h+='<br><span class="chip warn">'+esc(w)+'</span>';});
-  if(S.build.verify)h+='<br>'+(S.build.verify.ok?'<span class="chip ok">Verified: '+S.build.verify.info.blobs+' blocks, all checksums match, audio decodes.</span>':'<span class="chip bad">'+esc(S.build.verify.errors.join(' '))+'</span>');
+  if(S.build.verify)h+='<br>'+(S.build.verify.ok?'<span class="chip ok">Verified: '+(S.build.verify.instruments?S.build.verify.instruments+' instruments, ':'')+S.build.verify.info.blobs+' blocks, all checksums match, audio decodes.</span>':'<span class="chip bad">'+esc(S.build.verify.errors.join(' '))+'</span>');
   return h+'</div>';
 }
 function exRender(){
@@ -126,25 +129,35 @@ $('#leftX').addEventListener('click',e=>{
   if(b.dataset.xa==='pick')pickImage(id=>{S.lib.banner[k]=id;IMGC.delete(id);const sc=$('#leftX').scrollTop;$('#leftX').innerHTML=exLeftHTML();$('#leftX').scrollTop=sc;bannerRedraw();});
   else if(b.dataset.xa==='clear'){S.lib.banner[k]=null;const sc=$('#leftX').scrollTop;$('#leftX').innerHTML=exLeftHTML();$('#leftX').scrollTop=sc;bannerRedraw();}
 });
-async function exBuild(){
+/* a library: check every instrument inside */
+async function verifyBuilt(r){
+  if(!r||r.report.kind!=='vslib')return parseVsamp(r.bytes);
+  const lib=await readVslib(r.bytes),errors=[];let blobs=0;
+  for(const i of lib.instruments){const v=await parseVsamp(i.bytes);blobs+=v.info&&v.info.blobs||0;if(!v.ok)errors.push(i.name+': '+v.errors.join(' '));}
+  return{ok:!errors.length,errors,info:{blobs},instruments:lib.instruments.length};
+}
+async function exBuild(kind){
   if(S.build.busy)return;S.build.busy=true;S.build.verify=null;exRightRefresh();
   const say=t=>{S.build.progress=t;const l=$('#exLog');if(l)l.textContent=t;};
   try{
     ensureAudio();
-    const r=await buildVsamp(say);S.build.last=r;S.build.report=r.report;S.build.progress='Done.';
-    const v=await parseVsamp(r.bytes);S.build.verify=v;
+    const c=insCur(),multi=INS.list.length>1;
+    const r=kind==='vslib'?await buildLibrary(say):await buildVsamp(say,multi?{instrument:{id:c.id,name:c.name,desc:c.desc}}:{});
+    S.build.last=r;S.build.report=r.report;S.build.progress='Done.';
+    const v=await verifyBuilt(r);S.build.verify=v;
     flash(v.ok?'Built and verified: '+fmtBytes(r.bytes.length):'Built, but the check found problems');
   }catch(err){S.build.progress='Build failed: '+(err&&err.message||err);console.error(err);}
   S.build.busy=false;exRightRefresh();
 }
 $('#rightX').addEventListener('click',async e=>{
   const b=e.target.closest('[data-xa]');if(!b)return;const a=b.dataset.xa;
-  if(a==='build')exBuild();
-  else if(a==='verify'&&S.build.last){S.build.verify=await parseVsamp(S.build.last.bytes);exRightRefresh();}
+  if(a==='build')exBuild('vsins');
+  else if(a==='buildlib')exBuild('vslib');
+  else if(a==='verify'&&S.build.last){S.build.verify=await verifyBuilt(S.build.last);exRightRefresh();}
   else if(a==='tovst'&&S.build.last&&window.visuDesktop){
-    try{const file=await window.visuDesktop.saveLibrary(S.lib.name.trim()||'library',S.build.last.bytes);flash('Sent to VisuPlayer: '+file+'. Open the library browser in the VST to play it.');}
+    try{const r=S.build.report,file=await window.visuDesktop.saveLibrary((r.name||'').trim()||'library',S.build.last.bytes,r.kind||'vsins');flash('Sent to VisuPlayer: '+file+'. Open the library browser in the VST to play it.');}
     catch(err){flash('Could not save: '+(err&&err.message||err));}
   }
   else if(a==='folder'&&window.visuDesktop){window.visuDesktop.openLibraryFolder();}
-  else if(a==='download'&&S.build.last){downloadBytes(S.build.last.bytes,(S.lib.name.trim().replace(/[^\w\-. ]+/g,'')||'library')+'.vsamp');}
+  else if(a==='download'&&S.build.last){const r=S.build.report;downloadBytes(S.build.last.bytes,((r.name||'').trim().replace(/[^\w\-. ]+/g,'')||'library')+'.'+(r.kind||'vsins'));}
 });

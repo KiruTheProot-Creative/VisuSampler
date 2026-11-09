@@ -21,8 +21,10 @@ function libraryFeatures(set){
   Object.values(S.fx.graphs).forEach(g=>g.nodes.forEach(n=>{if(FXT[n.type]&&FXT[n.type].kind!=='io')add('fx:'+n.type);}));
   return [...f].sort();
 }
-async function buildVsamp(progress){
-  const t0=performance.now(),L=S.lib,o=L.export,say=progress||(()=>{});
+/* opt.instrument: {id,name,desc} when the project is a library: the file gets the instrument's own name and id
+   (library id + instrument id). opt.onlyUsed: pack only the images and fonts this instrument uses. */
+async function buildVsamp(progress,opt){
+  opt=opt||{};const t0=performance.now(),L=S.lib,o=L.export,say=progress||(()=>{});
   say('Planning…');await tick();
   const set=await buildExportSet(o,say);
   const pack=new Pack(),warn=[];
@@ -43,11 +45,12 @@ async function buildVsamp(progress){
   const layers={};
   for(const k of ['bgImg','logoImg','iconImg']){const a=banner[k]&&S.assets[banner[k]];if(a){const d=dataUrlBytes(fullUrl(banner[k]));if(d){layers[k]={mime:d.mime,name:a.name,data:await pack.add(d.bytes,{})};}}}
   /* project images */
-  const assets={};
-  for(const id of Object.keys(S.assets)){if(id.indexOf('tex_')===0)continue;const d=dataUrlBytes(fullUrl(id));if(d)assets[id]={name:S.assets[id].name,w:S.assets[id].w,h:S.assets[id].h,mime:d.mime,data:await pack.add(d.bytes,{})};}
+  const assets={},usedIn=opt.onlyUsed?JSON.stringify(snapshot()):null;
+  for(const id of Object.keys(S.assets)){if(id.indexOf('tex_')===0)continue;if(usedIn&&usedIn.indexOf('"'+id+'"')<0&&!Object.values(L.banner||{}).includes(id))continue;const d=dataUrlBytes(fullUrl(id));if(d)assets[id]={name:S.assets[id].name,w:S.assets[id].w,h:S.assets[id].h,mime:d.mime,data:await pack.add(d.bytes,{})};}
   const fonts={};
   for(const fam of Object.keys(S.fonts)){
     const f=S.fonts[fam];
+    if(usedIn&&usedIn.indexOf(fam)<0)continue;   /* a library's instrument: only the fonts it uses */
     if(f.lic==='restricted'){warn.push('Font "'+fam+'" forbids embedding and was left out.');continue;}
     if(!f.buf){warn.push('Font "'+fam+'" could not be packed.');continue;}
     fonts[fam]={lic:f.lic,data:await pack.add(new Uint8Array(f.buf),{compress:true})};
@@ -59,6 +62,7 @@ async function buildVsamp(progress){
   const fxRanges={};Object.keys(FXT).forEach(k=>{const d=FXT[k];fxRanges[k]={};d.params.forEach(q=>{fxRanges[k][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0,q.unit==='Hz'?1:0];});});
   const est=estimate(o),dropped=set.stats.unusedSkipped;
   const lib={id:L.id,name:L.name,author:L.author,version:L.version,desc:L.desc,tags:L.tags,category:L.category,web:L.web,licence:L.licence,changelog:L.changelog,accent:L.accent};
+  if(opt.instrument){lib.id=L.id+'-'+opt.instrument.id;lib.name=opt.instrument.name;if(opt.instrument.desc)lib.desc=opt.instrument.desc;lib.library=L.name;}
   delete banner.bgImg;delete banner.logoImg;delete banner.iconImg;
   const manifest={format:'vsamp',formatVersion:1,created:new Date().toISOString(),app:'VisuMaker prototype 4',lib,
     banner:{settings:banner,images:bi,layers},
@@ -68,8 +72,28 @@ async function buildVsamp(progress){
   say('Writing file…');await tick();
   const bytes=writeVsamp(manifest,pack);
   const report={bytes:bytes.length,ms:Math.round(performance.now()-t0),samples:smeta.length,zones:set.zones.length,baked:set.stats.baked,chunks:set.stats.chunks,step:set.stats.step,
-    zonesBaked:set.stats.zonesBaked,leftLive:set.stats.skipped,unusedSkipped:dropped,sourceBytes:est.before,warn,name:L.name};
+    zonesBaked:set.stats.zonesBaked,leftLive:set.stats.skipped,unusedSkipped:dropped,sourceBytes:est.before,warn,name:lib.name,kind:'vsins'};
   return{bytes,report,manifest};
+}
+/* The whole project as a library (.vslib): every instrument is built like a single export and stored inside. */
+async function buildLibrary(progress){
+  const say=progress||(()=>{}),t0=performance.now(),L=S.lib,start=INS.cur,banks=[],warn=[];let samples=0,zones=0;
+  try{
+    for(let k=0;k<INS.list.length;k++){
+      const i=INS.list[k];
+      if(i.id!==INS.cur)insVisit(i.id);
+      const r=await buildVsamp(t=>say(i.name+' ('+(k+1)+' / '+INS.list.length+'): '+t),{instrument:{id:i.id,name:i.name,desc:i.desc},onlyUsed:true});
+      samples+=r.report.samples;zones+=r.report.zones;r.report.warn.forEach(w=>warn.push(i.name+': '+w));
+      let b=banks.find(x=>x.name===i.bank);if(!b){b={name:i.bank,instruments:[]};banks.push(b);}
+      b.instruments.push({id:i.id,name:i.name,desc:i.desc,bytes:r.bytes});
+    }
+  }finally{if(INS.cur!==start)insVisit(start);}
+  say('Banner and writing the library…');await tick();
+  const images={wide:await bannerBlob('wide',1200,400),tile:await bannerBlob('tile',512,512),icon:await bannerBlob('icon',128,128)};
+  const lib={id:L.id,name:L.name,author:L.author,version:L.version,desc:L.desc,tags:L.tags,category:L.category,web:L.web,licence:L.licence,changelog:L.changelog,accent:L.accent};
+  const bytes=await writeVslib({lib,images,banks});
+  const report={bytes:bytes.length,ms:Math.round(performance.now()-t0),samples,zones,instruments:INS.list.length,banks:banks.length,warn,name:L.name,kind:'vslib',chunks:0,unusedSkipped:0,leftLive:0};
+  return{bytes,report};
 }
 const parseVsamp=bytes=>verifyVsamp(bytes);
 let LAST_DL=null;

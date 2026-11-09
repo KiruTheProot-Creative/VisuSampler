@@ -5,7 +5,7 @@ CORE='../../packages/core/src/index.js'
 imports='''import {
   resample,stretchCh,stretchAll,granularRender,wavetableRender,uniVoices,smDefaults,smOf,hash01,hann,MODES as CORE_MODES,
   detectTransients as coreDetectTransients,zoneData as coreZoneData,zoneInterp as coreZoneInterp,zoneRatio as coreZoneRatio,
-  crc32,encodePCM,decodePCM,Pack,writeVsamp,vsampParts,readVsamp,verifyVsamp,fmtBytes,bytesPer,
+  crc32,encodePCM,decodePCM,Pack,writeVsamp,vsampParts,writeVslib,readVslib,readVsamp,verifyVsamp,fmtBytes,bytesPer,
   estimate as coreEstimate,chooseStep,zoneBakeReason as coreZoneBakeReason,buildExportSet as coreBuildExportSet
 } from '%s';
 ''' % CORE

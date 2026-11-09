@@ -69,10 +69,15 @@ app.whenReady().then(()=>{
   });
   /* Export to VisuPlayer: the VST reads Documents/VisuSampler/Libraries */
   const libDir=()=>path.join(app.getPath('documents'),'VisuSampler','Libraries');
-  ipcMain.handle('visu:saveLibrary',async(_e,name,bytes)=>{
-    const safe=String(name||'library').replace(/[<>:"/\\|?*\x00-\x1f]+/g,'').trim()||'library';
+  /* ext: vsins (one instrument) or vslib (a library of instruments). An older .vsamp of the same name is replaced
+     by the new .vsins, so the player does not list it twice. */
+  ipcMain.handle('visu:saveLibrary',async(_e,name,bytes,ext)=>{
+    const safe=String(name||'library').replace(/[<>:"/\\|?*\x00-\x1f]+/g,'').trim()||'library',x=ext==='vslib'?'vslib':'vsins';
     fs.mkdirSync(libDir(),{recursive:true});
-    const file=path.join(libDir(),safe+'.vsamp');fs.writeFileSync(file,Buffer.from(bytes));
+    const file=path.join(libDir(),safe+'.'+x),tmp=file+'.saving';
+    await fs.promises.writeFile(tmp,Buffer.from(bytes.buffer,bytes.byteOffset,bytes.byteLength));await fs.promises.rename(tmp,file);
+    if(x==='vsins'){const old=path.join(libDir(),safe+'.vsamp');if(fs.existsSync(old))await fs.promises.rm(old,{force:true});}
+    log('info','sent to VisuPlayer: '+file);
     return file;
   });
   ipcMain.handle('visu:libraryFolder',()=>libDir());

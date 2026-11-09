@@ -80,10 +80,10 @@ function glyphCount(font){
 function textProps(el){
   const fonts=BUILTIN_FONTS.concat(Object.keys(S.fonts));
   const emb=S.fonts[el.font];
-  const msg={ok:['ok','Embedding allowed. This font will travel inside the .vsamp.'],restricted:['bad','This font forbids embedding, so it will not be packed into the .vsamp.'],nosubset:['warn','Embeddable, but the font asks not to be subset, so the whole file is stored.'],unknown:['warn','Could not read the licence flag (WOFF is compressed). Check the font licence before shipping.']};
+  const msg={ok:['ok','Embedding allowed. This font will travel inside the instrument file.'],restricted:['bad','This font forbids embedding, so it will not be packed into the instrument file.'],nosubset:['warn','Embeddable, but the font asks not to be subset, so the whole file is stored.'],unknown:['warn','Could not read the licence flag (WOFF is compressed). Check the font licence before shipping.']};
   let fi;
   if(emb){const m=msg[emb.lic];fi='<span class="chip '+m[0]+'">'+m[1]+'</span><p class="hint">'+(emb.size/1024).toFixed(0)+' KB source · '+glyphCount(el.font)+' glyphs used</p>';}
-  else fi='<p class="hint">Preview font. On export only the glyphs you use are embedded in the .vsamp.</p>';
+  else fi='<p class="hint">Preview font. On export only the glyphs you use are embedded in the instrument file.</p>';
   let h=sec('Content',H.area('Text','text',el.text)+insRow());
   h+=sec('Font',H.sel('Font','font',el.font,fonts.map(f=>[f,f+(S.fonts[f]?' (embedded)':'')]),true)
     +'<button type="button" class="btn" data-act="font">Embed a font file…</button>'+fi
