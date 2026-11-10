@@ -60,6 +60,7 @@ public:
 
     struct MacroParam : public juce::AudioParameterFloat
     {
+        using juce::AudioParameterFloat::operator=;
         explicit MacroParam(int i);
         juce::String getName(int maximumStringLength) const override;
         void setLabel(const juce::String& s) { const juce::SpinLock::ScopedLockType l(lock_); label_ = s; }
