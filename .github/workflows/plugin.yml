@@ -3,14 +3,10 @@ on:
   push:
     paths:
       - "apps/plugin/**"
-      - "apps/maker/nodefx.html"
-      - "apps/maker/nodefx.js"
       - ".github/workflows/plugin.yml"
   pull_request:
     paths:
       - "apps/plugin/**"
-      - "apps/maker/nodefx.html"
-      - "apps/maker/nodefx.js"
       - ".github/workflows/plugin.yml"
   workflow_dispatch:
 jobs:
@@ -34,19 +30,15 @@ jobs:
         shell: bash
         run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
       - name: Build
-        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone NodeFX_VST3 NodeFX_Standalone HyperSynth_VST3 HyperSynth_Standalone --parallel 4
+        run: cmake --build build --config Release --target HyperSynth_VST3 HyperSynth_Standalone --parallel 4
       - name: Collect each plugin by itself
         shell: bash
         run: |
-          for P in VisuPlayer NodeFX HyperSynth; do
+          for P in HyperSynth; do
             mkdir -p "out/$P"
             find build -maxdepth 6 -type d -name "$P.vst3" -exec cp -R {} "out/$P/" \;
             find build -path "*Standalone*" -name "$P.exe" -exec cp {} "out/$P/" \;
           done
           ls -laR out | head -40
-      - uses: actions/upload-artifact@v4
-        with: { name: "VisuPlayer-${{ runner.os }}", path: out/VisuPlayer }
-      - uses: actions/upload-artifact@v4
-        with: { name: "NodeFX-${{ runner.os }}", path: out/NodeFX }
       - uses: actions/upload-artifact@v4
         with: { name: "HyperSynth-${{ runner.os }}", path: out/HyperSynth }

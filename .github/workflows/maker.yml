@@ -1,20 +1,7 @@
 name: maker
+# Paused while we focus on HyperSynth: runs only when started by hand (Actions tab). To bring it back, restore the
+# push triggers from git history.
 on:
-  push:
-    paths:
-      - "apps/maker/**"
-      - "apps/maker-desktop/**"
-      - "packages/core/**"
-      - "packages/engine-wasm/**"
-      - "apps/plugin/native/**"
-      - "apps/plugin/engine/**"
-      - ".github/workflows/maker.yml"
-  pull_request:
-    paths:
-      - "apps/maker/**"
-      - "apps/maker-desktop/**"
-      - "packages/core/**"
-      - ".github/workflows/maker.yml"
   workflow_dispatch:
 jobs:
   desktop:

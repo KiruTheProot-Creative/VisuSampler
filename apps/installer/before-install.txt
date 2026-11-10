@@ -1,7 +1,7 @@
 Welcome to the Kiru Creative Audio Suite (Kiru CAS)!
 
 Kiru CAS is the audio side of Kiru's Creative Suite (KCS): plugins and audio tools, in one setup.
-This installs:
+This installs (the parts this setup carries; for now: HyperSynth):
 
   * VisuMaker  - build your own sample libraries (instruments, interface, effects).
   * VisuPlayer - plays them: a VST3 plugin for your DAW, and a standalone app.

@@ -1,6 +1,7 @@
 ; Kiru Creative Audio Suite (Kiru CAS) installer (Inno Setup 6): KCS's audio tools and plugins in one setup.
 ; Today: VisuMaker, VisuPlayer, NodeFX and HyperSynth (the plugins as VST3 + standalone).
 ; The AppId is the one the earlier "VisuSampler" setup used, so this setup upgrades that install in place.
+; Every part is optional: a part whose /D folder is not given is left out (for now the release ships HyperSynth only).
 ; Built by .github/workflows/release.yml:
 ;   iscc /DVersion=0.0.1 /DBuild=abc1234 /DRoot=<repo> /DMakerDir=<win-unpacked> /DVst3Dir=<VisuPlayer.vst3> /DStandaloneExe=<VisuPlayer.exe> /DNodeFXVst3Dir=<NodeFX.vst3> /DNodeFXExe=<NodeFX.exe> /DHyperSynthVst3Dir=<HyperSynth.vst3> /DHyperSynthExe=<HyperSynth.exe> /DOutDir=<out> KiruCAS.iss
 
@@ -36,20 +37,30 @@ WizardStyle=modern
 ChangesAssociations=yes
 CloseApplications=yes
 UninstallDisplayName=Kiru Creative Audio Suite (Kiru CAS) {#Version}
+#ifdef MakerDir
 UninstallDisplayIcon={app}\VisuMaker\VisuMaker.exe
+#else
+UninstallDisplayIcon={app}\HyperSynth\HyperSynth.exe
+#endif
 VersionInfoDescription=Kiru Creative Audio Suite setup
 VersionInfoProductName=Kiru Creative Audio Suite
 SetupLogging=yes
 
 [Types]
-Name: "full"; Description: "Everything (VisuMaker, VisuPlayer, NodeFX and HyperSynth)"
+Name: "full"; Description: "Everything in this setup"
+#ifdef Vst3Dir
 Name: "player"; Description: "Only VisuPlayer (to play libraries)"
+#endif
 Name: "custom"; Description: "Let me choose"; Flags: iscustom
 
 [Components]
+#ifdef MakerDir
 Name: "maker"; Description: "VisuMaker: build your own libraries"; Types: full custom
+#endif
+#ifdef Vst3Dir
 Name: "vst3"; Description: "VisuPlayer VST3 plugin (for your DAW)"; Types: full player custom
 Name: "standalone"; Description: "VisuPlayer standalone app (play without a DAW)"; Types: full player custom
+#endif
 #ifdef NodeFXVst3Dir
 Name: "nodefx"; Description: "NodeFX: node-based effects plugin (VST3 and standalone)"; Types: full custom
 #endif
@@ -61,9 +72,13 @@ Name: "hypersynth"; Description: "HyperSynth: two-layer synthesizer (VST3 and st
 Name: "desktopicon"; Description: "Create desktop shortcuts"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
+#ifdef MakerDir
 Source: "{#MakerDir}\*"; DestDir: "{app}\VisuMaker"; Components: maker; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
+#ifdef Vst3Dir
 Source: "{#Vst3Dir}\*"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StandaloneExe}"; DestDir: "{app}\VisuPlayer"; DestName: "VisuPlayer.exe"; Components: standalone; Flags: ignoreversion
+#endif
 #ifdef NodeFXVst3Dir
 Source: "{#NodeFXVst3Dir}\*"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; Components: nodefx; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#NodeFXExe}"; DestDir: "{app}\NodeFX"; DestName: "NodeFX.exe"; Components: nodefx; Flags: ignoreversion
@@ -77,8 +92,12 @@ Source: "{#Root}\NOTICE.md"; DestDir: "{app}"; DestName: "NOTICE.txt"; Flags: ig
 Source: "{#Root}\TERMS.md"; DestDir: "{app}"; DestName: "TERMS.txt"; Flags: ignoreversion
 
 [Icons]
+#ifdef MakerDir
 Name: "{group}\VisuMaker"; Filename: "{app}\VisuMaker\VisuMaker.exe"; Components: maker
+#endif
+#ifdef Vst3Dir
 Name: "{group}\VisuPlayer"; Filename: "{app}\VisuPlayer\VisuPlayer.exe"; Components: standalone
+#endif
 #ifdef NodeFXVst3Dir
 Name: "{group}\NodeFX"; Filename: "{app}\NodeFX\NodeFX.exe"; Components: nodefx
 #endif
@@ -88,9 +107,17 @@ Name: "{group}\HyperSynth"; Filename: "{app}\HyperSynth\HyperSynth.exe"; Compone
 Name: "{group}\License"; Filename: "{app}\LICENSE.txt"
 Name: "{group}\Terms of use"; Filename: "{app}\TERMS.txt"
 Name: "{group}\Uninstall Kiru CAS"; Filename: "{uninstallexe}"
+#ifdef MakerDir
 Name: "{autodesktop}\VisuMaker"; Filename: "{app}\VisuMaker\VisuMaker.exe"; Components: maker; Tasks: desktopicon
+#endif
+#ifdef Vst3Dir
 Name: "{autodesktop}\VisuPlayer"; Filename: "{app}\VisuPlayer\VisuPlayer.exe"; Components: standalone; Tasks: desktopicon
+#endif
+#ifdef HyperSynthVst3Dir
+Name: "{autodesktop}\HyperSynth"; Filename: "{app}\HyperSynth\HyperSynth.exe"; Components: hypersynth; Tasks: desktopicon
+#endif
 
+#ifdef MakerDir
 [Registry]
 ; double-clicking a .vmproj opens it in VisuMaker
 Root: HKA; Subkey: "Software\Classes\.vmproj"; ValueType: string; ValueName: ""; ValueData: "VisuMaker.Project"; Flags: uninsdeletevalue; Components: maker
@@ -100,6 +127,7 @@ Root: HKA; Subkey: "Software\Classes\VisuMaker.Project\shell\open\command"; Valu
 
 [Run]
 Filename: "{app}\VisuMaker\VisuMaker.exe"; Description: "Start VisuMaker"; Flags: nowait postinstall skipifsilent unchecked; Components: maker
+#endif
 
 [UninstallDelete]
 ; only what the installer put there; libraries, projects, presets and logs in Documents stay
@@ -133,5 +161,7 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+#ifdef MakerDir
   if (CurStep = ssInstall) and WizardIsComponentSelected('maker') then RemoveOldVisuMaker();
+#endif
 end;
