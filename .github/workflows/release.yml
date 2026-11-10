@@ -1,6 +1,6 @@
 name: release
 # Builds the Windows downloads and puts them on a GitHub release:
-#   the VisuSampler setup (VisuMaker, VisuPlayer and NodeFX) plus the bare VST3 zips.
+#   the Kiru CAS setup (VisuMaker, VisuPlayer and NodeFX) plus the bare VST3 zips.
 # Runs when a tag like v0.2.0 is pushed, or by hand from the Actions tab.
 on:
   push:
@@ -90,19 +90,19 @@ jobs:
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
           if (-not (Test-Path $iscc)) { throw "Inno Setup is missing" }
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Build VisuSampler-Setup.exe
+      - name: Build KiruCAS-Setup.exe
         shell: pwsh
         run: |
           $b = "$env:GITHUB_SHA".Substring(0,7); $w = "$env:GITHUB_WORKSPACE"
-          & $env:ISCC "/DVersion=0.0.1" "/DBuild=$b" "/DRoot=$w" "/DMakerDir=$w\dl\maker" "/DVst3Dir=$w\dl\player\VisuPlayer.vst3" "/DStandaloneExe=$w\dl\player\VisuPlayer.exe" "/DNodeFXVst3Dir=$w\dl\player\NodeFX.vst3" "/DNodeFXExe=$w\dl\player\NodeFX.exe" "/DOutDir=$w\out" apps\installer\VisuSampler.iss
+          & $env:ISCC "/DVersion=0.0.1" "/DBuild=$b" "/DRoot=$w" "/DMakerDir=$w\dl\maker" "/DVst3Dir=$w\dl\player\VisuPlayer.vst3" "/DStandaloneExe=$w\dl\player\VisuPlayer.exe" "/DNodeFXVst3Dir=$w\dl\player\NodeFX.vst3" "/DNodeFXExe=$w\dl\player\NodeFX.exe" "/DOutDir=$w\out" apps\installer\KiruCAS.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
           Get-ChildItem out
       - name: Install it, try it, uninstall it
         shell: pwsh
         run: |
-          $p = Start-Process out\VisuSampler-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=install.log' -Wait -PassThru
+          $p = Start-Process out\KiruCAS-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=install.log' -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; throw "setup exit code $($p.ExitCode)" }
-          $app = "$env:ProgramFiles\VisuSampler"; $vst = "$env:CommonProgramFiles\VST3\VisuPlayer.vst3"; $nvst = "$env:CommonProgramFiles\VST3\NodeFX.vst3"
+          $app = "$env:ProgramFiles\Kiru CAS"; $vst = "$env:CommonProgramFiles\VST3\VisuPlayer.vst3"; $nvst = "$env:CommonProgramFiles\VST3\NodeFX.vst3"
           foreach ($f in "$app\VisuMaker\VisuMaker.exe", "$app\VisuMaker\resources\native\VisuMakerAudio.exe", "$app\VisuPlayer\VisuPlayer.exe", "$app\NodeFX\NodeFX.exe", "$app\LICENSE.txt", $vst, $nvst) {
             if (-not (Test-Path $f)) { throw "missing after install: $f" } else { "installed: $f" } }
           foreach ($b in $vst, $nvst) { if ((Get-ChildItem $b -Recurse -Filter *.vst3 -File).Count -lt 1) { throw "the VST3 bundle $b has no plugin binary" } }
@@ -131,15 +131,15 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           case "$TAG" in v*) ;; *) TAG="build-$(date -u +%Y%m%d-%H%M)";; esac
           cat > notes.md <<'MD'
-          Windows builds of VisuSampler.
+          Windows builds of the Kiru Creative Audio Suite (Kiru CAS): VisuSampler (VisuMaker + VisuPlayer) and NodeFX.
 
-          - **VisuSampler-Setup.exe**: installs VisuMaker (the library designer), the VisuPlayer VST3 plugin and standalone, and NodeFX (VST3 effect and standalone); pick the parts you want. Uninstall from Windows Settings, your libraries stay.
+          - **KiruCAS-Setup.exe**: the Kiru CAS setup, installs VisuMaker (the library designer), the VisuPlayer VST3 plugin and standalone, and NodeFX (VST3 effect and standalone); pick the parts you want. Uninstall from Windows Settings, your libraries and presets stay. It replaces an earlier VisuSampler setup in place.
           - **VisuPlayer-VST3-Windows.zip**: only the plugin, for installing by hand: put `VisuPlayer.vst3` into `C:\Program Files\Common Files\VST3`.
           - **NodeFX-VST3-Windows.zip**: NodeFX, the node-based effect plugin, by itself (same place). Its presets are `.nfx` files in `Documents\VisuSampler\NodeFX Presets`.
 
-          VisuSampler is free software under the GNU GPL v3 (or later). Libraries you make with VisuMaker are yours.
+          VisuSampler is free software under the GNU GPL v3 (or later). Libraries you make with VisuMaker and presets you make with NodeFX are yours.
 
           Libraries exported from VisuMaker go to `Documents\VisuSampler\Libraries`, where VisuPlayer finds them.
           The builds are not code-signed, so Windows SmartScreen may ask before the first start ("More info", then "Run anyway").
           MD
-          gh release create "$TAG" dl/installer/* dl/player/* --repo "$REPO" --target "${GITHUB_SHA}" --title "VisuSampler 0.0.1 (${TAG})" --notes-file notes.md --prerelease
+          gh release create "$TAG" dl/installer/* dl/player/* --repo "$REPO" --target "${GITHUB_SHA}" --title "Kiru CAS 0.0.1 (${TAG})" --notes-file notes.md --prerelease

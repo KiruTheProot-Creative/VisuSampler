@@ -15,6 +15,12 @@ Nothing here plays on the web: VisuMaker is a Windows desktop app (`.exe`) and V
   turn 8 macro knobs (automatable in your DAW), and save your sounds as `.nfx` presets
   (`Documents\\VisuSampler\\NodeFX Presets`, one folder per bank). It comes with factory presets: basics, guitar amps and weird FX.
 
+## Download
+
+Grab **KiruCAS-Setup.exe** from the [releases](https://github.com/KiruTheProot-Creative/VisuSampler/releases): the
+**Kiru Creative Audio Suite (Kiru CAS)** setup installs VisuMaker, VisuPlayer and NodeFX (pick the parts you want).
+Kiru CAS is the audio side of Kiru's Creative Suite: plugins and audio tools, all in one setup.
+
 ## Guides
 
 - **[Tags: the guide for library makers](docs/tags.md)**: knobs, buttons, texts, effects and DAW automation, all through tags.

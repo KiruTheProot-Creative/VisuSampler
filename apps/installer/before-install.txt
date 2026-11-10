@@ -1,16 +1,20 @@
-Welcome to VisuSampler!
+Welcome to the Kiru Creative Audio Suite (Kiru CAS)!
 
+Kiru CAS is the audio side of Kiru's Creative Suite (KCS): plugins and audio tools, in one setup.
 This installs:
 
   * VisuMaker  - build your own sample libraries (instruments, interface, effects).
   * VisuPlayer - plays them: a VST3 plugin for your DAW, and a standalone app.
+  * NodeFX     - a node-based effect: cable effects together, 8 macro knobs, .nfx presets.
+                 A VST3 plugin and a standalone app.
 
 You can pick which parts to install on the next pages.
 
 Where things go
-  * VisuMaker and the standalone VisuPlayer: the folder you choose (Program Files by default).
-  * The VisuPlayer VST3 plugin: C:\Program Files\Common Files\VST3, where every DAW looks for plugins.
+  * VisuMaker and the standalone apps: the folder you choose (Program Files\Kiru CAS by default).
+  * The VST3 plugins (VisuPlayer, NodeFX): C:\Program Files\Common Files\VST3, where every DAW looks for plugins.
   * Your libraries: Documents\VisuSampler\Libraries (made the first time you start VisuMaker or VisuPlayer).
+  * NodeFX presets: Documents\VisuSampler\NodeFX Presets.
   * Log files for bug reports: Documents\VisuSampler\Logs.
 
 Uninstalling removes the programs and the plugin, never your libraries, projects or presets.
@@ -20,11 +24,11 @@ Questions, bug reports, libraries and news: Kiru's Creative Suite (KCS) on Disco
 (there is a Discord button in VisuMaker and VisuPlayer too).
 
 Made with AI
-Nearly all of VisuSampler was written by an AI (Claude, by Anthropic), directed, tested and reviewed by a human.
+Nearly all of Kiru CAS was written by an AI (Claude, by Anthropic), directed, tested and reviewed by a human.
 It is early, experimental software: keep backups of your projects, and please report bugs.
 
 Terms of use (short version; the full text is installed as TERMS.txt)
-  * What you make is yours: instruments, libraries, projects, samples and songs. Share, sell or keep them,
+  * What you make is yours: instruments, libraries, projects, presets, samples and songs. Share, sell or keep them,
     under any terms you like. No royalties, no credit required.
   * Only use samples, images and fonts you have the right to use. Other people's libraries belong to them.
   * No data is collected or sent. Logs and backups stay on your computer.

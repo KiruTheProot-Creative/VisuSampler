@@ -47,7 +47,7 @@ libraries. VisuMaker saves a backup while you work, but that does not replace yo
 
 ## 5. Names
 
-"VisuSampler", "VisuMaker", "VisuPlayer", "NodeFX" and "Kiru's Creative Suite (KCS)" name this project. If you share a
+"VisuSampler", "VisuMaker", "VisuPlayer", "NodeFX", "Kiru Creative Audio Suite (Kiru CAS)" and "Kiru's Creative Suite (KCS)" name this project. If you share a
 changed version, please give it a name of its own, so nobody mistakes it for the original. VST is a trademark of
 Steinberg Media Technologies GmbH.
 

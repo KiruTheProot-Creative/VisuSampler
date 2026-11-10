@@ -1,6 +1,8 @@
-; VisuSampler installer (Inno Setup 6): VisuMaker, the VisuPlayer VST3 and the standalone VisuPlayer in one setup.
+; Kiru Creative Audio Suite (Kiru CAS) installer (Inno Setup 6): KCS's audio tools and plugins in one setup.
+; Today: VisuMaker, VisuPlayer (VST3 + standalone) and NodeFX (VST3 + standalone).
+; The AppId is the one the earlier "VisuSampler" setup used, so this setup upgrades that install in place.
 ; Built by .github/workflows/release.yml:
-;   iscc /DVersion=0.0.1 /DBuild=abc1234 /DRoot=<repo> /DMakerDir=<win-unpacked> /DVst3Dir=<VisuPlayer.vst3> /DStandaloneExe=<VisuPlayer.exe> /DNodeFXVst3Dir=<NodeFX.vst3> /DNodeFXExe=<NodeFX.exe> /DOutDir=<out> VisuSampler.iss
+;   iscc /DVersion=0.0.1 /DBuild=abc1234 /DRoot=<repo> /DMakerDir=<win-unpacked> /DVst3Dir=<VisuPlayer.vst3> /DStandaloneExe=<VisuPlayer.exe> /DNodeFXVst3Dir=<NodeFX.vst3> /DNodeFXExe=<NodeFX.exe> /DOutDir=<out> KiruCAS.iss
 
 #ifndef Version
   #define Version "0.0.1"
@@ -11,20 +13,20 @@
 
 [Setup]
 AppId={{8F6A3C2E-5B1D-4E7A-9C3F-2D8E1A6B4C70}
-AppName=VisuSampler
+AppName=Kiru Creative Audio Suite
 AppVersion={#Version}
-AppVerName=VisuSampler {#Version} (build {#Build})
+AppVerName=Kiru Creative Audio Suite {#Version} (build {#Build})
 AppPublisher=KiruTheProot-Creative
 AppPublisherURL=https://github.com/KiruTheProot-Creative/VisuSampler
 AppSupportURL=https://github.com/KiruTheProot-Creative/VisuSampler/issues
 VersionInfoVersion={#Version}
-DefaultDirName={autopf}\VisuSampler
-DefaultGroupName=VisuSampler
+DefaultDirName={autopf}\Kiru CAS
+DefaultGroupName=Kiru CAS
 DisableProgramGroupPage=yes
 LicenseFile={#Root}\LICENSE
 InfoBeforeFile={#Root}\apps\installer\before-install.txt
 OutputDir={#OutDir}
-OutputBaseFilename=VisuSampler-Setup
+OutputBaseFilename=KiruCAS-Setup
 Compression=lzma2/max
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -33,8 +35,10 @@ PrivilegesRequired=admin
 WizardStyle=modern
 ChangesAssociations=yes
 CloseApplications=yes
-UninstallDisplayName=VisuSampler {#Version}
+UninstallDisplayName=Kiru Creative Audio Suite (Kiru CAS) {#Version}
 UninstallDisplayIcon={app}\VisuMaker\VisuMaker.exe
+VersionInfoDescription=Kiru Creative Audio Suite setup
+VersionInfoProductName=Kiru Creative Audio Suite
 SetupLogging=yes
 
 [Types]
@@ -73,7 +77,7 @@ Name: "{group}\NodeFX"; Filename: "{app}\NodeFX\NodeFX.exe"; Components: nodefx
 #endif
 Name: "{group}\License"; Filename: "{app}\LICENSE.txt"
 Name: "{group}\Terms of use"; Filename: "{app}\TERMS.txt"
-Name: "{group}\Uninstall VisuSampler"; Filename: "{uninstallexe}"
+Name: "{group}\Uninstall Kiru CAS"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\VisuMaker"; Filename: "{app}\VisuMaker\VisuMaker.exe"; Components: maker; Tasks: desktopicon
 Name: "{autodesktop}\VisuPlayer"; Filename: "{app}\VisuPlayer\VisuPlayer.exe"; Components: standalone; Tasks: desktopicon
 
