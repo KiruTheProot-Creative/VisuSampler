@@ -613,6 +613,38 @@ static void testFxRack() {
     { std::string e; CHECK(!FxRack::build("{\"nope\":1}", 48000, e) && !e.empty(), "nodefx: something that is not a chain is refused (%s)", e.c_str()); }
 }
 
+/* NodeFX's factory presets: each one builds, plays, stays bounded with every macro at either end */
+static void testNodeFXFactory() {
+    const std::string txt = readText(std::string(TEST_DATA_DIR) + "/nodefx-factory.json");
+    const Json all = Json::parse(txt.data(), txt.size());
+    const Json& ps = all["presets"];
+    CHECK(ps.size() >= 20, "nodefx factory: %d presets", (int) ps.size());
+    int bad = 0;
+    for (size_t i = 0; i < ps.size(); ++i) {
+        const Json& st = ps[i]["state"]; const std::string name = ps[i]["bank"].str() + " / " + ps[i]["name"].str();
+        Json in; in.type = Json::Obj; in.o = { { "graph", st["graph"] }, { "tags", st["tags"] }, { "fxRanges", all["fxRanges"] } };
+        std::string err; auto r = FxRack::build(in, 48000, err);
+        if (!r || !r->unsupported().empty()) { ++bad; std::printf("      %s: %s %s\n", name.c_str(), err.c_str(), r && !r->unsupported().empty() ? r->unsupported()[0].c_str() : ""); continue; }
+        bool noisy = false; for (size_t k = 0; k < st["graph"]["nodes"].size(); ++k) { const std::string t = st["graph"]["nodes"][k]["type"].str(); if (t == "radio" || t == "lofi" || t == "vinyl" || t == "tapemach" || t == "vintage") noisy = true; }
+        std::vector<float> l(96000, 0.f), rr(96000, 0.f); r->process(l.data(), rr.data(), 96000);
+        double quiet = 0; for (int k = 48000; k < 96000; ++k) quiet = std::max(quiet, (double) std::fabs(l[k]) + std::fabs(rr[k]));   // after a start-up click settles
+        double worst = 0, rms = 0, asSet = 0; bool finite = true;
+        for (int pass = 0; pass < 3; ++pass) {   // macros as set, all down, all up
+            if (pass) for (int m = 0; m < 8; ++m) r->setTag(r->macro[m], pass == 1 ? 0.f : 1.f);
+            std::vector<float> a(96000), b(96000);
+            for (int k = 0; k < 96000; ++k) { const double t = k / 48000.0, env = std::exp(-std::fmod(t, .5) * 5); const float v = (float) (.5 * env * (2 * std::fmod(t * 110, 1.0) - 1)); a[k] = v; b[k] = v * .9f; }
+            r->process(a.data(), b.data(), 96000);
+            double e = 0; for (int k = 0; k < 96000; ++k) { if (!std::isfinite(a[k]) || !std::isfinite(b[k])) finite = false; worst = std::max(worst, (double) std::fabs(a[k])); e += a[k] * a[k]; }
+            if (!pass) { rms = std::sqrt(e / 96000); asSet = worst; }
+        }
+        // as loaded: a sensible level (the test signal peaks at 0.5); every macro at either end: finite and bounded
+        const bool ok = finite && asSet < 1.6 && worst < 12 && rms > .005 && (noisy || quiet < 1e-3);
+        if (!ok || std::getenv("NODEFX_LEVELS")) std::printf("      %s %s: as loaded peak %.2f (level %.3f), at the extremes %.2f, silence %.2g\n", ok ? "  " : "!!", name.c_str(), asSet, rms, worst, quiet);
+        if (!ok) ++bad;
+    }
+    CHECK(bad == 0, "nodefx factory: every preset builds with known modules, plays, stays finite and bounded with its macros at either end, and is silent with no input (%d problems)", bad);
+}
+
 static void testCompat() {
     const std::string dir = COMPAT_DIR, jp = dir + "/compat.json"; std::string txt = readText(jp);
     Json db = txt.empty() ? Json() : Json::parse(txt.data(), txt.size());
@@ -659,7 +691,7 @@ static void testCompat() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testFxRack(); testCompat();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testFxRack(); testNodeFXFactory(); testCompat();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

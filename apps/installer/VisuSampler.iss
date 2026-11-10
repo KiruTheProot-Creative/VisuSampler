@@ -1,6 +1,6 @@
 ; VisuSampler installer (Inno Setup 6): VisuMaker, the VisuPlayer VST3 and the standalone VisuPlayer in one setup.
 ; Built by .github/workflows/release.yml:
-;   iscc /DVersion=0.0.1 /DBuild=abc1234 /DRoot=<repo> /DMakerDir=<win-unpacked> /DVst3Dir=<VisuPlayer.vst3> /DStandaloneExe=<VisuPlayer.exe> /DOutDir=<out> VisuSampler.iss
+;   iscc /DVersion=0.0.1 /DBuild=abc1234 /DRoot=<repo> /DMakerDir=<win-unpacked> /DVst3Dir=<VisuPlayer.vst3> /DStandaloneExe=<VisuPlayer.exe> /DNodeFXVst3Dir=<NodeFX.vst3> /DNodeFXExe=<NodeFX.exe> /DOutDir=<out> VisuSampler.iss
 
 #ifndef Version
   #define Version "0.0.1"
@@ -38,7 +38,7 @@ UninstallDisplayIcon={app}\VisuMaker\VisuMaker.exe
 SetupLogging=yes
 
 [Types]
-Name: "full"; Description: "Everything (VisuMaker and VisuPlayer)"
+Name: "full"; Description: "Everything (VisuMaker, VisuPlayer and NodeFX)"
 Name: "player"; Description: "Only VisuPlayer (to play libraries)"
 Name: "custom"; Description: "Let me choose"; Flags: iscustom
 
@@ -46,6 +46,9 @@ Name: "custom"; Description: "Let me choose"; Flags: iscustom
 Name: "maker"; Description: "VisuMaker: build your own libraries"; Types: full custom
 Name: "vst3"; Description: "VisuPlayer VST3 plugin (for your DAW)"; Types: full player custom
 Name: "standalone"; Description: "VisuPlayer standalone app (play without a DAW)"; Types: full player custom
+#ifdef NodeFXVst3Dir
+Name: "nodefx"; Description: "NodeFX: node-based effects plugin (VST3 and standalone)"; Types: full custom
+#endif
 
 [Tasks]
 Name: "desktopicon"; Description: "Create desktop shortcuts"; GroupDescription: "Shortcuts:"; Flags: unchecked
@@ -54,6 +57,10 @@ Name: "desktopicon"; Description: "Create desktop shortcuts"; GroupDescription: 
 Source: "{#MakerDir}\*"; DestDir: "{app}\VisuMaker"; Components: maker; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#Vst3Dir}\*"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StandaloneExe}"; DestDir: "{app}\VisuPlayer"; DestName: "VisuPlayer.exe"; Components: standalone; Flags: ignoreversion
+#ifdef NodeFXVst3Dir
+Source: "{#NodeFXVst3Dir}\*"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; Components: nodefx; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#NodeFXExe}"; DestDir: "{app}\NodeFX"; DestName: "NodeFX.exe"; Components: nodefx; Flags: ignoreversion
+#endif
 Source: "{#Root}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "{#Root}\NOTICE.md"; DestDir: "{app}"; DestName: "NOTICE.txt"; Flags: ignoreversion
 Source: "{#Root}\TERMS.md"; DestDir: "{app}"; DestName: "TERMS.txt"; Flags: ignoreversion
@@ -61,6 +68,9 @@ Source: "{#Root}\TERMS.md"; DestDir: "{app}"; DestName: "TERMS.txt"; Flags: igno
 [Icons]
 Name: "{group}\VisuMaker"; Filename: "{app}\VisuMaker\VisuMaker.exe"; Components: maker
 Name: "{group}\VisuPlayer"; Filename: "{app}\VisuPlayer\VisuPlayer.exe"; Components: standalone
+#ifdef NodeFXVst3Dir
+Name: "{group}\NodeFX"; Filename: "{app}\NodeFX\NodeFX.exe"; Components: nodefx
+#endif
 Name: "{group}\License"; Filename: "{app}\LICENSE.txt"
 Name: "{group}\Terms of use"; Filename: "{app}\TERMS.txt"
 Name: "{group}\Uninstall VisuSampler"; Filename: "{uninstallexe}"
@@ -80,6 +90,7 @@ Filename: "{app}\VisuMaker\VisuMaker.exe"; Description: "Start VisuMaker"; Flags
 [UninstallDelete]
 ; only what the installer put there; libraries, projects, presets and logs in Documents stay
 Type: dirifempty; Name: "{commoncf64}\VST3\VisuPlayer.vst3"
+Type: dirifempty; Name: "{commoncf64}\VST3\NodeFX.vst3"
 Type: dirifempty; Name: "{app}"
 
 [Code]

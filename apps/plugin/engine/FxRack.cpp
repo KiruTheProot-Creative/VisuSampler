@@ -6,12 +6,16 @@
 namespace visu {
 
 std::shared_ptr<FxRack> FxRack::build(const std::string& json, double sampleRate, std::string& error) {
+    return build(Json::parse(json.data(), json.size()), sampleRate, error);
+}
+std::shared_ptr<FxRack> FxRack::build(const Json& json, double sampleRate, std::string& error) {
     auto lib = Library::fromFx(json, error, sampleRate);
     if (!lib) return nullptr;
     auto r = std::make_shared<FxRack>();
     r->lib_ = std::move(lib);
     r->c_.sampleRate = sampleRate; r->c_.tags = r->lib_->tagValues.get(); r->c_.numTags = (int) r->lib_->tags.size();
     r->c_.gate = false; r->c_.key = 60; r->c_.vel = 0;
+    for (int i = 0; i < 8; ++i) r->macro[i] = r->tagIndex("m" + std::to_string(i + 1));
     return r;
 }
 

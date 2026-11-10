@@ -3,10 +3,14 @@ on:
   push:
     paths:
       - "apps/plugin/**"
+      - "apps/maker/nodefx.html"
+      - "apps/maker/app.js"
       - ".github/workflows/plugin.yml"
   pull_request:
     paths:
       - "apps/plugin/**"
+      - "apps/maker/nodefx.html"
+      - "apps/maker/app.js"
       - ".github/workflows/plugin.yml"
   workflow_dispatch:
 jobs:
@@ -30,13 +34,14 @@ jobs:
         shell: bash
         run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
       - name: Build
-        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone --parallel 4
+        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone NodeFX_VST3 NodeFX_Standalone --parallel 4
       - name: Collect VST3 and standalone
         shell: bash
         run: |
           mkdir -p out
           find build -name "*.vst3" -maxdepth 6 -exec cp -R {} out/ \;
           find build -path "*Standalone*" -name "VisuPlayer.exe" -exec cp {} out/ \;
+          find build -path "*Standalone*" -name "NodeFX.exe" -exec cp {} out/ \;
           ls -la out
       - uses: actions/upload-artifact@v4
         with:

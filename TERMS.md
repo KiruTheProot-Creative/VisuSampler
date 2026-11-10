@@ -1,6 +1,6 @@
 # VisuSampler: terms of use
 
-These terms explain what you can expect from VisuSampler (VisuMaker and VisuPlayer). They are written to be read,
+These terms explain what you can expect from VisuSampler (VisuMaker, VisuPlayer and NodeFX). They are written to be read,
 not to trap you. They **do not take away any right** the GNU General Public License gives you (see
 [LICENSE](LICENSE)): the software itself is licensed under the GPL, version 3 or later, and where these terms and
 the GPL seem to disagree, the GPL wins.
@@ -11,6 +11,7 @@ Everything you create with VisuSampler belongs to **you**:
 
 - instruments (`.vsins`, and older `.vsamp`) and libraries (`.vslib`)
 - projects (`.vmproj`)
+- NodeFX presets (`.nfx`)
 - the samples you record or bring in, and the interfaces, effect settings and presets you build
 
 VisuSampler and its authors claim **no ownership, no share, no royalties and no credit requirement** on any of it.
@@ -38,7 +39,7 @@ libraries. VisuMaker saves a backup while you work, but that does not replace yo
 
 ## 4. Your privacy
 
-- VisuMaker and VisuPlayer **don't collect or send any data**: no accounts, no tracking, no usage statistics.
+- VisuMaker, VisuPlayer and NodeFX **don't collect or send any data**: no accounts, no tracking, no usage statistics.
 - They don't go online by themselves. A link (like the Discord button) only opens in your browser when you click it.
 - The **log files** (`Documents\VisuSampler\Logs`) and autosave backups stay on your computer. They're only
   shared if you send them yourself, for example with a bug report. Have a look before you send them: logs can
@@ -46,7 +47,7 @@ libraries. VisuMaker saves a backup while you work, but that does not replace yo
 
 ## 5. Names
 
-"VisuSampler", "VisuMaker", "VisuPlayer" and "Kiru's Creative Suite (KCS)" name this project. If you share a
+"VisuSampler", "VisuMaker", "VisuPlayer", "NodeFX" and "Kiru's Creative Suite (KCS)" name this project. If you share a
 changed version, please give it a name of its own, so nobody mistakes it for the original. VST is a trademark of
 Steinberg Media Technologies GmbH.
 

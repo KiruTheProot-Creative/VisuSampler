@@ -36,6 +36,6 @@ export async function openApp(viewport,opts){
         send:m=>{if(m.t==='load'&&m.bytes){window.__naSend({t:'load'},b64(new Uint8Array(m.bytes)));}else window.__naSend(m,null);}};
     });
   }
-  await p.goto('http://localhost:'+port+'/apps/maker/');await p.waitForTimeout(700);
+  await p.goto('http://localhost:'+port+'/apps/maker/'+(opts.page||''));await p.waitForTimeout(700);
   return{p,b,errs,close:async()=>{if(proc)try{proc.stdin.end();proc.kill();}catch(e){}await b.close();server.close();}};
 }

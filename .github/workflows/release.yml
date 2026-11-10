@@ -1,6 +1,6 @@
 name: release
 # Builds the Windows downloads and puts them on a GitHub release:
-#   VisuMaker setup (.exe installer), VisuPlayer VST3 and VisuPlayer standalone (.exe).
+#   the VisuSampler setup (VisuMaker, VisuPlayer and NodeFX) plus the bare VST3 zips.
 # Runs when a tag like v0.2.0 is pushed, or by hand from the Actions tab.
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DVISU_BUILD_ID="${GITHUB_SHA::7}" -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
       - name: Build
-        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone --parallel 4
+        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone NodeFX_VST3 NodeFX_Standalone --parallel 4
       - name: Package
         shell: pwsh
         run: |
@@ -31,6 +31,12 @@ jobs:
           New-Item -ItemType Directory -Force parts | Out-Null
           Copy-Item $exe.FullName parts/VisuPlayer.exe
           Copy-Item $vst.FullName parts/VisuPlayer.vst3 -Recurse
+          $nvst = Get-ChildItem build -Recurse -Directory -Filter "NodeFX.vst3" | Select-Object -First 1
+          $nexe = Get-ChildItem build -Recurse -Filter "NodeFX.exe" | Where-Object { $_.FullName -match "Standalone" } | Select-Object -First 1
+          if (-not $nvst -or -not $nexe) { throw "NodeFX was not built" }
+          Compress-Archive -Path $nvst.FullName -DestinationPath out/NodeFX-VST3-Windows.zip
+          Copy-Item $nexe.FullName parts/NodeFX.exe
+          Copy-Item $nvst.FullName parts/NodeFX.vst3 -Recurse
           Get-ChildItem out, parts
       - uses: actions/upload-artifact@v4
         with: { name: player, path: out }
@@ -88,7 +94,7 @@ jobs:
         shell: pwsh
         run: |
           $b = "$env:GITHUB_SHA".Substring(0,7); $w = "$env:GITHUB_WORKSPACE"
-          & $env:ISCC "/DVersion=0.0.1" "/DBuild=$b" "/DRoot=$w" "/DMakerDir=$w\dl\maker" "/DVst3Dir=$w\dl\player\VisuPlayer.vst3" "/DStandaloneExe=$w\dl\player\VisuPlayer.exe" "/DOutDir=$w\out" apps\installer\VisuSampler.iss
+          & $env:ISCC "/DVersion=0.0.1" "/DBuild=$b" "/DRoot=$w" "/DMakerDir=$w\dl\maker" "/DVst3Dir=$w\dl\player\VisuPlayer.vst3" "/DStandaloneExe=$w\dl\player\VisuPlayer.exe" "/DNodeFXVst3Dir=$w\dl\player\NodeFX.vst3" "/DNodeFXExe=$w\dl\player\NodeFX.exe" "/DOutDir=$w\out" apps\installer\VisuSampler.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
           Get-ChildItem out
       - name: Install it, try it, uninstall it
@@ -96,17 +102,17 @@ jobs:
         run: |
           $p = Start-Process out\VisuSampler-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=install.log' -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; throw "setup exit code $($p.ExitCode)" }
-          $app = "$env:ProgramFiles\VisuSampler"; $vst = "$env:CommonProgramFiles\VST3\VisuPlayer.vst3"
-          foreach ($f in "$app\VisuMaker\VisuMaker.exe", "$app\VisuMaker\resources\native\VisuMakerAudio.exe", "$app\VisuPlayer\VisuPlayer.exe", "$app\LICENSE.txt", $vst) {
+          $app = "$env:ProgramFiles\VisuSampler"; $vst = "$env:CommonProgramFiles\VST3\VisuPlayer.vst3"; $nvst = "$env:CommonProgramFiles\VST3\NodeFX.vst3"
+          foreach ($f in "$app\VisuMaker\VisuMaker.exe", "$app\VisuMaker\resources\native\VisuMakerAudio.exe", "$app\VisuPlayer\VisuPlayer.exe", "$app\NodeFX\NodeFX.exe", "$app\LICENSE.txt", $vst, $nvst) {
             if (-not (Test-Path $f)) { throw "missing after install: $f" } else { "installed: $f" } }
-          if ((Get-ChildItem $vst -Recurse -Filter *.vst3 -File).Count -lt 1) { throw "the VST3 bundle has no plugin binary" }
+          foreach ($b in $vst, $nvst) { if ((Get-ChildItem $b -Recurse -Filter *.vst3 -File).Count -lt 1) { throw "the VST3 bundle $b has no plugin binary" } }
           $cls = (Get-ItemProperty "HKLM:\Software\Classes\.vmproj").'(default)'
           if ($cls -ne 'VisuMaker.Project') { throw ".vmproj is not linked to VisuMaker ($cls)" } else { ".vmproj opens with VisuMaker" }
           $m = Start-Process "$app\VisuMaker\VisuMaker.exe" -ArgumentList '--smoke' -Wait -PassThru
           if ($m.ExitCode -ne 0) { throw "the installed VisuMaker did not start (exit $($m.ExitCode))" } else { "the installed VisuMaker starts and plays" }
           $u = Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
           Start-Sleep -Seconds 3
-          foreach ($f in "$app\VisuMaker\VisuMaker.exe", $vst) { if (Test-Path $f) { throw "still there after uninstall: $f" } }
+          foreach ($f in "$app\VisuMaker\VisuMaker.exe", $vst, $nvst, "$app\NodeFX\NodeFX.exe") { if (Test-Path $f) { throw "still there after uninstall: $f" } }
           if (Test-Path "HKLM:\Software\Classes\VisuMaker.Project") { throw "the .vmproj file type is still registered" }
           "uninstalled cleanly"
       - uses: actions/upload-artifact@v4
@@ -127,8 +133,9 @@ jobs:
           cat > notes.md <<'MD'
           Windows builds of VisuSampler.
 
-          - **VisuSampler-Setup.exe**: installs VisuMaker (the library designer), the VisuPlayer VST3 plugin and the standalone VisuPlayer; pick the parts you want. Uninstall from Windows Settings, your libraries stay.
+          - **VisuSampler-Setup.exe**: installs VisuMaker (the library designer), the VisuPlayer VST3 plugin and standalone, and NodeFX (VST3 effect and standalone); pick the parts you want. Uninstall from Windows Settings, your libraries stay.
           - **VisuPlayer-VST3-Windows.zip**: only the plugin, for installing by hand: put `VisuPlayer.vst3` into `C:\Program Files\Common Files\VST3`.
+          - **NodeFX-VST3-Windows.zip**: NodeFX, the node-based effect plugin, by itself (same place). Its presets are `.nfx` files in `Documents\VisuSampler\NodeFX Presets`.
 
           VisuSampler is free software under the GNU GPL v3 (or later). Libraries you make with VisuMaker are yours.
 

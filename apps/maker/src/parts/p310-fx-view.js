@@ -103,7 +103,7 @@ function fxRender(){
   const nodesView=S.fx.view==='nodes';
   $('#fxStage').hidden=!nodesView; $('#fxStack').hidden=nodesView;
   $('#fxVNodes').setAttribute('aria-pressed',String(nodesView)); $('#fxVStack').setAttribute('aria-pressed',String(!nodesView));
-  $('#fxFlow').setAttribute('aria-pressed',String(S.fx.flow)); $('#fxScopeName').textContent=S.fx.scope==='master'?'Master chain':S.fx.scope;
+  $('#fxFlow').setAttribute('aria-pressed',String(S.fx.flow)); $('#fxScopeName').textContent=typeof NODEFX!=='undefined'&&NODEFX?'Chain':S.fx.scope==='master'?'Master chain':S.fx.scope;
   $('#fxScope').innerHTML=fxScopeHTML(); $('#fxPal').innerHTML=fxPaletteHTML();
   if(nodesView){
     $('#fxPan').style.transform='translate('+S.fx.pan.x+'px,'+S.fx.pan.y+'px)';

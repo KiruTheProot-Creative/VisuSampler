@@ -50,4 +50,5 @@ if(VISU_BUILD_PLUGIN OR VISU_BUILD_MAKER_AUDIO)
 endif()
 if(VISU_BUILD_PLUGIN)
   add_subdirectory(plugin)
+  add_subdirectory(nodefx)   # NodeFX, the effect plugin
 endif()

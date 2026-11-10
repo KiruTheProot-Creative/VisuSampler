@@ -1,0 +1,31 @@
+/* NodeFX (nodefx.html): the Effects editor as an effect plugin. Only in nodefx.html. */
+body.nodefx .app{grid-template-rows:auto minmax(0,1fr) auto}
+body.nodefx #viewTabs,body.nodefx .insw,body.nodefx #presetBtn,body.nodefx #projOpen,body.nodefx #projSave,body.nodefx #audioSetBtn,
+body.nodefx #tipsBtn,body.nodefx #fxScope,body.nodefx #leftF>h2:first-child,body.nodefx #modeSeg{display:none!important}
+body.nodefx .logo em{color:#7fd1ff}
+.nfxbar{display:flex;align-items:center;gap:4px}
+.nfxpw{position:relative}
+#nfxPName{min-width:240px;max-width:360px;justify-content:space-between;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#nfxPName::after{content:" ▾";opacity:.7}
+#nfxMenu{width:340px}
+.nfxlist{max-height:360px;overflow:auto}
+.nfxrow{display:flex;align-items:center}
+.nfxrow .mi{flex:1}
+.nfxrow .x{background:none;border:0;color:var(--muted,#9a9a9a);cursor:pointer;padding:2px 6px}
+.nfxrow .mi[aria-current="true"]{background:#2e4258;color:#fff}
+.nfxstrip{grid-column:1/-1;display:flex;align-items:center;gap:18px;background:linear-gradient(#3a3a3a,#2e2e2e);border:1px solid var(--lo,#1d1d1d);padding:8px 14px}
+.nfxmacros{display:flex;gap:14px;flex:1;justify-content:center;flex-wrap:wrap}
+.nfxglobals{display:flex;gap:14px;padding-left:18px;border-left:1px solid #222}
+.nfxm{display:flex;flex-direction:column;align-items:center;gap:3px;width:78px}
+.nfxk{--v:0;position:relative;width:46px;height:46px;border-radius:50%;cursor:ns-resize;touch-action:none;outline:none;
+  background:radial-gradient(circle at 50% 40%,#5a5a5a,#2c2c2c 70%);box-shadow:0 2px 4px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.12)}
+.nfxk::before{content:"";position:absolute;inset:-5px;border-radius:50%;
+  background:conic-gradient(from 225deg,#7fd1ff calc(var(--v)*270deg),#1b1b1b 0 270deg,transparent 0);
+  -webkit-mask:radial-gradient(circle,transparent 25px,#000 26px);mask:radial-gradient(circle,transparent 25px,#000 26px)}
+.nfxk i{position:absolute;left:50%;top:50%;width:3px;height:17px;margin:-17px 0 0 -1.5px;border-radius:2px;background:#e8e8e8;transform-origin:50% 100%;transform:rotate(calc(var(--v)*270deg - 135deg))}
+.nfxk:focus-visible{box-shadow:0 0 0 2px #7fd1ff}
+.nfxm.g .nfxk::before{background:conic-gradient(from 225deg,#ffc46b calc(var(--v)*270deg),#1b1b1b 0 270deg,transparent 0)}
+.nfxn{background:none;border:0;color:var(--fg,#ddd);font:inherit;font-size:11px;max-width:78px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;padding:0}
+.nfxn.static{cursor:default}
+.nfxv{font-size:10px;color:var(--muted,#9a9a9a);font-family:var(--f-mono,monospace)}
+.nfxren{width:76px;font-size:11px}

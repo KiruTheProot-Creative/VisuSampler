@@ -138,6 +138,7 @@ public:
     // (the master chain, ranges and tags in VisuMaker's formats). The chain runs on whatever is written into
     // fx->groupIn(-1) (the master input).
     static std::shared_ptr<Library> fromFx(const std::string& json, std::string& error, double sampleRate = 48000);
+    static std::shared_ptr<Library> fromFx(const Json& in, std::string& error, double sampleRate = 48000);
 private:
     static void readTags(const Json& tj, Library& L);
     static std::shared_ptr<Library> fromFile(const VsampFile& f, std::string& error, double sampleRate, const Library* reuse = nullptr);

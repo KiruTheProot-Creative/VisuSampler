@@ -24,7 +24,10 @@ css=r('style.css')+'\n'+r('style-extra.css')+'\n'+r('style-unity.css')
 head=r('head.html').replace('/*@@CSS@@*/',css)
 html='<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n'+head+'</head><body>\n'+r('body.html')+'\n<script type="module" src="app.js"></script>\n</body></html>\n'
 open(os.path.join(d,'index.html'),'w',encoding='utf8').write(html)
-print('built app.js',len(app),'index.html',len(html))
+# NodeFX (the Effects editor as an effect plugin): the same page, flagged, with its own styles
+nfx=html.replace('</head>','<style>'+r('style-nodefx.css')+'</style></head>',1).replace('<script type="module" src="app.js"></script>','<script>window.__NODEFX=1</script>\n<script type="module" src="app.js"></script>',1)
+open(os.path.join(d,'nodefx.html'),'w',encoding='utf8').write(nfx)
+print('built app.js',len(app),'index.html',len(html),'nodefx.html',len(nfx))
 
 # ---- interface runtime for the VST window (same drawing code as the Designer) ----
 RT_PARTS=['p000-prelude.js','p010-state.js','p020-tokens.js','p030-assets-mipmaps.js','p040-factories.js','p050-geometry-light.js',

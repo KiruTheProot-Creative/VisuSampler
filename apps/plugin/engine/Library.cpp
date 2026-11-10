@@ -350,7 +350,9 @@ void Library::readTags(const Json& tj, Library& L) {
     for (size_t i = 0; i < L.tags.size(); ++i) L.tagValues[i].store(L.tags[i].def);
 }
 std::shared_ptr<Library> Library::fromFx(const std::string& json, std::string& error, double sampleRate) {
-    const Json in = Json::parse(json.data(), json.size());
+    return fromFx(Json::parse(json.data(), json.size()), error, sampleRate);
+}
+std::shared_ptr<Library> Library::fromFx(const Json& in, std::string& error, double sampleRate) {
     if (in.type != Json::Obj || in["graph"].type != Json::Obj) { error = "Not an effect chain."; return nullptr; }
     auto L = std::make_shared<Library>();
     L->info.name = in["name"].str("Effect chain");

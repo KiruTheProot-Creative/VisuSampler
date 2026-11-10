@@ -11,6 +11,7 @@ class FxRack {
 public:
     // json: {"graph":{nodes,cables}, "fxRanges":{...}, "tags":[{id,name,kind,def},...]}; null and `error` on failure
     static std::shared_ptr<FxRack> build(const std::string& json, double sampleRate, std::string& error);
+    static std::shared_ptr<FxRack> build(const Json& json, double sampleRate, std::string& error);
     // the host's audio, changed in place (any block size)
     void process(float* left, float* right, int n);
     void setTempo(double bpm, int sigN, int sigD) { c_.bpm = bpm > 0 ? bpm : 120; c_.sigN = sigN > 0 ? sigN : 4; c_.sigD = sigD > 0 ? sigD : 4; }
@@ -23,6 +24,8 @@ public:
     bool setParam(const std::string& nodeId, const std::string& key, float value, bool syncPos) { return lib_->fx->setParam(nodeId, key, value, syncPos); }
     const std::vector<std::string>& unsupported() const { return lib_->unsupported; }
     bool empty() const { return !lib_->fx->hasAny(); }
+    // NodeFX's macros: tag index of m1..m8 (-1 when the chain has no such tag), found once when the rack is built
+    int macro[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 private:
     std::shared_ptr<Library> lib_;
     fx::Control c_;

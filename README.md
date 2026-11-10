@@ -10,7 +10,10 @@ A lighter, friendlier Kontakt alternative, for Windows.
 Nothing here plays on the web: VisuMaker is a Windows desktop app (`.exe`) and VisuPlayer is a VST3. The Maker exports a library straight into the VST's library folder (`Documents\\VisuSampler\\Libraries`).
 
 - **VisuMaker** builds libraries: Samples, Mapping, Designer, FX Designer, Export.
-- **VisuPlayer** plays them. A library is one `.vsamp` file. No scripting.
+- **VisuPlayer** plays them. An instrument is one `.vsins` file, a library of several is one `.vslib` (older `.vsamp` files still load). No scripting.
+- **NodeFX** is the Maker's node effects editor as its own effect plugin (VST3 and standalone): cable modules together,
+  turn 8 macro knobs (automatable in your DAW), and save your sounds as `.nfx` presets
+  (`Documents\\VisuSampler\\NodeFX Presets`, one folder per bank). It comes with factory presets: basics, guitar amps and weird FX.
 
 ## Guides
 
@@ -30,6 +33,7 @@ short, plain [terms of use](TERMS.md).
 
 - `packages/core`: the engine and the `.vsamp` format (done, tested, `npm test`)
 - `apps/plugin`: **VisuPlayer**, the VST3/AU plugin (C++ engine, JUCE). Its window (`apps/plugin/ui`) is the library browser and play view, shown in a web view
+- `apps/plugin/nodefx`: **NodeFX**, the effect plugin; its window is the Maker's FX page (`apps/maker/nodefx.html`), its factory presets come from `presets/make-presets.mjs`
 - `examples/`: a demo library used by the tests
 - `tools/serve.mjs`: local web server for the Maker (`node tools/serve.mjs`)
 - `apps/maker`: VisuMaker (`python3 apps/maker/build.py`)
