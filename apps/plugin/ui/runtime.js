@@ -9,6 +9,14 @@ const dpr=()=>window.devicePixelRatio||1;
 let uid=1; const nid=p=>p+(uid++);
 
 
+/* NodeFX (apps/maker/nodefx.html) builds the Effects editor alone into the NodeFX plugin; the Maker never sets this */
+const NODEFX=!!window.__NODEFX;
+/* follow the pointer until it is let go */
+function drag(mv,end){
+  const up=()=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);if(end)end();};
+  window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);
+}
+
 /* ---------- state ---------- */
 const BANK_LETTERS='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const bankLetter=i=>i<26?BANK_LETTERS[i]:BANK_LETTERS[Math.floor(i/26)-1]+BANK_LETTERS[i%26];

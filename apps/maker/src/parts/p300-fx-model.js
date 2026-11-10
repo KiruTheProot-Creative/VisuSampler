@@ -20,7 +20,7 @@ const FXT={
     params:[FP('low','Low',-12,12,'dB',0),FP('mid','Mid',-12,12,'dB',0),FP('high','High',-12,12,'dB',0),FP('mix','Mix',0,100,'%',100)]},
   comp:{label:'Compressor',kind:'fx',cat:'Dynamics',ins:['in','sc'],outs:AO,cpu:2,lat:0,hint:'Evens out level. The sc input is an optional sidechain.',
     params:[FP('thresh','Threshold',-60,0,'dB',-18),FP('ratio','Ratio',1,20,':1',3),FP('attack','Attack',0.1,100,'ms',10),FP('mix','Mix',0,100,'%',100)]},
-  limiter:{label:'Limiter',kind:'fx',cat:'Dynamics',ins:['in'],outs:AO,cpu:2,lat:5,hint:'Catches peaks. Uses 5 ms of lookahead, so it adds latency.',
+  limiter:{label:'Limiter',kind:'fx',cat:'Dynamics',ins:['in'],outs:AO,cpu:2,lat:2,hint:'Brick wall: nothing ever gets past the Ceiling. It looks 2 ms ahead (that much latency, which NodeFX reports to your DAW). Classic is the older, softer fast compressor.',
     params:[FP('ceiling','Ceiling',-12,0,'dB',-0.3),FP('mix','Mix',0,100,'%',100)]},
   lfo:{label:'LFO',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:.2,lat:0,hint:'Slow wave. Drag from its out port to any parameter dot.',
     params:[FP('rate','Rate',0.05,20,'Hz',1),FP('depth','Depth',0,100,'%',100)]},
@@ -41,6 +41,9 @@ function graphOf(scope){
   return S.fx.graphs[scope];
 }
 const curG=()=>graphOf(S.fx.scope);
+/* a module saved before one of its settings existed gets the value that keeps its old sound (q.old, e.g. Oversampling
+   off), or else the default. New modules get the defaults (fxNode). The engine does the same with a missing setting. */
+function fxFillParams(n){const d=FXT[n.type];if(!d)return;n.p=n.p||{};n.tag=n.tag||{};d.params.forEach(q=>{if(n.p[q.k]==null)n.p[q.k]=q.old!=null?q.old:q.def;});}
 function fxNode(type,x,y,o){
   const d=FXT[type],n={id:nid('n'),type,x:Math.round(x),y:Math.round(y),bypass:false,name:(o&&o.name)||d.label,p:{},tag:{}};
   d.params.forEach(q=>{n.p[q.k]=q.def;});
@@ -219,3 +222,5 @@ function relinkChain(g,order){
   g.cables.push(mkCable(prev,pp,out,'in'));
   inp.x=20;inp.y=120;out.x=Math.round(200+order.length*210);out.y=120;
 }
+/* what does not change the sound (layout, names): left out when deciding whether a chain must be rebuilt */
+const ENGINE_SIG_SKIP={x:1,y:1,name:1,skin:1,open:1,collapsed:1};

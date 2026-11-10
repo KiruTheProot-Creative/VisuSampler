@@ -94,6 +94,9 @@ private:
     juce::SpinLock pushLock_;
 
     juce::AudioBuffer<float> dry_;
+    // the dry signal for Mix, delayed like the chain (lookahead), and the delay the DAW is told about
+    static constexpr int kDryLine = 16384;
+    juce::AudioBuffer<float> dryLine_; int dryW_ = 0; std::atomic<int> latNow_ { 0 };
     juce::LinearSmoothedValue<float> mixS_, gainS_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(NodeFXProcessor)

@@ -24,6 +24,8 @@ public:
     bool setParam(const std::string& nodeId, const std::string& key, float value, bool syncPos) { return lib_->fx->setParam(nodeId, key, value, syncPos); }
     const std::vector<std::string>& unsupported() const { return lib_->unsupported; }
     bool empty() const { return !lib_->fx->hasAny(); }
+    // samples the chain delays the sound by (lookahead, e.g. a brick-wall limiter); safe to ask while playing
+    int latency() const { return lib_->fx->latency(); }
     // NodeFX's macros: tag index of m1..m8 (-1 when the chain has no such tag), found once when the rack is built
     int macro[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 private:

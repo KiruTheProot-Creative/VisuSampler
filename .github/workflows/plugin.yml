@@ -4,13 +4,13 @@ on:
     paths:
       - "apps/plugin/**"
       - "apps/maker/nodefx.html"
-      - "apps/maker/app.js"
+      - "apps/maker/nodefx.js"
       - ".github/workflows/plugin.yml"
   pull_request:
     paths:
       - "apps/plugin/**"
       - "apps/maker/nodefx.html"
-      - "apps/maker/app.js"
+      - "apps/maker/nodefx.js"
       - ".github/workflows/plugin.yml"
   workflow_dispatch:
 jobs:

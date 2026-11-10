@@ -1,10 +1,9 @@
 /* ---------- NodeFX: the Effects editor as an effect plugin ----------
-   nodefx.html is this page with window.__NODEFX set. Only the Effects view shows (one chain, from the plugin's
+   Built into nodefx.html (build.py) with only the parts the Effects editor needs, never into the Maker. Only the Effects view shows (one chain, from the plugin's
    input to its output); 8 macro knobs (tags m1..m8) sit at the bottom, a preset bar at the top. The page never
    plays audio itself: the chain goes to the plugin (setRack), parameter moves go straight to it (setParam).
    Native functions (NodeFXEditor.cpp): getRack, setRack(json, rebuild), setParam, setMacro, setGlobal,
    listPresets, loadPreset, savePreset, deletePreset, openPresetFolder, openCommunity. Events: macros, globals. */
-const NODEFX=!!window.__NODEFX;
 const NFX={macros:8,last:'',lastLayout:'',name:'Init',bank:'',mix:1,out:0,presets:[],cur:null,busy:false};
 const nfxB=()=>window.__JUCE__&&window.__JUCE__.backend;
 let nfxNext=1;const nfxPending=new Map();
@@ -78,13 +77,13 @@ function nfxApply(st){
   try{
     const g=JSON.parse(JSON.stringify(st.graph));
     /* parameters a preset does not have (saved before a module had them) start at their defaults */
-    (g.nodes||[]).forEach(n=>{const d=FXT[n.type];n.p=n.p||{};n.tag=n.tag||{};if(d)d.params.forEach(q=>{if(n.p[q.k]==null)n.p[q.k]=q.def;});});
+    (g.nodes||[]).forEach(fxFillParams);
     S.fx.graphs={master:g};S.fx.scope='master';
     const tg=st.tags||[];nfxMakeTags(tg.map(t=>t.name),tg.map(t=>t.value!=null?t.value:t.def));
     NFX.name=st.name||'Untitled';NFX.bank=st.bank||'';
     if(st.mix!=null&&st.globals!==false)NFX.mix=st.mix;
     $('#nfxMacros').innerHTML=nfxMacrosHTML();nfxShowGlobal('mix');
-    S.fx.sel=null;fxRender();if(typeof histClear==='function')histClear();
+    S.fx.sel=null;fxRender();histClear();
   }finally{NFX.busy=false;}
   nfxSync(true);return true;
 }
@@ -166,6 +165,7 @@ async function nfxStart(){
   if(s&&s.out!=null)NFX.out=s.out;
   if(!s||!s.graph){const ps=await nfxRefreshPresets();const first=ps.find(p=>p.factory);if(first){await nfxLoadPreset(first);s=null;}else nfxInitChain();}
   else{NFX.cur=s.preset||null;nfxApply(s);}
-  nfxShowGlobal('out');setView('fx');fxRender();
-  setInterval(()=>nfxSync(false),150);
+  nfxShowGlobal('out');setView('fx');fxRender();histClear();
+  document.body.classList.add('nfx-ready');   /* shown only now: the page never flashes half built */
+  setInterval(()=>{nfxSync(false);nfxHistTick();},150);
 }

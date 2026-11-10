@@ -39,6 +39,7 @@ void NodeFXProcessor::prepareToPlay(double sr, int maxBlock)
     const bool changed = std::abs(sr - sampleRate_) > 1 || !current_;
     sampleRate_ = sr;
     dry_.setSize(2, std::max(1, maxBlock), false, false, true);
+    dryLine_.setSize(2, kDryLine, false, true, false); dryW_ = 0;
     mixS_.reset(sr, .03); gainS_.reset(sr, .03);
     mixS_.setCurrentAndTargetValue(mix_->get()); gainS_.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(out_->get()));
     if (changed) rebuild();
@@ -111,6 +112,8 @@ void NodeFXProcessor::timerCallback()
     std::shared_ptr<visu::FxRack> old;
     { const juce::SpinLock::ScopedLockType l(swapLock_); old = std::move(retired_); }
     // `old` is freed here, on the message thread
+    const int lat = latNow_.load();
+    if (lat != getLatencySamples()) setLatencySamples(lat);   // the DAW moves the track earlier to make up for lookahead
 }
 
 void NodeFXProcessor::processBlock(juce::AudioBuffer<float>& buf, juce::MidiBuffer&)
@@ -138,9 +141,13 @@ void NodeFXProcessor::processBlock(juce::AudioBuffer<float>& buf, juce::MidiBuff
     float* l = buf.getWritePointer(0);
     float* r = buf.getWritePointer(outCh > 1 ? 1 : 0);
     mixS_.setTargetValue(mix_->get()); gainS_.setTargetValue(juce::Decibels::decibelsToGain(out_->get()));
+    const int lat = rack ? std::min(rack->latency(), kDryLine - 1) : 0; latNow_.store(lat);
     for (int at = 0; at < n; ) {   // in pieces as big as the dry buffer (hosts may send more than they announced)
         const int m = std::min(n - at, dry_.getNumSamples());
-        dry_.copyFrom(0, 0, l + at, m); dry_.copyFrom(1, 0, r + at, m);
+        {   // the dry signal, as late as the chain's output
+            float* ll = dryLine_.getWritePointer(0); float* lr = dryLine_.getWritePointer(1); float* d0 = dry_.getWritePointer(0); float* d1 = dry_.getWritePointer(1);
+            for (int i = 0; i < m; ++i) { ll[dryW_] = l[at + i]; lr[dryW_] = r[at + i]; const int rd = (dryW_ - lat + kDryLine) % kDryLine; d0[i] = ll[rd]; d1[i] = lr[rd]; dryW_ = (dryW_ + 1) % kDryLine; }
+        }
         if (rack) {
             if (outCh > 1) rack->process(l + at, r + at, m);
             else { float* tmp = dry_.getWritePointer(1); juce::FloatVectorOperations::copy(tmp, l + at, m); rack->process(l + at, tmp, m); }

@@ -21,10 +21,4 @@ function setCanvas(w,h){
   if(clamped) flash('Canvas is limited to 1920 × 1080');
   layout();
 }
-let flashT=0;
-function flash(t){
-  const ms=[$('#msg'),$('#fxMsg'),$('#mapMsg'),$('#smMsg'),$('#exMsg')];
-  ms.forEach(m=>{if(m)m.textContent=t;});
-  clearTimeout(flashT);flashT=setTimeout(()=>{ms.forEach(m=>{if(m)m.textContent='';});},3800);
-}
 

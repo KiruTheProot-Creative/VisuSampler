@@ -1,5 +1,4 @@
 /* ---------- inspector markup: core ---------- */
-const sec=(title,body)=>'<details class="sec" data-sec="'+title+'"'+(closed.has(title)?'':' open')+'><summary>'+title+'</summary>'+body+'</details>';
 const H={
   range:(l,k,mn,mx,st,v)=>'<label class="f"><span>'+l+'</span><input type="range" data-k="'+k+'" min="'+mn+'" max="'+mx+'" step="'+st+'" value="'+v+'"><output>'+v+'</output></label>',
   num:(l,k,v,mn,mx,st,rb)=>'<label class="f"><span>'+l+'</span><input type="number" data-k="'+k+'" value="'+Math.round(v)+'"'+(mn!=null?' min="'+mn+'"':'')+(mx!=null?' max="'+mx+'"':'')+' step="'+(st||1)+'"'+(rb?' data-rb="1"':'')+'></label>',
@@ -17,7 +16,6 @@ const H={
       +(hint?'<p class="hint">'+hint+'</p>':'')+'</div>';
   }
 };
-const tagOpts=()=>[['','— none —']].concat(S.tags.map(t=>[t.id,t.name]));
 function insRow(){
   return '<div class="ins"><select id="insTag" aria-label="Tag to insert">'+S.tags.map(t=>'<option value="'+esc(t.name)+'">'+esc(t.name)+'</option>').join('')+'</select><select id="insFmt" aria-label="Format">'+['number','percent','name','ms','id','number'].filter((v,i,a)=>a.indexOf(v)===i).map(f=>'<option>'+f+'</option>').join('')+'</select><button type="button" class="btn" data-act="ins">Insert live value</button></div>'
     +'<p class="hint">Typed by hand: <code>{cutoff.number}</code>, <code>{list.name}</code>, <code>{timesig}</code>. The colon form <code>{cutoff:number}</code> works too.</p>';

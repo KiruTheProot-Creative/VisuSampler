@@ -42,6 +42,7 @@ public:
     bool empty() const;
     std::vector<std::unique_ptr<Node>> nodes;
     std::vector<int> order;             // processing order (back edges read the previous block)
+    mutable std::vector<int> latAt, latPos;   // scratch for System::latency (sized when built: nothing allocated while playing)
     std::string warn;
 };
 
@@ -61,6 +62,8 @@ public:
     // position 0..1 of a tempo-synced parameter when `syncPos`). Returns false when there is no such node or parameter.
     bool setParam(const std::string& nodeId, const std::string& key, float value, bool syncPos);
     bool hasAny() const { return any_; }
+    // samples of lookahead delay on the way through the master chain (a brick-wall limiter, for example)
+    int latency() const;
 private:
     std::vector<std::unique_ptr<Graph>> groups_;   // index = group index; null = no chain
     std::unique_ptr<Graph> master_;

@@ -12,7 +12,8 @@ function fxByTagHTML(n){
     +opts.map(t=>'<option value="'+t.id+'"'+(b.tag===t.id?' selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select></label>';
   if(b.tag)h+='<label class="f chk"><input type="checkbox" data-fn="byinv"'+(b.inv?' checked':'')+'><span>Reverse: on while the tag is off</span></label>'
     +'<label class="f chk"><input type="checkbox" data-fn="bytails"'+(b.tails?' checked':'')+'><span>Let tails ring out when switched off</span></label>'
-    +'<p class="hint">Now '+(fxTagOff(n)?'off':'on')+'. A Toggle button on this tag in the Interface tab switches it; buttons, rules and knobs (past halfway) all work.</p>';
+    +'<p class="hint">Now '+(fxTagOff(n)?'off':'on')+'. '+(NODEFX?'Turn the macro knob past halfway to switch it on (automate it in your DAW).':'A Toggle button on this tag in the Interface tab switches it; buttons, rules and knobs (past halfway) all work.')+'</p>';
+  else if(NODEFX)h+='<p class="hint">Pick a macro knob: the module plays while the knob is past halfway.</p>';
   else h+='<div class="chips"><button type="button" class="btn" data-fa="mkbybtn">Make an on/off button</button></div><p class="hint">Adds a Toggle button with a light to your interface and links this module to it.</p>';
   return sec('Switch from the interface',h);
 }

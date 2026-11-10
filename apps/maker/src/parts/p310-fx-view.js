@@ -99,6 +99,7 @@ function fxStackHTML(){
 }
 function fxRender(){
   if(!$('#fxNodes')) return;
+  Object.values(S.fx.graphs||{}).forEach(gr=>{if(gr&&gr.nodes)gr.nodes.forEach(fxFillParams);});
   const g=curG(); S.fx.an=fxAnalyze(g);
   const nodesView=S.fx.view==='nodes';
   $('#fxStage').hidden=!nodesView; $('#fxStack').hidden=nodesView;

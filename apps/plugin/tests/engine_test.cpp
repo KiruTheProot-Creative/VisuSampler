@@ -6,6 +6,7 @@
 #include "Engine.h"
 #include "FxRack.h"
 #include <cmath>
+#include <complex>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -645,6 +646,74 @@ static void testNodeFXFactory() {
     CHECK(bad == 0, "nodefx factory: every preset builds with known modules, plays, stays finite and bounded with its macros at either end, and is silent with no input (%d problems)", bad);
 }
 
+/* Effect quality: smoothed parameter moves, 4x oversampled distortion, the brick-wall limiter, filters that stay calm
+   while they move. Chains are built here from the Maker's catalog (golden/fx-catalog.json, saved by save-fx-catalog.mjs). */
+static double toneDb(const std::vector<float>& v, size_t from, size_t to, double f, double sr) {   // level of one frequency (Hann window)
+    std::complex<double> acc = 0; const size_t n = to - from;
+    for (size_t i = from; i < to; ++i) { const double w = .5 - .5 * std::cos(2 * 3.14159265358979 * (double) (i - from) / (double) n); acc += std::polar(w * v[i], -2 * 3.14159265358979 * f * (double) i / sr); }
+    return 20 * std::log10(std::abs(acc) / ((double) n / 4) + 1e-15);
+}
+static void testFxQuality() {
+    const std::string ct = readText(std::string(TEST_DATA_DIR) + "/fx-catalog.json"); const Json cat = Json::parse(ct.data(), ct.size());
+    // input -> one module -> output; `p` is the module's settings as JSON
+    auto chain = [&](const std::string& type, const std::string& p, const char* port = "mix") {
+        const std::string g = "{\"nodes\":[{\"id\":\"i\",\"type\":\"input\",\"p\":{}},{\"id\":\"m\",\"type\":\"" + type + "\",\"p\":" + p + "},{\"id\":\"o\",\"type\":\"output\",\"p\":{}}],"
+            "\"cables\":[{\"from\":{\"n\":\"i\",\"p\":\"out\"},\"to\":{\"n\":\"m\",\"p\":\"in\"}},{\"from\":{\"n\":\"m\",\"p\":\"" + std::string(port) + "\"},\"to\":{\"n\":\"o\",\"p\":\"in\"}}]}";
+        Json in; in.type = Json::Obj; in.o = { { "graph", Json::parse(g.data(), g.size()) }, { "fxRanges", cat["ranges"] } };
+        std::string err; auto r = FxRack::build(in, 48000, err); if (!r) std::printf("      %s: %s\n", type.c_str(), err.c_str()); return r;
+    };
+    const double sr = 48000, PI = 3.14159265358979;
+    /* 1. a parameter that moves glides (about 12 ms) instead of jumping */
+    { auto r = chain("util", "{\"gain\":-24,\"pan\":0,\"width\":100}", "out");
+      std::vector<float> l(9600), rr(9600); auto feed = [&](int n) { for (int i = 0; i < n; ++i) l[(size_t) i] = rr[(size_t) i] = .25f; r->process(l.data(), rr.data(), n); };
+      if (r) { feed(4800); r->setParam("m", "gain", 0, false); feed(9600);
+        const double first = l[31] / .25, mid = l[1200] / .25, late = l[9000] / .25;   // 0.6 ms, 25 ms, 190 ms after the move
+        CHECK(first < .3 && mid > .5 && mid < .97 && std::fabs(late - 1) < .01, "fx quality: a moved gain glides to its new value (%.2f after 0.6 ms, %.2f after 25 ms, %.3f after 190 ms)", first, mid, late); }
+      else CHECK(false, "fx quality: util chain builds"); }
+    /* 2. oversampling: a hard-clipped 7 kHz tone; its harmonics above 24 kHz fold back down (35 kHz -> 13 kHz, 49 kHz -> 1 kHz) */
+    for (const char* type : { "dist", "amp" }) {
+        double alias[2] = {}, fund[2] = {};
+        for (int os = 0; os < 2; ++os) {
+            const std::string p = std::string(type) == "dist" ? "{\"type\":2,\"drive\":70,\"tone\":100,\"level\":0,\"os\":" + std::to_string(os) + ",\"mix\":100}"
+                                                               : "{\"amp\":2,\"gain\":80,\"bass\":0,\"mid\":0,\"treble\":0,\"volume\":0,\"mic\":0,\"os\":" + std::to_string(os) + ",\"mix\":100}";
+            auto r = chain(type, p); if (!r) continue;
+            std::vector<float> l(48000), rr(48000); for (int i = 0; i < 48000; ++i) l[(size_t) i] = rr[(size_t) i] = (float) (.8 * std::sin(2 * PI * 7000 * i / sr));
+            r->process(l.data(), rr.data(), 48000);
+            alias[os] = std::max(toneDb(l, 8000, 48000, 1000, sr), toneDb(l, 8000, 48000, 13000, sr)); fund[os] = toneDb(l, 8000, 48000, 7000, sr);
+        }
+        // a hard clip loses almost all of it; the amp at full gain is close to a square wave, so some is left even at 4x
+        CHECK(alias[0] - alias[1] > (std::string(type) == "dist" ? 40 : 12) && std::fabs(fund[0] - fund[1]) < 1.5, "fx quality: %s with Oversampling has far less aliasing (%.0f dB -> %.0f dB, the note itself %.1f -> %.1f dB)", type, alias[0], alias[1], fund[0], fund[1]);
+    }
+    /* 3. brick wall: nothing gets past the ceiling, ever; 2 ms of lookahead, reported; quiet sound passes untouched and the
+       dry part of Mix lines up with it */
+    { auto r = chain("limiter", "{\"brick\":1,\"ceiling\":-1,\"release\":60,\"mix\":100}");
+      if (!r) CHECK(false, "fx quality: limiter chain builds");
+      else {
+        const float ceil = std::pow(10.f, -1 / 20.f); std::vector<float> l(96000), rr(96000); uint32_t s = 7;
+        for (int i = 0; i < 96000; ++i) { s = s * 1664525u + 1013904223u; const float nz = ((s >> 8) / 8388608.f - 1);
+            float v = (float) (.6 * std::sin(2 * PI * 110 * i / sr)) + .3f * nz; if (i % 7919 == 0) v = 4; if (i % 12007 == 5) v = -3.5f; if (i > 60000 && i < 60100) v *= 8; l[(size_t) i] = v; rr[(size_t) i] = -v * .7f; }
+        for (int at = 0; at < 96000; at += 517) r->process(l.data() + at, rr.data() + at, std::min(517, 96000 - at));
+        double pk = 0; for (int i = 0; i < 96000; ++i) pk = std::max(pk, (double) std::max(std::fabs(l[(size_t) i]), std::fabs(rr[(size_t) i])));
+        CHECK(pk <= ceil + 1e-6 && pk > ceil * .9, "fx quality: the brick-wall limiter never goes past its ceiling (peak %.6f, ceiling %.6f, input peaks up to 32)", pk, ceil);
+        CHECK(r->latency() == 96, "fx quality: its 2 ms lookahead is reported (%d samples at 48 kHz)", r->latency());
+      }
+      auto q = chain("limiter", "{\"brick\":1,\"ceiling\":-1,\"release\":60,\"mix\":50}");
+      if (q) { std::vector<float> l(2000, 0.f), rr(2000, 0.f); l[100] = rr[100] = .5f; q->process(l.data(), rr.data(), 2000);
+        int pk = 0; for (int i = 0; i < 2000; ++i) if (std::fabs(l[(size_t) i]) > std::fabs(l[(size_t) pk])) pk = i; double rest = 0; for (int i = 0; i < 2000; ++i) if (i != pk) rest = std::max(rest, (double) std::fabs(l[(size_t) i]));
+        CHECK(pk == 196 && std::fabs(l[196] - .5f) < 1e-6 && rest < 1e-6, "fx quality: below the ceiling the sound passes untouched, and at Mix 50%% the dry part lines up (one click at %d, %.4f)", pk, l[(size_t) pk]); }
+      auto c = chain("limiter", "{\"ceiling\":-1,\"release\":60,\"mix\":100}");   // saved before Brick wall existed: the classic one, no delay
+      CHECK(c && c->latency() == 0, "fx quality: a limiter saved before Brick wall existed keeps the classic one (no lookahead)"); }
+    /* 4. a resonant low-pass swept fast by an LFO stays calm (no bursts) */
+    { const std::string g = "{\"nodes\":[{\"id\":\"i\",\"type\":\"input\",\"p\":{}},{\"id\":\"f\",\"type\":\"filter\",\"p\":{\"type\":0,\"cutoff\":800,\"res\":100,\"slope\":1,\"gain\":0,\"mix\":100}},"
+          "{\"id\":\"lfo\",\"type\":\"lfo\",\"p\":{\"rate\":20,\"shape\":2,\"depth\":100,\"retrig\":0}},{\"id\":\"o\",\"type\":\"output\",\"p\":{}}],"
+          "\"cables\":[{\"from\":{\"n\":\"i\",\"p\":\"out\"},\"to\":{\"n\":\"f\",\"p\":\"in\"}},{\"from\":{\"n\":\"f\",\"p\":\"mix\"},\"to\":{\"n\":\"o\",\"p\":\"in\"}},{\"from\":{\"n\":\"lfo\",\"p\":\"out\"},\"to\":{\"n\":\"f\",\"p\":\"p:cutoff\"},\"amt\":100}]}";
+      Json in; in.type = Json::Obj; in.o = { { "graph", Json::parse(g.data(), g.size()) }, { "fxRanges", cat["ranges"] } }; std::string err; auto r = FxRack::build(in, 48000, err);
+      if (r) { std::vector<float> l(96000), rr(96000); for (int i = 0; i < 96000; ++i) l[(size_t) i] = rr[(size_t) i] = (float) (.5 * (2 * std::fmod(i * 110 / sr, 1.0) - 1));
+        r->process(l.data(), rr.data(), 96000); double pk = 0; bool fin = true; for (float v : l) { if (!std::isfinite(v)) fin = false; pk = std::max(pk, (double) std::fabs(v)); }
+        CHECK(fin && pk < 5, "fx quality: a resonant filter swept by a fast LFO stays calm (peak %.2f)", pk); }
+      else CHECK(false, "fx quality: sweep chain builds (%s)", err.c_str()); }
+}
+
 static void testCompat() {
     const std::string dir = COMPAT_DIR, jp = dir + "/compat.json"; std::string txt = readText(jp);
     Json db = txt.empty() ? Json() : Json::parse(txt.data(), txt.size());
@@ -691,7 +760,7 @@ static void testCompat() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testFxRack(); testNodeFXFactory(); testCompat();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testFxRack(); testNodeFXFactory(); testFxQuality(); testCompat();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

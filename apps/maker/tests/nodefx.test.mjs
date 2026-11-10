@@ -11,6 +11,8 @@ const app=await openApp({width:1500,height:900},{page:'nodefx.html',
       cables:[{id:'c1',from:{n:'i',p:'out'},to:{n:'d',p:'in'},amt:50},{id:'c2',from:{n:'d',p:'mix'},to:{n:'o',p:'in'},amt:50}]},tags:[{id:'m1',name:'Time',value:.5}],mix:.8};
     const crunch={v:1,graph:{nodes:[{id:'i',type:'input',x:40,y:150,bypass:false,name:'Input',p:{},tag:{}},{id:'a',type:'amp',x:300,y:150,bypass:false,name:'Amp',p:{amp:1,gain:60},tag:{}},{id:'o',type:'output',x:620,y:150,bypass:false,name:'Output',p:{},tag:{}}],
       cables:[{id:'c1',from:{n:'i',p:'out'},to:{n:'a',p:'in'},amt:50},{id:'c2',from:{n:'a',p:'mix'},to:{n:'o',p:'in'},amt:50}]},tags:[{id:'m1',name:'Gain',value:.6}]};
+    if(navigator.requestMIDIAccess)navigator.requestMIDIAccess=()=>{window.__midiAsked=1;return Promise.reject(new Error('no'));};
+    for(const k of ['AudioContext','webkitAudioContext'])if(window[k]){const C=window[k];window[k]=function(...x){window.__ctxMade=1;return new C(...x);};}
     window.__nfxMock=(name,a)=>{
       window.__nfxLog(name,JSON.stringify(a));
       if(name==='getRack')return store.rack;
@@ -75,5 +77,23 @@ await p.click('#nfxPName');await p.waitForTimeout(200);await p.click('[data-del=
 ok(calls.some(c=>c[0]==='deletePreset'&&c[1][0]==='u:Mine/My Echo')&&await p.locator('#nfxMenu [data-p]').count()===2,'a user preset can be deleted');
 await p.keyboard.press('Escape');
 await p.screenshot({path:'/tmp/claude-0/-home-claude/a30fc208-8447-5909-8f35-21df8f80b96b/scratchpad/nodefx.png'});
+/* only the Effects editor: none of the Maker's other parts, no audio or MIDI of its own, shown once ready */
+const slim=await p.evaluate(()=>({tabs:!!document.querySelector('#viewTabs,#canvas,#centerD,#centerS,#insBtn,#projSave'),scripts:[...document.scripts].map(s=>s.src.split('/').pop()).filter(Boolean),
+  engine:typeof window.__visuEngine,ready:document.body.classList.contains('nfx-ready'),vis:getComputedStyle(document.querySelector('.app')).visibility}));
+ok(!slim.tabs&&slim.scripts.join()==='nodefx.js'&&slim.engine==='undefined','the page carries only the Effects editor ('+slim.scripts.join()+')');
+ok(slim.ready&&slim.vis==='visible','it shows once the chain is loaded, never half built');
+ok(!(await p.evaluate(()=>window.__midiAsked||window.__ctxMade)),'it never opens MIDI devices or an audio output of its own');
+/* undo / redo of the chain */
+await p.evaluate(()=>window.__vs.nfxHistTick());
+const nn=()=>p.evaluate(()=>window.__vs.graphOf('master').nodes.length);
+const before=await nn();
+await p.evaluate(()=>{const v=window.__vs,g=v.graphOf('master');g.nodes.push(v.fxNode('chorus',300,300));v.fxRender();});
+await p.waitForTimeout(900);
+ok(await nn()===before+1,'a module was added ('+before+' → '+(before+1)+')');
+await p.keyboard.press('Control+z');await p.waitForTimeout(300);
+const afterUndo=await nn(),undoRack=lastRack();
+ok(afterUndo===before&&!JSON.parse(undoRack[1][0]).graph.nodes.some(n=>n.type==='chorus'),'Ctrl+Z takes it out again, in the plugin too');
+await p.keyboard.press('Control+y');await p.waitForTimeout(300);
+ok(await nn()===before+1,'Ctrl+Y brings it back');
 ok(app.errs.length===0,'no page errors '+app.errs.join(' | '));
 console.log(fails.length?'FAILED':'ALL OK');await app.close();process.exit(fails.length?1:0);

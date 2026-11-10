@@ -22,39 +22,36 @@ void Stereo::add(const Stereo& o, int n, float g) { for (int i = 0; i < n; ++i) 
 /* ================= small DSP parts ================= */
 struct Noise { uint32_t s = 22222; float next() { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (float) ((double) s / 2147483648.0 - 1.0); } };
 
-// Biquad with Web Audio semantics (low/high-pass Q in dB, others linear, shelves fixed slope)
+/* Filter with Web Audio's settings (low/high-pass Q in dB, others linear, shelves with the fixed slope) and exactly
+   the responses of the classic cookbook biquads, built as a state-variable filter (Andrew Simper's trapezoidal SVF,
+   "SvfLinearTrapOptimised2"). Unlike a direct-form biquad it stays well behaved while its frequency, Q or gain move,
+   even fast, wide and resonant (gliding knobs, LFOs, wahs): no bursts or clicks. */
 struct Biquad {
     enum T { LP, HP, BP, Notch, Peak, LowShelf, HighShelf, AllPass } type = LP;
-    double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, x1[2] = {}, x2[2] = {}, y1[2] = {}, y2[2] = {};
+    double a1 = 1, a2 = 0, a3 = 0, m0 = 1, m1 = 0, m2 = 0, ic1[2] = {}, ic2[2] = {};
     float f = -1, q = -1, g = -99; T lastT = LP;
     void set(T t, float freq, float Q, float gainDb, double sr) {
         if (t == lastT && freq == f && Q == q && gainDb == g) return;
         type = lastT = t; f = freq; q = Q; g = gainDb;
-        const double nyq = sr / 2, fr = std::min<double>(std::max<double>(freq, 1.0), nyq * .999), w0 = 2 * kPi * fr / sr, cw = std::cos(w0), sw = std::sin(w0);
+        const double nyq = sr / 2, fr = std::min<double>(std::max<double>(freq, 1.0), nyq * .999), w = std::tan(kPi * fr / sr);
         const double A = std::pow(10.0, gainDb / 40.0);
-        double B0, B1, B2, A0, A1, A2;
-        if (t == LP || t == HP) {
-            const double Qd = std::pow(10.0, Q / 20.0), alpha = sw / (2 * Qd);
-            if (t == LP) { B0 = (1 - cw) / 2; B1 = 1 - cw; B2 = (1 - cw) / 2; } else { B0 = (1 + cw) / 2; B1 = -(1 + cw); B2 = (1 + cw) / 2; }
-            A0 = 1 + alpha; A1 = -2 * cw; A2 = 1 - alpha;
-        } else if (t == BP || t == Notch || t == AllPass || t == Peak) {
-            const double alpha = sw / (2 * std::max(1e-4, (double) Q));
-            if (t == BP) { B0 = alpha; B1 = 0; B2 = -alpha; A0 = 1 + alpha; A1 = -2 * cw; A2 = 1 - alpha; }
-            else if (t == Notch) { B0 = 1; B1 = -2 * cw; B2 = 1; A0 = 1 + alpha; A1 = -2 * cw; A2 = 1 - alpha; }
-            else if (t == AllPass) { B0 = 1 - alpha; B1 = -2 * cw; B2 = 1 + alpha; A0 = 1 + alpha; A1 = -2 * cw; A2 = 1 - alpha; }
-            else { B0 = 1 + alpha * A; B1 = -2 * cw; B2 = 1 - alpha * A; A0 = 1 + alpha / A; A1 = -2 * cw; A2 = 1 - alpha / A; }
-        } else {
-            const double alpha = sw / 2 * std::sqrt(2.0), sa = 2 * std::sqrt(A) * alpha;
-            if (t == LowShelf) { B0 = A * ((A + 1) - (A - 1) * cw + sa); B1 = 2 * A * ((A - 1) - (A + 1) * cw); B2 = A * ((A + 1) - (A - 1) * cw - sa);
-                                 A0 = (A + 1) + (A - 1) * cw + sa; A1 = -2 * ((A - 1) + (A + 1) * cw); A2 = (A + 1) + (A - 1) * cw - sa; }
-            else { B0 = A * ((A + 1) + (A - 1) * cw + sa); B1 = -2 * A * ((A - 1) + (A + 1) * cw); B2 = A * ((A + 1) + (A - 1) * cw - sa);
-                   A0 = (A + 1) - (A - 1) * cw + sa; A1 = 2 * ((A - 1) - (A + 1) * cw); A2 = (A + 1) - (A - 1) * cw - sa; }
+        double gg = w, k;
+        switch (t) {
+            case LP: k = 1 / std::pow(10.0, Q / 20.0); m0 = 0; m1 = 0; m2 = 1; break;
+            case HP: k = 1 / std::pow(10.0, Q / 20.0); m0 = 1; m1 = -k; m2 = -1; break;
+            case BP: k = 1 / std::max(1e-4, (double) Q); m0 = 0; m1 = k; m2 = 0; break;             // 0 dB at the centre
+            case Notch: k = 1 / std::max(1e-4, (double) Q); m0 = 1; m1 = -k; m2 = 0; break;
+            case AllPass: k = 1 / std::max(1e-4, (double) Q); m0 = 1; m1 = -2 * k; m2 = 0; break;
+            case Peak: k = 1 / (std::max(1e-4, (double) Q) * A); m0 = 1; m1 = k * (A * A - 1); m2 = 0; break;
+            case LowShelf: gg = w / std::sqrt(A); k = std::sqrt(2.0); m0 = 1; m1 = k * (A - 1); m2 = A * A - 1; break;
+            default: gg = w * std::sqrt(A); k = std::sqrt(2.0); m0 = A * A; m1 = k * (1 - A) * A; m2 = 1 - A * A; break;   // high shelf
         }
-        b0 = B0 / A0; b1 = B1 / A0; b2 = B2 / A0; a1 = A1 / A0; a2 = A2 / A0;
+        a1 = 1 / (1 + gg * (gg + k)); a2 = gg * a1; a3 = gg * a2;
     }
     inline float run(int c, float x) {
-        const double y = b0 * x + b1 * x1[c] + b2 * x2[c] - a1 * y1[c] - a2 * y2[c];
-        x2[c] = x1[c]; x1[c] = x; y2[c] = y1[c]; y1[c] = y; return (float) y;
+        const double v3 = x - ic2[c], v1 = a1 * ic1[c] + a2 * v3, v2 = ic2[c] + a2 * ic1[c] + a3 * v3;
+        ic1[c] = 2 * v1 - ic1[c]; ic2[c] = 2 * v2 - ic2[c];
+        return (float) (m0 * x + m1 * v1 + m2 * v2);
     }
 };
 
@@ -99,6 +96,48 @@ struct Lfo { double ph = 0; inline float sine(double hz, double sr) { ph += hz /
     inline float tri(double hz, double sr) { ph += hz / sr; ph -= std::floor(ph); return (float) (1 - std::fabs(ph * 4 - 2)); }
     inline float sq(double hz, double sr) { ph += hz / sr; ph -= std::floor(ph); return ph < .5 ? 1.f : -1.f; } };
 
+/* 2x polyphase IIR half-band filter (Laurent de Soras' design, as in his "hiir"): two all-pass chains, minimum phase,
+   so it adds almost no delay. up(): one sample in, two out; down(): two in, one out. */
+struct HalfbandDesign {
+    static double accNum(double q, int order, int c) { double acc = 0, t; int i = 0, j = 1; do { t = std::pow(q, i * (i + 1)) * std::sin((i * 2 + 1) * c * kPi / order) * j; acc += t; j = -j; ++i; } while (std::fabs(t) > 1e-100); return acc; }
+    static double accDen(double q, int order, int c) { double acc = 0, t; int i = 1, j = -1; do { t = std::pow(q, i * i) * std::cos(i * 2 * c * kPi / order) * j; acc += t; j = -j; ++i; } while (std::fabs(t) > 1e-100); return acc; }
+    static void design(double* coef, int n, double transition) {
+        double k = std::tan((1 - transition * 2) * kPi / 4); k *= k;
+        const double kk = std::pow(1 - k * k, .25), e = .5 * (1 - kk) / (1 + kk), e4 = e * e * e * e, q = e * (1 + e4 * (2 + e4 * (15 + 150 * e4)));
+        const int order = n * 2 + 1;
+        for (int i = 0; i < n; ++i) {
+            const double num = accNum(q, order, i + 1) * std::pow(q, .25), den = accDen(q, order, i + 1) + .5, ww = num / den, wsq = ww * ww;
+            const double x = std::sqrt((1 - wsq * k) * (1 - wsq / k)) / (1 + wsq); coef[i] = (1 - x) / (1 + x);
+        }
+    }
+};
+template <int N> struct Halfband {
+    const double* c = nullptr; double x[N] = {}, y[N] = {};
+    inline void stages(double& a, double& b) {
+        for (int i = 0; i < N; i += 2) {
+            const double ta = (a - y[i]) * c[i] + x[i]; x[i] = a; y[i] = ta; a = ta;
+            const double tb = (b - y[i + 1]) * c[i + 1] + x[i + 1]; x[i + 1] = b; y[i + 1] = tb; b = tb;
+        }
+    }
+    inline void up(float in, float& o0, float& o1) { double a = in, b = in; stages(a, b); o0 = (float) a; o1 = (float) b; }
+    inline float down(float i0, float i1) { double a = i1, b = i0; stages(a, b); return (float) (.5 * (a + b)); }
+};
+/* 4x oversampling around a non-linear stage (distortion, an amp): run(ch, x, f) calls f four times at 4x the rate.
+   Clipping makes harmonics far above the top of hearing; at the normal rate they fold back down as harsh, out-of-tune
+   tones (aliasing). At 4x they are filtered out first: about -110 dB instead of -20 dB on a hard-clipped high note. */
+struct Os4 {
+    Halfband<8> u1[2], d1[2]; Halfband<4> u2[2], d2[2];
+    Os4() {
+        static double c8[8], c4[4]; static const bool once = (HalfbandDesign::design(c8, 8, .04), HalfbandDesign::design(c4, 4, .2), true); (void) once;
+        for (int ch = 0; ch < 2; ++ch) { u1[ch].c = d1[ch].c = c8; u2[ch].c = d2[ch].c = c4; }
+    }
+    template <class F> inline float run(int ch, float x, F&& f) {
+        float a, b, s0, s1, s2, s3; u1[ch].up(x, a, b); u2[ch].up(a, s0, s1); u2[ch].up(b, s2, s3);
+        s0 = f(s0); s1 = f(s1); s2 = f(s2); s3 = f(s3);
+        const float r0 = d2[ch].down(s0, s1), r1 = d2[ch].down(s2, s3); return d1[ch].down(r0, r1);
+    }
+};
+
 struct Follower { float v = 0; inline float run(float x, float a, float r) { const float ax = std::fabs(x); v += (ax > v ? a : r) * (ax - v); return v; } };
 
 static inline void panStereo(float pan, float& l, float& r) {   // Web Audio StereoPanner on a stereo signal
@@ -107,7 +146,8 @@ static inline void panStereo(float pan, float& l, float& r) {   // Web Audio Ste
 }
 
 /* ================= nodes ================= */
-struct ParamInfo { std::string key; float min = 0, max = 1, raw = 0, real = 0; bool opt = false, sync = false, known = false, log = false, syncOn = false, hz = false; float ps = -1; int tag = -1; };
+struct ParamInfo { std::string key; float min = 0, max = 1, raw = 0, real = 0; bool opt = false, sync = false, known = false, log = false, syncOn = false, hz = false; float ps = -1; int tag = -1;
+    float sm = 0; bool smOn = false; };   // the smoothed value (0..1 of the range): moves glide, never jump
 struct ModLink { int param; int src; float amt; };
 struct Cable { int src; std::string srcPort; std::string dstPort; };
 
@@ -116,6 +156,9 @@ public:
     virtual ~Module() {}
     virtual void prepare(double sr) { sr_ = sr; }
     virtual void run(Node& nd, int n, Control& c) = 0;
+    // lookahead: how many samples late the module's output comes now, and at most (the dry signal is delayed to match)
+    virtual int latency(const Node&) const { return 0; }
+    virtual int maxLatency() const { return 0; }
 protected:
     double sr_ = 44100;
 };
@@ -131,6 +174,7 @@ struct Node {
     std::unique_ptr<Module> mod;
     float modValue = .5f, mixPrev = -1, wetPrev = -1; double randCur = .5, randStep = -1;
     int byTag = -1; bool byInv = false, byTails = false; Stereo hold;   // bypass follows a tag (a button on the interface)
+    DelayLine dryDelay[2]; Stereo dryLate; int lat = 0;   // the dry signal, as late as a module with lookahead
     std::string sampleRef, tagRef;          // convolution impulse, macro tag
     int idx(const char* k) const { for (size_t i = 0; i < params.size(); ++i) if (params[i].key == k) return (int) i; return -1; }
     float P(int i, float def = 0) const { return i < 0 ? def : params[(size_t) i].real; }
@@ -183,8 +227,16 @@ struct Verb {
     static constexpr int NC = 8, NA = 4;
     DelayLine comb[2][NC], ap[2][NA]; float combFilt[2][NC] = {}; int cl[NC], al[NA]; double sr = 44100;
     float scale = 1, damp = .4f, decay = 2;
+    float lenC[2][NC] = {}, gC[2][NC] = {}, lenA[2][NA] = {}, setScale = -1, setDecay = -1;
+    void setup() {   // delay lengths and feedback: once when size or decay change, not for every sample (same values)
+        if (scale == setScale && decay == setDecay) return; setScale = scale; setDecay = decay;
+        for (int c = 0; c < 2; ++c) {
+            for (int i = 0; i < NC; ++i) { const float len = (float) ((cl[i] + c * 23) * sr / 44100 * scale); lenC[c][i] = len; gC[c][i] = std::min((float) std::pow(10.0, -3.0 * len / (decay * sr)), .985f); }
+            for (int i = 0; i < NA; ++i) lenA[c][i] = (float) ((al[i] + c * 23) * sr / 44100);
+        }
+    }
     void prepare(double s) {
-        sr = s; const int C[NC] = { 1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617 }, A[NA] = { 556, 441, 341, 225 };
+        sr = s; setScale = -1; const int C[NC] = { 1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617 }, A[NA] = { 556, 441, 341, 225 };
         for (int c = 0; c < 2; ++c) { for (int i = 0; i < NC; ++i) comb[c][i].init((int) ((C[i] + 23) * s / 44100 * 2.6)); for (int i = 0; i < NA; ++i) ap[c][i].init((int) ((A[i] + 23) * s / 44100) + 4); }
         for (int i = 0; i < NC; ++i) cl[i] = C[i]; for (int i = 0; i < NA; ++i) al[i] = A[i];
     }
@@ -193,11 +245,10 @@ struct Verb {
         for (int c = 0; c < 2; ++c) {
             float s = 0;
             for (int i = 0; i < NC; ++i) {
-                const float len = (float) ((cl[i] + c * 23) * sr / 44100 * scale), g = (float) std::pow(10.0, -3.0 * len / (decay * sr));
-                const float y = comb[c][i].read(len); combFilt[c][i] = y * (1 - damp) + combFilt[c][i] * damp;
-                comb[c][i].push(in + combFilt[c][i] * std::min(g, .985f)); s += y;
+                const float y = comb[c][i].read(lenC[c][i]); combFilt[c][i] = y * (1 - damp) + combFilt[c][i] * damp;
+                comb[c][i].push(in + combFilt[c][i] * gC[c][i]); s += y;
             }
-            for (int i = 0; i < NA; ++i) { const float len = (float) ((al[i] + c * 23) * sr / 44100); const float bo = ap[c][i].read(len); ap[c][i].push(s + bo * .5f); s = bo - s; }
+            for (int i = 0; i < NA; ++i) { const float bo = ap[c][i].read(lenA[c][i]); ap[c][i].push(s + bo * .5f); s = bo - s; }
             o[c] = s;
         }
         outL = o[0] * 2.2f; outR = o[1] * 2.2f;
@@ -205,11 +256,12 @@ struct Verb {
 };
 
 struct ReverbM : Module {
-    Verb v; DelayLine pre[2]; std::string flav; int type_, size_, decay_, damp_, pre_, grit_, gate_, drip_, shine_;
+    enum F { Room, Hall, Plate, Ambience, Cathedral, Spring, Shimmer, Digital, Gated };
+    Verb v; DelayLine pre[2]; F flav; int type_, size_, decay_, damp_, pre_, grit_, gate_, drip_, shine_;
     Follower gateF; float gateEnv = 0; double gateLeft = 0; int hold = 0; float held[2] = {};
     DelayLine shift[2]; double shPh = 0; Biquad shHp; float shFb[2] = {};
     std::vector<DelayLine> spring[2]; Biquad springLp;
-    ReverbM(Node& nd, std::string f) : flav(std::move(f)) {
+    ReverbM(Node& nd, F f) : flav(f) {
         type_ = nd.idx("type"); size_ = nd.idx("size"); decay_ = nd.idx("decay"); damp_ = nd.idx("damp"); pre_ = nd.idx("pre"); grit_ = nd.idx("grit"); gate_ = nd.idx("gate"); drip_ = nd.idx("drip"); shine_ = nd.idx("shine");
     }
     void prepare(double sr) override {
@@ -217,18 +269,16 @@ struct ReverbM : Module {
         for (int c = 0; c < 2; ++c) { spring[c].assign(10, DelayLine()); for (auto& d : spring[c]) d.init(64); }
     }
     void run(Node& nd, int n, Control&) override {
-        std::string f = flav;
-        if (f == "hall") {   // Room, Hall, Plate, Ambience, Cathedral, Spring, Shimmer (the EmulonX set)
-            static const char* T[7] = { "room", "hall", "plate", "ambience", "cathedral", "spring", "shimmer" };
-            f = T[std::min(6, std::max(0, (int) std::lround(nd.P(type_, 1))))];
-        }
+        F f = flav;
+        if (f == Hall) f = (F) std::min(6, std::max(0, (int) std::lround(nd.P(type_, 1))));   // Room, Hall, Plate, Ambience, Cathedral, Spring, Shimmer (the EmulonX set)
         const float size = nd.P(size_, 60) / 100.f;
-        v.scale = (f == "room" ? .55f : f == "plate" ? .8f : f == "ambience" ? .35f : f == "cathedral" ? 1.5f : 1.f) * (.6f + size * .8f);
-        v.decay = std::max(.1f, f == "gated" ? 2.5f : f == "ambience" ? std::min(1.2f, nd.P(decay_, 2.4f) * .4f) : f == "cathedral" ? nd.P(decay_, 2.4f) * 1.8f : nd.P(decay_, f == "spring" ? 2.2f : 2.4f));
-        v.damp = f == "plate" || f == "digital" ? .1f + nd.P(damp_, 30) / 400.f : f == "cathedral" ? .03f + nd.P(damp_, 40) / 100.f * .5f : .05f + nd.P(damp_, 40) / 100.f * .8f;
-        const float preD = std::max(1.f, (nd.P(pre_, 0) + (f == "cathedral" ? 25.f : 0.f)) / 1000.f * (float) sr_);
+        v.scale = (f == Room ? .55f : f == Plate ? .8f : f == Ambience ? .35f : f == Cathedral ? 1.5f : 1.f) * (.6f + size * .8f);
+        v.decay = std::max(.1f, f == Gated ? 2.5f : f == Ambience ? std::min(1.2f, nd.P(decay_, 2.4f) * .4f) : f == Cathedral ? nd.P(decay_, 2.4f) * 1.8f : nd.P(decay_, f == Spring ? 2.2f : 2.4f));
+        v.damp = f == Plate || f == Digital ? .1f + nd.P(damp_, 30) / 400.f : f == Cathedral ? .03f + nd.P(damp_, 40) / 100.f * .5f : .05f + nd.P(damp_, 40) / 100.f * .8f;
+        v.setup();
+        const float preD = std::max(1.f, (nd.P(pre_, 0) + (f == Cathedral ? 25.f : 0.f)) / 1000.f * (float) sr_);
         Stereo& x = nd.ins[0];
-        if (f == "spring") {
+        if (f == Spring) {
             const float drip = nd.P(drip_, 50) / 100.f, g = .55f + drip * .35f; springLp.set(Biquad::LP, 4500, 0, 0, sr_);
             for (int i = 0; i < n; ++i) {
                 float o[2];
@@ -245,16 +295,16 @@ struct ReverbM : Module {
         const float gateMs = nd.P(gate_, 300); const float grit = nd.P(grit_, 50); const int holdN = 1 + (int) (grit / 25); const float q = 8 + (100 - grit) * 3.f;
         for (int i = 0; i < n; ++i) {
             float il = pre[0].read(preD), ir = pre[1].read(preD); pre[0].push(x.l[i]); pre[1].push(x.r[i]);
-            if (f == "shimmer") { il += shFb[0]; ir += shFb[1]; }
+            if (f == Shimmer) { il += shFb[0]; ir += shFb[1]; }
             float l, r; v.run(il, ir, l, r);
-            if (f == "digital") { if (++hold >= holdN) { hold = 0; held[0] = std::round(l * q) / q; held[1] = std::round(r * q) / q; } l = held[0] * .6f + l * .4f; r = held[1] * .6f + r * .4f; }
-            if (f == "gated") {
+            if (f == Digital) { if (++hold >= holdN) { hold = 0; held[0] = std::round(l * q) / q; held[1] = std::round(r * q) / q; } l = held[0] * .6f + l * .4f; r = held[1] * .6f + r * .4f; }
+            if (f == Gated) {
                 const float lv = gateF.run((x.l[i] + x.r[i]) * .5f, .02f, .0005f);
                 if (lv > .01f) gateLeft = gateMs / 1000.0 * sr_;
                 if (gateLeft > 0) { gateLeft -= 1; gateEnv = std::min(1.f, gateEnv + .02f); } else gateEnv = std::max(0.f, gateEnv - (float) (40.0 / sr_));
                 l *= gateEnv * 1.4f; r *= gateEnv * 1.4f;
             }
-            if (f == "shimmer") {   // octave up: two read heads moving at double speed, crossfaded
+            if (f == Shimmer) {   // octave up: two read heads moving at double speed, crossfaded
                 const float W = (float) (sr_ * .05); shPh += 1.0 / W; shPh -= std::floor(shPh);
                 for (int c = 0; c < 2; ++c) {
                     shift[c].push(c ? r : l);
@@ -264,7 +314,7 @@ struct ReverbM : Module {
                     shFb[c] = shHp.run(c, up) * shine * .35f;
                 }
             }
-            if (f == "ambience") { l = l * .7f + il * .25f; r = r * .7f + ir * .25f; }   // mostly early energy, little tail
+            if (f == Ambience) { l = l * .7f + il * .25f; r = r * .7f + ir * .25f; }   // mostly early energy, little tail
             nd.wet.l[i] = l; nd.wet.r[i] = r;
         }
     }
@@ -436,15 +486,19 @@ struct EqM : Module {
     }
 };
 
+/* "os" (Oversampling, on for new modules): the shaper runs at 4x, without aliasing. Modules saved before it existed
+   do not have it and play exactly as they always did. */
 struct DistM : Module {   // distortion, overdrive pedal, fuzz pedal
-    Shaper sh; Biquad tone, hump; int type_, drive_, tone_, level_; int fixedType; bool odHump; float dcx[2] = {}, dcy[2] = {};
-    DistM(Node& nd, int ft, const char* driveKey, bool hump_) : fixedType(ft), odHump(hump_) { type_ = nd.idx("type"); drive_ = nd.idx(driveKey); tone_ = nd.idx("tone"); level_ = nd.idx("level"); }
+    Shaper sh; Biquad tone, hump; int type_, drive_, tone_, level_, os_; int fixedType; bool odHump; float dcx[2] = {}, dcy[2] = {}; Os4 ov;
+    DistM(Node& nd, int ft, const char* driveKey, bool hump_) : fixedType(ft), odHump(hump_) { type_ = nd.idx("type"); drive_ = nd.idx(driveKey); tone_ = nd.idx("tone"); level_ = nd.idx("level"); os_ = nd.idx("os"); }
     void run(Node& nd, int n, Control&) override {
         const int t = fixedType >= 0 ? fixedType : (int) std::lround(nd.P(type_, 0)); sh.set(t, nd.P(drive_, 30) / 100.f);
         tone.set(Biquad::LP, logF(nd.P(tone_, 50), 800, 16000), .6f, 0, sr_); if (odHump) hump.set(Biquad::Peak, 720, 1.2f, 7, sr_);
-        const float lv = dbg(nd.P(level_, 0)); Stereo& x = nd.ins[0];
+        const float lv = dbg(nd.P(level_, 0)); Stereo& x = nd.ins[0]; const bool os = nd.P(os_, 0) > .5f;
+        auto shape = [this](float v) { return sh.run(v); };
         for (int i = 0; i < n; ++i) { float l = x.l[i], r = x.r[i]; if (odHump) { l = hump.run(0, l); r = hump.run(1, r); }
-            l = tone.run(0, sh.run(l)); r = tone.run(1, sh.run(r));
+            if (os) { l = tone.run(0, ov.run(0, l, shape)); r = tone.run(1, ov.run(1, r, shape)); }
+            else { l = tone.run(0, sh.run(l)); r = tone.run(1, sh.run(r)); }
             // DC blocker: rectify and diode shift the signal off centre
             const float yl = l - dcx[0] + .9995f * dcy[0], yr = r - dcx[1] + .9995f * dcy[1]; dcx[0] = l; dcx[1] = r; dcy[0] = yl; dcy[1] = yr;
             nd.wet.l[i] = yl * lv; nd.wet.r[i] = yr * lv; }
@@ -455,9 +509,10 @@ struct DistM : Module {   // distortion, overdrive pedal, fuzz pedal
    microphone. Mono inside, like a real amp; "In the room" adds early reflections that spread it in stereo.
    Self-limiting (every stage saturates), so a cable from further down the chain back into it howls but stays bounded. */
 struct AmpM : Module {
-    int amp_, gain_, bass_, mid_, treb_, vol_, mic_;
+    int amp_, gain_, bass_, mid_, treb_, vol_, mic_, os_;
     Biquad hp, push, bass, mid, treb, cab[4], micf[3]; float dcx = 0, dcy = 0; DelayLine room; const float kBias = std::tanh(.15f);
-    explicit AmpM(Node& nd) { amp_ = nd.idx("amp"); gain_ = nd.idx("gain"); bass_ = nd.idx("bass"); mid_ = nd.idx("mid"); treb_ = nd.idx("treble"); vol_ = nd.idx("volume"); mic_ = nd.idx("mic"); }
+    Os4 ov; Biquad bass4, mid4, treb4; float dcx4 = 0, dcy4 = 0;   // the amp's stages at 4x ("os")
+    explicit AmpM(Node& nd) { amp_ = nd.idx("amp"); gain_ = nd.idx("gain"); bass_ = nd.idx("bass"); mid_ = nd.idx("mid"); treb_ = nd.idx("treble"); vol_ = nd.idx("volume"); mic_ = nd.idx("mic"); os_ = nd.idx("os"); }
     void prepare(double sr) override { Module::prepare(sr); room.init((int) (sr * .05)); }
     void run(Node& nd, int n, Control&) override {
         const int a = std::min(2, std::max(0, (int) std::lround(nd.P(amp_, 0)))), m = std::min(2, std::max(0, (int) std::lround(nd.P(mic_, 0))));
@@ -475,16 +530,26 @@ struct AmpM : Module {
         micf[1].set(Biquad::HighShelf, 4500, .7f, m == 0 ? 2.f : m == 1 ? -6.f : -3.f, sr_);
         micf[2].set(Biquad::Peak, c[5], 1.f, c[6], sr_);
         const float vol = dbg(nd.P(vol_, 0)) * (a == 0 ? .6f : .5f);
-        Stereo& x = nd.ins[0];
+        Stereo& x = nd.ins[0]; const bool os = nd.P(os_, 0) > .5f;
+        if (os) { const double s4 = sr_ * 4; bass4.set(Biquad::LowShelf, 160, .7f, nd.P(bass_, 0), s4); mid4.set(Biquad::Peak, 650, .7f, nd.P(mid_, 0), s4); treb4.set(Biquad::HighShelf, 2800, .7f, nd.P(treb_, 0), s4); }
+        static const float kCap4 = std::pow(.995f, .25f);   // the same coupling capacitor at 4x the rate
+        auto stages4 = [&](float s) {   // preamps, coupling capacitor, tone stack and power stage at 4x
+            s = std::tanh(s * pre + .15f) - kBias; s = std::tanh(s * (1.5f + g * 3));
+            const float y = s - dcx4 + kCap4 * dcy4; dcx4 = s; dcy4 = y;
+            return std::tanh(treb4.run(0, mid4.run(0, bass4.run(0, y))) * 1.4f) / 1.4f * 1.3f;
+        };
         const float d1 = (float) (sr_ * .0071), d2 = (float) (sr_ * .0133), d3 = (float) (sr_ * .0229);
         for (int i = 0; i < n; ++i) {
             float s = .5f * (x.l[i] + x.r[i]);
             s = hp.run(0, s); s = push.run(0, s);
+            if (os) s = ov.run(0, s, stages4);
+            else {
             s = std::tanh(s * pre + .15f) - kBias;                          // preamp 1 (a little asymmetric: even harmonics; silence stays silent)
             s = std::tanh(s * (1.5f + g * 3));                              // preamp 2
             const float y = s - dcx + .995f * dcy; dcx = s; dcy = y; s = y;  // coupling capacitor
             s = treb.run(0, mid.run(0, bass.run(0, s)));
             s = std::tanh(s * 1.4f) / 1.4f * 1.3f;                          // power stage
+            }
             for (auto& f : cab) s = f.run(0, s);
             for (auto& f : micf) s = f.run(0, s);
             float l = s, r = s;
@@ -567,8 +632,37 @@ struct VibeM : Module {
 };
 
 /* ---------- dynamics ---------- */
+/* The Limiter module ("brick": Brick wall, on for new modules) never lets a sample past the ceiling. It looks 2 ms ahead:
+   the gain it needs for every sample is known 2 ms before that sample plays, the lowest one over that window is taken
+   and smoothed over the same 2 ms, so the gain is already down when a peak arrives (no overshoot, no clicks), then it
+   recovers with Release. A last safety clamp catches rounding. It delays the sound by 2 ms (reported to the DAW by
+   NodeFX). Limiters saved before it existed have no "brick" and keep the classic fast compressor. */
+struct BrickWall {
+    int L = 1, Q = 3, qh = 0, qn = 0, ai = 0, di = 0; long long t = 0; double sum = 1; float hr = 1;
+    std::vector<float> qv, av, dl, dr; std::vector<long long> qt;
+    void prepare(double sr) {
+        L = std::max(1, (int) std::lround(sr * .002)); Q = L + 2;
+        qv.assign((size_t) Q, 1.f); qt.assign((size_t) Q, 0); av.assign((size_t) L, 1.f); dl.assign((size_t) L, 0.f); dr.assign((size_t) L, 0.f);
+        qh = qn = ai = di = 0; t = 0; sum = L; hr = 1;
+    }
+    inline void run(float inL, float inR, float ceil, float relK, float& outL, float& outR) {
+        const float pk = std::max(std::fabs(inL), std::fabs(inR)), req = pk > ceil ? ceil / pk : 1.f;
+        ++t;   // the lowest gain needed over the last L+1 samples (a queue that keeps only falling values)
+        while (qn > 0 && qv[(size_t) ((qh + qn - 1) % Q)] >= req) --qn;
+        qv[(size_t) ((qh + qn) % Q)] = req; qt[(size_t) ((qh + qn) % Q)] = t; ++qn;
+        while (qt[(size_t) qh] <= t - (L + 1)) { qh = (qh + 1) % Q; --qn; }
+        hr = std::min(qv[(size_t) qh], hr + (1 - hr) * relK);              // release: recover slowly, never above what is needed
+        sum += (double) hr - av[(size_t) ai]; av[(size_t) ai] = hr; ai = (ai + 1) % L;   // smoothed over L samples
+        const float g = (float) (sum / L), l = dl[(size_t) di], r = dr[(size_t) di]; dl[(size_t) di] = inL; dr[(size_t) di] = inR; di = (di + 1) % L;
+        outL = clampf(l * g, -ceil, ceil); outR = clampf(r * g, -ceil, ceil);
+    }
+};
 struct CompM : Module {   // feed-forward compressor; limiter and comp pedal are presets of it. Mode: compressor, limiter, OTT (from EmulonX)
-    float env = 0; int kind; int thresh_, ratio_, attack_, release_, makeup_, ceiling_, sustain_, level_, mode_;
+    float env = 0; int kind; int thresh_, ratio_, attack_, release_, makeup_, ceiling_, sustain_, level_, mode_, brick_ = -1; BrickWall bw;
+    void prepare(double sr) override { Module::prepare(sr); bw.prepare(sr); }
+    bool brick(const Node& nd) const { return kind == 1 && nd.P(brick_, 0) > .5f; }
+    int latency(const Node& nd) const override { return brick(nd) ? bw.L : 0; }
+    int maxLatency() const override { return kind == 1 ? bw.L : 0; }
     double be[3] = {}, sv[2][4][2] = {};
     struct Svf { double a1 = 0, a2 = 0, a3 = 0; };
     static Svf svc(double f, double k, double sr) { const double g = std::tan(kPi * std::min(f, sr * .45) / sr), a1 = 1 / (1 + g * (g + k)); return { a1, g * a1, g * g * a1 }; }
@@ -599,11 +693,17 @@ struct CompM : Module {   // feed-forward compressor; limiter and comp pedal are
         }
     }
     CompM(Node& nd, int k) : kind(k) { mode_ = nd.idx("mode"); thresh_ = nd.idx("thresh"); ratio_ = nd.idx("ratio"); attack_ = nd.idx("attack"); release_ = nd.idx("release"); makeup_ = nd.idx("makeup");
-        ceiling_ = nd.idx("ceiling"); sustain_ = nd.idx("sustain"); level_ = nd.idx("level"); }
+        ceiling_ = nd.idx("ceiling"); sustain_ = nd.idx("sustain"); level_ = nd.idx("level"); brick_ = nd.idx("brick"); }
     void run(Node& nd, int n, Control&) override {
         float th, ratio, att, rel, knee, mk;
         const int mode = kind == 0 ? (int) std::lround(nd.P(mode_, 0)) : 0;
         if (mode == 2) { ott(nd, n); return; }
+        if (brick(nd)) {
+            const float ceil = dbg(std::min(0.f, nd.P(ceiling_, -.3f))), relK = 1 - std::exp(-1 / (std::max(.001f, nd.P(release_, 60) / 1000) * (float) sr_));
+            Stereo& x = nd.ins[0];
+            for (int i = 0; i < n; ++i) bw.run(x.l[i], x.r[i], ceil, relK, nd.wet.l[i], nd.wet.r[i]);
+            return;
+        }
         if (mode == 1) { th = nd.P(thresh_, -18) - 1; ratio = 20; att = .001f; rel = nd.P(release_, 60) / 1000; knee = 0; mk = dbg(nd.P(makeup_, 0)); }
         else if (kind == 0) { th = nd.P(thresh_, -18); ratio = nd.P(ratio_, 3); att = nd.P(attack_, 10) / 1000; rel = nd.P(release_, 150) / 1000; knee = 30; mk = dbg(nd.P(makeup_, 0)); }
         else if (kind == 1) { th = nd.P(ceiling_, -.3f) - 1; ratio = 20; att = .001f; rel = nd.P(release_, 60) / 1000; knee = 0; mk = 1; }
@@ -771,11 +871,11 @@ const std::vector<std::string>& supportedModules() {
 static std::unique_ptr<Module> makeModule(Node& nd, const Library& lib) {
     const std::string& t = nd.type;
     if (t == "delay") return std::make_unique<DelayM>(nd);
-    if (t == "reverb") return std::make_unique<ReverbM>(nd, "hall");
-    if (t == "digiverb") return std::make_unique<ReverbM>(nd, "digital");
-    if (t == "gatedverb") return std::make_unique<ReverbM>(nd, "gated");
-    if (t == "spring") return std::make_unique<ReverbM>(nd, "spring");
-    if (t == "shimmer") return std::make_unique<ReverbM>(nd, "shimmer");
+    if (t == "reverb") return std::make_unique<ReverbM>(nd, ReverbM::Hall);
+    if (t == "digiverb") return std::make_unique<ReverbM>(nd, ReverbM::Digital);
+    if (t == "gatedverb") return std::make_unique<ReverbM>(nd, ReverbM::Gated);
+    if (t == "spring") return std::make_unique<ReverbM>(nd, ReverbM::Spring);
+    if (t == "shimmer") return std::make_unique<ReverbM>(nd, ReverbM::Shimmer);
     if (t == "conv") { auto m = std::make_unique<ConvM>(nd, lib); const int li = nd.idx("len"); if (li >= 0) m->lenFromFile = nd.params[(size_t) li].raw; return m; }
     if (t == "chorus") return std::make_unique<ChorusM>(nd, std::make_unique<EnsembleM>(nd));
     if (t == "flanger") return std::make_unique<ModDelayM>(nd, .0035f, .003f, .5f, true, false, false);
@@ -833,7 +933,11 @@ static float modOut(Node& m, Control& c, double blockSec, const std::vector<TagD
 Graph::~Graph() {}
 bool Graph::empty() const { return nodes.empty(); }
 
-static void evalParams(Node& nd, Control& c, const std::vector<TagDef>& tags, const std::vector<std::unique_ptr<Node>>& all) {
+/* smoothK: how far a moved parameter glides towards its new value in one block (about 12 ms to settle). Knobs, macros,
+   DAW automation and tags move parameters in small steps instead of jumps, so filters, gains and drives never crackle
+   ("zipper noise"). Steps (types, modes) and tempo-synced values still switch at once; modulators are added on top
+   unsmoothed, so LFOs keep their full speed. A parameter that never moves sounds exactly as before. */
+static void evalParams(Node& nd, Control& c, const std::vector<TagDef>& tags, const std::vector<std::unique_ptr<Node>>& all, float smoothK) {
     for (size_t pi = 0; pi < nd.params.size(); ++pi) {
         ParamInfo& p = nd.params[pi];
         if (!p.known) { p.real = p.raw; continue; }
@@ -857,6 +961,11 @@ static void evalParams(Node& nd, Control& c, const std::vector<TagDef>& tags, co
             norm = tv;
         } else if (p.log) norm = std::log(std::max(p.min, p.raw) / p.min) / std::log(p.max / p.min);
         else norm = p.max > p.min ? (p.raw - p.min) / (p.max - p.min) : 0;
+        if (!p.opt) {
+            if (!p.smOn || std::fabs(norm - p.sm) < 1e-6f) { p.sm = norm; p.smOn = true; }
+            else p.sm += (norm - p.sm) * smoothK;
+            norm = p.sm;
+        }
         // a macro adds its knob on top (0 = the parameter as set); other modulators swing both ways
         for (auto& m : nd.mods) if (m.param == (int) pi) { const Node& src = *all[(size_t) m.src];
             norm += src.type == "macro" ? src.modValue * (m.amt / 100.f) : (src.modValue - .5f) * 2 * (m.amt / 100.f); }
@@ -955,12 +1064,14 @@ static std::unique_ptr<Graph> buildGraph(const Json& g, const Json& ranges, cons
     for (size_t i = 0; i < G->nodes.size(); ++i) if (G->nodes[i]->type == "input") dfs((int) i);
     for (size_t i = 0; i < G->nodes.size(); ++i) if (!state[i]) dfs((int) i);
     G->order.assign(post.rbegin(), post.rend());
+    G->latAt.assign(G->nodes.size(), 0); G->latPos.assign(G->nodes.size(), 0);
     return G;
 }
 
 static void runGraph(Graph& G, int n, Control& c, const std::vector<TagDef>& tags) {
     const double blockSec = n / c.sampleRate;
-    for (auto& nd : G.nodes) if (nd->isMod) { evalParams(*nd, c, tags, G.nodes); if (nd->type != "env") nd->modValue = modOut(*nd, c, blockSec, tags); }
+    const float smoothK = 1 - (float) std::exp(-blockSec / .012);
+    for (auto& nd : G.nodes) if (nd->isMod) { evalParams(*nd, c, tags, G.nodes, smoothK); if (nd->type != "env") nd->modValue = modOut(*nd, c, blockSec, tags); }
     for (int u : G.order) {
         Node& nd = *G.nodes[(size_t) u];
         for (auto& s : nd.ins) s.clear(n);
@@ -972,7 +1083,7 @@ static void runGraph(Graph& G, int n, Control& c, const std::vector<TagDef>& tag
         }
         if (nd.type == "output") { std::memcpy(&G.output, &nd.ins[0], sizeof(Stereo)); continue; }
         if (nd.type == "input") continue;
-        evalParams(nd, c, tags, G.nodes);
+        evalParams(nd, c, tags, G.nodes, smoothK);
         if (nd.isMod) { if (nd.mod) { nd.mod->run(nd, n, c); nd.modValue = modOut(nd, c, blockSec, tags); } continue; }
         /* bypass: the switch in the editor, or a tag (on while the tag is on, unless reversed) */
         bool off = nd.bypass || !nd.mod, tails = false;
@@ -986,7 +1097,13 @@ static void runGraph(Graph& G, int n, Control& c, const std::vector<TagDef>& tag
             continue;
         }
         /* effect: dry, wet and mix outputs */
-        Stereo& x = nd.ins[0];
+        Stereo& in0 = nd.ins[0];
+        nd.lat = off || !nd.mod ? 0 : nd.mod->latency(nd);
+        if (nd.mod && nd.mod->maxLatency() > 0) {   // keep the dry line running, so switching lookahead on is seamless
+            for (int i = 0; i < n; ++i) { nd.dryDelay[0].push(in0.l[i]); nd.dryDelay[1].push(in0.r[i]);
+                nd.dryLate.l[i] = nd.lat ? nd.dryDelay[0].read((float) nd.lat) : in0.l[i]; nd.dryLate.r[i] = nd.lat ? nd.dryDelay[1].read((float) nd.lat) : in0.r[i]; }
+        }
+        Stereo& x = in0; const Stereo& dry = nd.mod && nd.mod->maxLatency() > 0 ? nd.dryLate : in0;
         if (off) nd.wet.clear(n);
         else if (tails) {   // input closed, the module keeps running so reverb and delay tails ring out
             std::memcpy(&nd.hold, &x, sizeof(Stereo)); x.clear(n); nd.mod->run(nd, n, c); std::memcpy(&x, &nd.hold, sizeof(Stereo));
@@ -994,9 +1111,9 @@ static void runGraph(Graph& G, int n, Control& c, const std::vector<TagDef>& tag
         const int mi = nd.idx("mix"); const float m0 = clampf(nd.P(mi, 100) / 100.f, 0, 1);
         const float dryT = off || tails ? 1.f : 1 - m0, wetT = off ? 0.f : m0;   // smoothed, so switching never clicks
         if (nd.mixPrev < 0) { nd.mixPrev = dryT; nd.wetPrev = wetT; }
-        std::memcpy(&nd.outs[0], &x, sizeof(Stereo)); std::memcpy(&nd.outs[1], &nd.wet, sizeof(Stereo));
+        std::memcpy(&nd.outs[0], &dry, sizeof(Stereo)); std::memcpy(&nd.outs[1], &nd.wet, sizeof(Stereo));
         for (int i = 0; i < n; ++i) { const float t = (float) (i + 1) / (float) n, dg = nd.mixPrev + (dryT - nd.mixPrev) * t, wg = nd.wetPrev + (wetT - nd.wetPrev) * t;
-            nd.outs[2].l[i] = x.l[i] * dg + nd.wet.l[i] * wg; nd.outs[2].r[i] = x.r[i] * dg + nd.wet.r[i] * wg; }
+            nd.outs[2].l[i] = dry.l[i] * dg + nd.wet.l[i] * wg; nd.outs[2].r[i] = dry.r[i] * dg + nd.wet.r[i] * wg; }
         nd.mixPrev = dryT; nd.wetPrev = wetT;
         for (int i = 0; i < n; ++i) { if (!std::isfinite(nd.outs[2].l[i]) || !std::isfinite(nd.outs[2].r[i])) { nd.outs[2].clear(n); nd.outs[1].clear(n); break; } }
     }
@@ -1022,8 +1139,26 @@ std::unique_ptr<System> System::build(const Json& manifest, const Library& lib, 
 System::~System() {}
 
 void System::prepare(double sr) {
-    auto prep = [&](Graph* g) { if (!g) return; for (auto& nd : g->nodes) if (nd->mod) nd->mod->prepare(sr); };
+    auto prep = [&](Graph* g) { if (!g) return; for (auto& nd : g->nodes) if (nd->mod) {
+        nd->mod->prepare(sr); const int ml = nd->mod->maxLatency(); if (ml > 0) for (auto& d : nd->dryDelay) d.init(ml + kBlock); } };
     prep(master_.get()); for (auto& g : groups_) prep(g.get());
+}
+
+/* how late the master chain's output is (lookahead modules on the way, the longest path counts) */
+int System::latency() const {
+    if (!master_ || master_->nodes.empty()) return 0;
+    Graph& G = *master_; std::vector<int>& at = G.latAt; std::vector<int>& pos = G.latPos; int out = 0;
+    if (at.size() != G.nodes.size()) return 0;
+    std::fill(at.begin(), at.end(), 0);
+    for (size_t k = 0; k < G.order.size(); ++k) pos[(size_t) G.order[k]] = (int) k;
+    for (int u : G.order) {
+        Node& nd = *G.nodes[(size_t) u]; int in = 0;
+        for (auto& e : nd.incoming) if (pos[(size_t) e.src] < pos[(size_t) u]) in = std::max(in, at[(size_t) e.src]);   // feedback edges do not count
+        const bool live = !nd.bypass && nd.mod && !nd.raw && !nd.isMod;
+        at[(size_t) u] = in + (live ? nd.mod->latency(nd) : 0);
+        if (nd.type == "output") out = std::max(out, in);
+    }
+    return out;
 }
 
 Stereo& System::groupIn(int g) {

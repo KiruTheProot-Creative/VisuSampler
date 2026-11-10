@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VisuMaker 0.0.1</title>
+<title>NodeFX</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
 @font-face{font-family:'Figtree';src:url('../../assets/fonts/Figtree.ttf');font-weight:100 900;}
@@ -733,8 +733,9 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 .insform label{display:grid;gap:2px;font-size:11px;color:var(--muted,#9a9a9a)}
 .insform input{width:100%;box-sizing:border-box}
 
-</style>
-<style>/* NodeFX (nodefx.html): the Effects editor as an effect plugin. Only in nodefx.html. */
+/* NodeFX (nodefx.html): the Effects editor as an effect plugin. Only in nodefx.html. */
+html{background:#15131b}
+body.nodefx:not(.nfx-ready) .app{visibility:hidden}   /* shown once the chain is loaded (p985 nfxStart) */
 body.nodefx .app{grid-template-rows:auto minmax(0,1fr) auto}
 body.nodefx #viewTabs,body.nodefx .insw,body.nodefx #presetBtn,body.nodefx #projOpen,body.nodefx #projSave,body.nodefx #audioSetBtn,
 body.nodefx #tipsBtn,body.nodefx #fxScope,body.nodefx #leftF>h2:first-child,body.nodefx #modeSeg{display:none!important}
@@ -765,117 +766,21 @@ body.nodefx .logo em{color:#7fd1ff}
 .nfxn.static{cursor:default}
 .nfxv{font-size:10px;color:var(--muted,#9a9a9a);font-family:var(--f-mono,monospace)}
 .nfxren{width:76px;font-size:11px}
-</style></head><body>
+
+</style>
+</head><body class="nodefx">
 <div class="app">
   <header class="top">
-    <div class="logo">Visu<em>Maker</em></div>
-    <nav class="tabs" id="viewTabs" aria-label="Maker sections">
-      <button type="button" data-view="sound">Sound</button>
-      <button type="button" class="on" data-view="design" aria-current="page">Interface</button>
-      <button type="button" data-view="fx">Effects</button>
-      <button type="button" data-view="export">Export</button>
-    </nav>
-    <div class="insw">
-      <button type="button" class="btn" id="insBtn" aria-haspopup="true" aria-expanded="false" aria-controls="insMenu"><span class="ilabel">Instrument</span> <b id="insName"></b><span class="icount" id="insCount"></span> ▾</button>
-      <div class="menu insmenu" id="insMenu" hidden role="dialog" aria-label="Instruments in this library"></div>
-    </div>
-    <div class="pre">
-      <button type="button" class="btn ghost" id="tipsBtn" aria-pressed="false" title="Show or hide the explanations">Tips</button>
-      <button type="button" class="btn" id="projOpen" title="Open a saved project (.vmproj, Ctrl+O)">Open</button>
-      <button type="button" class="btn" id="projSave" title="Save the project (Ctrl+S). Shift+click or Ctrl+Shift+S: save as a new file">Save</button>
-      <input type="file" id="fileProj" accept=".vmproj,application/octet-stream" hidden>
-      <button type="button" class="btn" id="presetBtn" aria-haspopup="true" aria-expanded="false">Presets ▾</button>
-      <button type="button" class="btn" id="presetUndo" hidden>Undo preset</button>
-      <div class="menu" id="presetMenu" hidden></div>
-    </div>
-    <div class="seg" id="modeSeg" role="group" aria-label="Mode">
-      <button type="button" id="mDesign" aria-pressed="true">Design</button>
-      <button type="button" id="mTest" aria-pressed="false">Test</button>
-    </div>
+    <div class="logo">Node<em>FX</em></div>
   </header>
-
-  <aside class="box left" id="leftD" aria-label="Elements and layers">
-    <h2>Add</h2>
-    <div class="adds">
-      <button type="button" class="btn" data-act="add" data-type="panel"><i class="ic panel"></i>Panel</button>
-      <button type="button" class="btn" data-act="add" data-type="knob"><i class="ic knob"></i>Knob</button>
-      <button type="button" class="btn" data-act="add" data-type="fader"><i class="ic fader"></i>Fader</button>
-      <button type="button" class="btn" data-act="add" data-type="text"><i class="ic text"></i>Text</button>
-      <button type="button" class="btn" data-act="add" data-type="button"><i class="ic btn"></i>Button</button>
-      <button type="button" class="btn" data-act="add" data-type="lcd"><i class="ic lcd"></i>Text panel</button>
-      <button type="button" class="btn" data-act="add" data-type="list"><i class="ic list"></i>List selector</button>
-      <button type="button" class="btn" data-act="add" data-type="dropdown"><i class="ic dropdown"></i>Dropdown</button>
-      <button type="button" class="btn" data-act="add" data-type="graph"><i class="ic graph"></i>Graph</button>
-      <button type="button" class="btn" data-act="addimg"><i class="ic image"></i>Image…</button>
-      <button type="button" class="btn" data-act="addcomp" data-comp="banks"><i class="ic banks"></i>Bank buttons</button>
-      <button type="button" class="btn" data-act="addcomp" data-comp="browser" title="A display with folder and patch buttons, already wired up"><i class="ic list"></i>Patch browser</button>
-      <button type="button" class="btn" data-act="addcomp" data-comp="slotB" title="A second patch that plays at the same time, with its own browser and an A/B mix knob"><i class="ic list"></i>Second patch slot</button>
-    </div>
-    <h2>Layers <span id="layerCount" class="muted"></span><button type="button" id="layPage" class="laypage" aria-pressed="true" hidden title="Show only the layers on the page you are editing">This page</button></h2>
-    <ul id="layers"></ul>
-    <p class="tip">Top of the list is the front; drag rows to restack or into a group. <kbd>Shift</kbd>/<kbd>Ctrl</kbd>-click or drag across empty space to pick several, <kbd>Ctrl</kbd>+<kbd>G</kbd> groups them, <kbd>Ctrl</kbd>+<kbd>A</kbd> picks all. Drag corners to resize. Hold <kbd>Alt</kbd> to skip snapping. <kbd>Del</kbd> removes, arrows nudge, <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates.</p>
-  </aside>
-
-  <aside class="box left" id="leftF" aria-label="FX scopes and effects" hidden>
+<aside class="box left" id="leftF" aria-label="FX scopes and effects">
     <h2>Chain for</h2>
     <div id="fxScope" class="scopes"></div>
     <h2>Add</h2>
     <div id="fxPal"></div>
     <p class="tip"><kbd>A</kbd> or double-click opens search. <kbd>Del</kbd> removes. <kbd>B</kbd> bypasses. Drag from a coloured dot to wire.</p>
   </aside>
-
-  <main class="center" id="centerD">
-    <div class="bar">
-      <label>Canvas
-        <input id="cw" type="number" min="200" max="1920" step="1" aria-label="Canvas width in pixels">
-        <span>×</span>
-        <input id="ch" type="number" min="120" max="1080" step="1" aria-label="Canvas height in pixels">
-      </label>
-      <select id="preset" aria-label="Canvas sizes">
-        <option value="">Sizes</option>
-        <option value="640x360">640 × 360</option>
-        <option value="960x540">960 × 540</option>
-        <option value="1280x720">1280 × 720</option>
-        <option value="1600x420">1600 × 420 (rack)</option>
-        <option value="1080x1080">1080 × 1080</option>
-        <option value="1920x1080">1920 × 1080 (max)</option>
-      </select>
-      <label>Zoom
-        <select id="zoom" aria-label="Zoom">
-          <option value="fit">Fit</option><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option>
-          <option value="100">100%</option><option value="150">150%</option><option value="200">200%</option>
-        </select>
-      </label>
-      <label class="chk"><input type="checkbox" id="snap" checked> Snap</label>
-      <span id="pageBar" class="pagebar" aria-label="Pages"></span>
-      <span id="zl" class="muted"></span>
-      <span id="msg" role="status" aria-live="polite"></span>
-    </div>
-
-    <div class="stage design" id="stage">
-      <div id="viewport">
-        <div id="canvas"></div>
-        <div id="guides"><div id="gx" hidden></div><div id="gy" hidden></div></div>
-        <div id="selbox" hidden>
-          <span id="selTag"></span>
-          <i class="hd nw" data-dir="nw"></i><i class="hd ne" data-dir="ne"></i><i class="hd sw" data-dir="sw"></i><i class="hd se" data-dir="se"></i>
-        </div>
-      </div>
-    </div>
-
-    <div class="testbar" id="testbar" hidden>
-      <div class="tb-top">
-        <span class="live">● Test mode</span>
-        <span class="muted">Drag knobs, click buttons and list rows, scroll to nudge. Play with the keys or A–K.</span>
-        <label>BPM <input id="bpm" type="number" min="40" max="300" value="120"></label>
-        <label>Time sig <span class="sigrow"><select id="sigN" aria-label="Beats per bar"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option></select><b>/</b><select id="sigD" aria-label="Note value"><option>2</option><option>4</option><option>8</option><option>16</option></select></span></label>
-        <button type="button" class="btn" id="resetVals">Reset values</button>
-      </div>
-      <div class="kbrow"><div class="wheels tall" id="kbWheels" role="group" aria-label="Pitch and mod wheels"></div><div class="kb" id="kb" aria-label="Test keyboard"></div></div>
-    </div>
-  </main>
-
-  <main class="center" id="centerF" hidden>
+<main class="center" id="centerF">
     <div class="bar">
       <strong id="fxScopeName">Master chain</strong>
       <div class="seg" role="group" aria-label="FX view">
@@ -900,97 +805,7 @@ body.nodefx .logo em{color:#7fd1ff}
     </div>
     <div class="fxstack" id="fxStack" hidden></div>
   </main>
-
-  <aside class="box left" id="leftS" aria-label="Samples" hidden></aside>
-
-  <main class="center" id="centerS" hidden>
-    <div class="bar">
-      <div class="seg" role="group" aria-label="Tool"><button type="button" id="smToolSel" aria-pressed="true">Select</button><button type="button" id="smToolSlice" aria-pressed="false">Slice</button></div>
-      <button type="button" class="btn" id="smRaw" title="Play the raw sample or selection (Space)">▶ Raw</button>
-      <button type="button" class="btn" id="smProc" title="Play through the mode and unison at the root key">▶ Processed</button>
-      <button type="button" class="btn" id="smStop">Stop</button>
-      <button type="button" class="btn" id="smFit">Fit</button>
-      <button type="button" class="btn" id="smZoomSel">Zoom to selection</button>
-      <span id="smInfo" class="muted"></span>
-      <span id="smMsg" role="status" aria-live="polite"></span>
-    </div>
-    <div class="mapmain">
-      <div id="smWrap"><canvas id="smCanvas" aria-label="Sample waveform"></canvas></div>
-      <input type="range" id="smScroll" min="0" max="0" value="0" aria-label="Scroll the waveform">
-      <div class="mapfoot"><span class="muted">Drag to select · double-click selects all · Ctrl+wheel zooms · drag the blue loop markers · in Slice mode click to add a marker</span></div>
-    </div>
-  </main>
-
-  <aside class="box left" id="leftX" aria-label="Library info" hidden></aside>
-  <main class="center" id="centerX" hidden>
-    <div class="bar"><b>Library page preview</b><span class="muted">what VisuPlayer's Library explorer will show</span><span id="exMsg" role="status" aria-live="polite"></span></div>
-    <div class="exmain" id="exMain"></div>
-  </main>
-  <aside class="box right" id="rightX" aria-label="Build" hidden><div id="rbodyX"></div></aside>
-
-  <aside class="box left" id="leftM" aria-label="Lists, groups and samples" hidden></aside>
-
-  <main class="center" id="centerN" hidden>
-    <div class="bar snbar">
-      <b id="snTitle">Sound</b><span id="snSub" class="muted"></span>
-      <span class="grow"></span>
-      <span id="snAutoSlot"></span>
-      <div class="menuwrap"><button type="button" class="btn" id="snTools" aria-haspopup="true" aria-expanded="false">Tools ▾</button><div class="menu snmenu" id="snToolsMenu" hidden></div></div>
-      <div class="seg" role="group" aria-label="Layout"><button type="button" data-lay="map" aria-pressed="false">Map</button><button type="button" data-lay="split" aria-pressed="true">Split</button><button type="button" data-lay="wave" aria-pressed="false">Wave</button></div>
-    </div>
-    <div class="snbody" id="snBody">
-      <div class="snpane" id="snTop"><div class="snempty" id="snEmpty" hidden><h2>Drop samples here</h2><p>WAV, FLAC, MP3 or OGG. Names like <b>Piano_C3</b> are mapped to the right key automatically.</p><div><button type="button" class="btn primary" data-ma="imp">Import audio…</button> <button type="button" class="btn" data-ma="demo">Load the demo set</button></div></div></div>
-      <div class="snsplit" id="snSplit" role="separator" aria-orientation="horizontal" aria-label="Resize map and waveform" tabindex="0"></div>
-      <div class="snpane" id="snBot">
-        <div class="snwbar"><b id="snWaveTitle">No sample</b><span id="snWaveSub" class="muted"></span><span class="grow"></span><span id="snWaveSlot"></span>
-          <div class="menuwrap"><button type="button" class="btn" id="snEdit" aria-haspopup="true" aria-expanded="false">View ▾</button><div class="menu snmenu" id="snEditMenu" hidden></div></div></div>
-      </div>
-    </div>
-  </main>
-
-  <aside class="box right" id="rightN" aria-label="Inspector" hidden>
-    <div id="snInsList" hidden></div>
-    <div id="snInsGroup" hidden></div>
-  </aside>
-
-  <main class="center" id="centerM" hidden>
-    <div class="bar mapbar">
-      <button type="button" class="btn" id="mapAuto" title="Map every unmapped sample by its root note">Auto-map</button>
-      <button type="button" class="btn" id="mapSpread" title="Spread key ranges between root notes">Spread keys</button>
-      <button type="button" class="btn" id="mapStack" title="Split selected zones into even velocity layers">Stack velocity</button>
-      <button type="button" class="btn" id="mapFill" title="Close gaps between neighbouring zones">Fill gaps</button>
-      <button type="button" class="btn" id="mapXfade" title="Make touching zones overlap with equal-power crossfades">Crossfade</button>
-      <label>± <input id="mapXf" type="number" min="1" max="24" value="3" aria-label="Crossfade size in keys"> keys</label>
-      <label>Zoom <input id="mapZoom" type="range" min="3" max="40" step="0.5" value="13"></label>
-      <label>Interpolation <select id="mapInterp" aria-label="Project interpolation"><option value="nearest">Nearest</option><option value="linear">Linear</option><option value="cubic" selected>Cubic</option><option value="sinc">Sinc</option></select></label>
-      <label>Test velocity <input id="mapVel" type="range" min="0" max="127" value="0"> <span id="mapVelOut" class="muted">by key height</span></label>
-      <button type="button" class="btn" id="mapPanic">Stop all</button>
-      <span id="mapVoices" class="muted">0 voices · no limit</span>
-      <span id="mapMsg" role="status" aria-live="polite"></span>
-    </div>
-    <div class="mapmain">
-      <div id="mapWrap"><canvas id="mapCanvas" tabindex="0" aria-label="Zone map: keys across, velocity up"></canvas></div>
-      <div class="mapkeys"><div class="wheels" id="mapWheels" role="group" aria-label="Pitch and mod wheels"></div><canvas id="mapPiano" aria-label="Piano. Click to play, height sets velocity."></canvas></div>
-      <input type="range" id="mapScroll" min="0" max="0" value="0" aria-label="Scroll the keyboard">
-      <div class="mapfoot"><span id="mapInfo" class="muted"></span><span class="muted">Click to select · drag to move or resize · diamonds drag crossfades · play keys with the piano or A–K</span></div>
-    </div>
-  </main>
-
-  <aside class="box right" id="rightD" aria-label="Inspector">
-    <div class="rtabs" role="tablist">
-      <button type="button" role="tab" data-tab="props" aria-selected="true">Props</button>
-      <button type="button" role="tab" data-tab="tags" aria-selected="false">Tags<small id="tagCount"></small></button>
-      <button type="button" role="tab" data-tab="lists" aria-selected="false">Lists<small id="listCount"></small></button>
-      <button type="button" role="tab" data-tab="proj" aria-selected="false">Project</button>
-    </div>
-    <div id="rbody"></div>
-  </aside>
-
-  <aside class="box right" id="rightS" aria-label="Sample inspector" hidden><h2>Sample</h2><div id="rbodyS"></div></aside>
-
-  <aside class="box right" id="rightM" aria-label="Zone inspector" hidden><h2>Zone</h2><div id="rbodyM"></div></aside>
-
-  <aside class="box right fxright" id="rightF" aria-label="FX inspector" hidden>
+<aside class="box right fxright" id="rightF" aria-label="FX inspector">
     <h2>Checks</h2>
     <div id="fxRep"></div>
     <h2>Selected</h2>
@@ -998,10 +813,6 @@ body.nodefx .logo em{color:#7fd1ff}
   </aside>
 </div>
 
-<input type="file" id="fileAudio" accept="audio/*,.wav,.flac,.ogg,.mp3,.aif,.aiff" multiple hidden>
-<input type="file" id="fileImg" accept="image/*" hidden>
-<input type="file" id="fileFont" accept=".ttf,.otf,.woff,.woff2" hidden>
-
 <script>window.__NODEFX=1</script>
-<script type="module" src="app.js"></script>
+<script type="module" src="nodefx.js"></script>
 </body></html>

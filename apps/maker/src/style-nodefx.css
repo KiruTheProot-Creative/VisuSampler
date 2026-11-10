@@ -1,4 +1,6 @@
 /* NodeFX (nodefx.html): the Effects editor as an effect plugin. Only in nodefx.html. */
+html{background:#15131b}
+body.nodefx:not(.nfx-ready) .app{visibility:hidden}   /* shown once the chain is loaded (p985 nfxStart) */
 body.nodefx .app{grid-template-rows:auto minmax(0,1fr) auto}
 body.nodefx #viewTabs,body.nodefx .insw,body.nodefx #presetBtn,body.nodefx #projOpen,body.nodefx #projSave,body.nodefx #audioSetBtn,
 body.nodefx #tipsBtn,body.nodefx #fxScope,body.nodefx #leftF>h2:first-child,body.nodefx #modeSeg{display:none!important}

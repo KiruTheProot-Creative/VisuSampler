@@ -39,5 +39,13 @@ await p.click('[data-view="fx"]');await p.evaluate(()=>{const v=window.__vs,S=v.
 await p.waitForTimeout(300);await p.screenshot({path:'/tmp/fx1.png'});
 await p.click('.fxn.pedal .foot');await p.waitForTimeout(150);
 ok(await p.evaluate(()=>window.__vs.S.fx.graphs.master.nodes.find(n=>n.type==='pod').bypass===true),'footswitch toggles bypass');
+/* new settings: new modules get them on; modules saved before they existed keep their old sound */
+const up=await p.evaluate(()=>{const v=window.__vs,g=v.S.fx.graphs.master;
+  const fresh=v.fxNode('dist',100,100),lim=v.fxNode('limiter',100,200);
+  const old=v.fxNode('amp',100,300);delete old.p.os;const oldLim=v.fxNode('limiter',100,400);delete oldLim.p.brick;
+  g.nodes.push(fresh,lim,old,oldLim);v.fxRender();
+  return{fresh:fresh.p.os,lim:lim.p.brick,old:old.p.os,oldLim:oldLim.p.brick,opts:v.FXT.dist.params.find(q=>q.k==='os').opts};});
+ok(up.fresh===1&&up.lim===1,'new Distortion modules are oversampled and new Limiters are brick walls');
+ok(up.old===0&&up.oldLim===0,'modules saved before those settings existed keep their old sound (Oversampling off, classic Limiter)');
 ok(app.errs.length===0,'no page errors '+app.errs.join(' | '));
 console.log(fails.length?'FAILED '+fails.length:'ALL OK');await app.close();process.exit(fails.length?1:0);

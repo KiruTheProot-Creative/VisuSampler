@@ -20,10 +20,6 @@ function syncPosFields(){
   const el=sel(); if(!el||S.tab!=='props') return;
   ['x','y','w','h'].forEach(k=>{const i=$('[data-k="'+k+'"]',rbody);if(i&&document.activeElement!==i)i.value=Math.round(el[k]);});
 }
-function drag(mv,end){
-  const up=()=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);if(end)end();};
-  window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);
-}
 function startMove(e){
   const el=sel(); if(!el) return; e.preventDefault();
   const sx=e.clientX,sy=e.clientY,ox=el.x,oy=el.y;

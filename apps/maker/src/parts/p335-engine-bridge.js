@@ -84,7 +84,6 @@ window.__visuEngine=()=>({on:engineOn(),native:!!ENG.native,device:ENG.dev||null
 window.__visuStartAudio=()=>{ensureAudio();return !!AU.ctx;};
 /* what decides that the engine needs the project again */
 /* (where effect modules sit and what they are called does not matter to the sound) */
-const ENGINE_SIG_SKIP={x:1,y:1,name:1,skin:1,open:1,collapsed:1};
 function engineSig(){
   const fx=JSON.stringify(S.fx.graphs,function(k,v){return ENGINE_SIG_SKIP[k]&&this&&this.type&&this.id?undefined:v;});   /* only on effect nodes */
   return S.map.ver+'|'+S.samples.length+'|'+fx+'|'+JSON.stringify([S.gset,S.lists.map(l=>[l.bank,l.groups]),S.tags.map(t=>[t.id,t.name,t.kind,t.basis,t.steps]),S.map.interp,S.bpm,S.sig]);

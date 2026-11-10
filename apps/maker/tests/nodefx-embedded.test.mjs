@@ -56,6 +56,6 @@ ok(st.name.includes(factory[0].name),'the first factory preset loads through the
 ok(st.knobs===8,'8 macro knobs');
 ok(st.nodes>0,'the chain\'s modules are drawn ('+st.nodes+')');
 ok(st.calls.includes('getRack')&&st.calls.includes('setRack'),'the page talks to the plugin ('+[...new Set(st.calls)].join(', ')+')');
-await p.screenshot({path:path.join(here,'_out-nodefx-embedded.png')}).catch(()=>{});
+await p.screenshot({path:path.join((await import('node:os')).tmpdir(),'nodefx-embedded.png')}).catch(()=>{});
 await b.close();
 console.log(fails.length?fails.length+' FAILED':'ALL OK');process.exit(fails.length?1:0);

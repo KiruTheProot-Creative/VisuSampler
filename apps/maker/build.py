@@ -24,10 +24,30 @@ css=r('style.css')+'\n'+r('style-extra.css')+'\n'+r('style-unity.css')
 head=r('head.html').replace('/*@@CSS@@*/',css)
 html='<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n'+head+'</head><body>\n'+r('body.html')+'\n<script type="module" src="app.js"></script>\n</body></html>\n'
 open(os.path.join(d,'index.html'),'w',encoding='utf8').write(html)
-# NodeFX (the Effects editor as an effect plugin): the same page, flagged, with its own styles
-nfx=html.replace('</head>','<style>'+r('style-nodefx.css')+'</style></head>',1).replace('<script type="module" src="app.js"></script>','<script>window.__NODEFX=1</script>\n<script type="module" src="app.js"></script>',1)
+# NodeFX (the Effects editor as an effect plugin): its own small page and script. Only the parts the Effects editor
+# needs (the rest of VisuMaker never loads in the plugin), plus src/nodefx (presets, macros, the plugin bridge).
+# The editor's markup comes from body.html, so a change to the Effects tab lands in both.
+NFX_PARTS=['p000','p010','p015','p020','p040','p300','p302','p305','p310','p320','p322']
+def pick(dirname,prefixes=None):
+    fs=sorted(glob.glob(os.path.join(d,'src',dirname,'p*.js')))
+    return [f for f in fs if prefixes is None or os.path.basename(f)[:4] in prefixes]
+nparts=sorted(pick('parts',NFX_PARTS)+pick('nodefx'),key=os.path.basename)
+njs="import {hash01} from '../../packages/core/src/util.js';\n(function(){\n'use strict';\n"+'\n'.join(open(p,encoding='utf8').read() for p in nparts)+"\n})();\n"
+open(os.path.join(d,'nodefx.js'),'w',encoding='utf8').write(njs)
+body=r('body.html')
+def element(src,eid):
+    m=re.search(r'<(\w+)\b[^>]*\bid="'+eid+'"[^>]*>',src); assert m,eid
+    tag=m.group(1); i=m.end(); depth=1
+    for t in re.finditer(r'<(/?)'+tag+r'\b[^>]*>',src[i:]):
+        depth+=-1 if t.group(1) else 1
+        if depth==0: return src[m.start():i+t.end()].replace(' hidden>','>',1)
+    raise Exception('unclosed '+eid)
+nbody=r('nodefx/body.html')
+for eid in ('leftF','centerF','rightF'): nbody=nbody.replace('<!--@@'+eid+'@@-->',element(body,eid))
+nhead=head.replace('<title>VisuMaker 0.0.1</title>','<title>NodeFX</title>').replace('</style>',r('style-nodefx.css')+'\n</style>',1)
+nfx='<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">\n'+nhead+'</head><body class="nodefx">\n'+nbody+'\n<script>window.__NODEFX=1</script>\n<script type="module" src="nodefx.js"></script>\n</body></html>\n'
 open(os.path.join(d,'nodefx.html'),'w',encoding='utf8').write(nfx)
-print('built app.js',len(app),'index.html',len(html),'nodefx.html',len(nfx))
+print('built app.js',len(app),'index.html',len(html),'nodefx.html',len(nfx),'nodefx.js',len(njs),'('+str(len(nparts))+' parts)')
 
 # ---- interface runtime for the VST window (same drawing code as the Designer) ----
 RT_PARTS=['p000-prelude.js','p010-state.js','p020-tokens.js','p030-assets-mipmaps.js','p040-factories.js','p050-geometry-light.js',

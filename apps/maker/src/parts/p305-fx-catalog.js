@@ -68,12 +68,12 @@ Object.assign(FXT,{
     params:[OPT('band','Band',['AM radio','Telephone','Walkie-talkie'],0),FP('crunch','Crunch',0,100,'%',30),FP('noise','Noise',0,100,'%',15),FP('mix','Mix',0,100,'%',100)]},
   amp:{label:'Amp & Mic',kind:'fx',cat:'Retro',ins:['in'],outs:AO,cpu:1.5,lat:0,fbOk:1,hint:'A guitar amp and speaker, picked up by a microphone. Cable something from further down back into it and it howls (it limits itself, so it never runs away).',
     params:[OPT('amp','Amp',['Mini practice amp','Combo 1x12','Stack 4x12'],0),FP('gain','Gain',0,100,'%',55),FP('bass','Bass',-12,12,'dB',0),FP('mid','Mid',-12,12,'dB',0),FP('treble','Treble',-12,12,'dB',0),
-      FP('volume','Volume',-24,12,'dB',0),OPT('mic','Mic',['Close, on the cone','Close, off axis','In the room'],0),FP('mix','Mix',0,100,'%',100)]},
+      FP('volume','Volume',-24,12,'dB',0),OPT('mic','Mic',['Close, on the cone','Close, off axis','In the room'],0),OPT('os','Oversampling',['Off','4× (cleaner)'],1,{stat:1,old:0}),FP('mix','Mix',0,100,'%',100)]},
   /* ---- pedals (same DSP, stomp-box look; the footswitch is bypass) ---- */
   pod:{label:'Overdrive',kind:'fx',cat:'Pedals',pedal:'#3f8a4a',ins:['in'],outs:AO,cpu:1,lat:0,hint:'Mid-hump overdrive pedal.',
-    params:[FP('drive','Drive',0,100,'%',45),FP('tone','Tone',0,100,'%',50),FP('level','Level',-24,12,'dB',0),FP('mix','Mix',0,100,'%',100)]},
+    params:[FP('drive','Drive',0,100,'%',45),FP('tone','Tone',0,100,'%',50),FP('level','Level',-24,12,'dB',0),OPT('os','Oversampling',['Off','4× (cleaner)'],1,{stat:1,old:0}),FP('mix','Mix',0,100,'%',100)]},
   pfuzz:{label:'Fuzz',kind:'fx',cat:'Pedals',pedal:'#b05a2a',ins:['in'],outs:AO,cpu:1,lat:0,hint:'60s germanium-style fuzz.',
-    params:[FP('fuzz','Fuzz',0,100,'%',70),FP('tone','Tone',0,100,'%',45),FP('level','Level',-24,12,'dB',-6),FP('mix','Mix',0,100,'%',100)]},
+    params:[FP('fuzz','Fuzz',0,100,'%',70),FP('tone','Tone',0,100,'%',45),FP('level','Level',-24,12,'dB',-6),OPT('os','Oversampling',['Off','4× (cleaner)'],1,{stat:1,old:0}),FP('mix','Mix',0,100,'%',100)]},
   pwah:{label:'Wah',kind:'fx',cat:'Pedals',pedal:'#2a2a2a',ins:['in'],outs:AO,cpu:.6,lat:0,hint:'Link Pedal to the Expression source (MIDI CC 11), the mod wheel or a knob. Auto mode follows how hard you play.',
     params:[FP('pos','Pedal',0,100,'%',50),OPT('mode','Mode',['Manual','Auto'],0),FP('q','Peak',1,20,'',7),FP('mix','Mix',0,100,'%',100)]},
   pcomp:{label:'Comp Pedal',kind:'fx',cat:'Pedals',pedal:'#2a5aa0',ins:['in'],outs:AO,cpu:1,lat:0,hint:'Squashy guitar compressor.',
@@ -94,7 +94,7 @@ Object.assign(FXT,{
 FXT.filter.label='Filter';FXT.filter.hint='Multi-mode filter: low-pass, high-pass, band-pass, notch or peak, 12 or 24 dB.';
 FXT.filter.params=[OPT('type','Type',['Low-pass','High-pass','Band-pass','Notch','Peak'],0),FP('cutoff','Cutoff',20,20000,'Hz',8000),FP('res','Resonance',0,100,'%',20),
   OPT('slope','Slope',['12 dB','24 dB'],0,{stat:1}),FP('gain','Peak gain',-18,18,'dB',6),FP('mix','Mix',0,100,'%',100)];
-FXT.dist.params=[OPT('type','Type',['Tube','Tape','Hard clip','Foldback','Fuzz','Soft clip','Bitcrush','Rectify','Sine shaper','Diode'],0,{stat:1}),FP('drive','Drive',0,100,'%',30),FP('tone','Tone',0,100,'%',50),FP('level','Level',-24,12,'dB',0),FP('mix','Mix',0,100,'%',100)];
+FXT.dist.params=[OPT('type','Type',['Tube','Tape','Hard clip','Foldback','Fuzz','Soft clip','Bitcrush','Rectify','Sine shaper','Diode'],0,{stat:1}),FP('drive','Drive',0,100,'%',30),FP('tone','Tone',0,100,'%',50),FP('level','Level',-24,12,'dB',0),OPT('os','Oversampling',['Off','4× (cleaner)'],1,{stat:1,old:0}),FP('mix','Mix',0,100,'%',100)];
 FXT.delay.params.splice(3,0,OPT('pp','Mode',['Stereo','Ping-pong','Tape','Diffuse'],0,{stat:1}));
 FXT.delay.hint='Echo. Modes: stereo, ping-pong, tape (wobbly, warm repeats) and diffuse (repeats smear into a wash). Time can sync to the project tempo.';
 FXT.reverb.hint='Room, hall, plate, ambience, cathedral, spring and shimmer tails.';
@@ -102,7 +102,7 @@ FXT.reverb.params=[OPT('type','Type',['Room','Hall','Plate','Ambience','Cathedra
 FXT.comp.params=[OPT('mode','Mode',['Compressor','Limiter','OTT'],0),FP('thresh','Threshold',-60,0,'dB',-18),FP('ratio','Ratio',1,20,':1',3),FP('attack','Attack',0.1,100,'ms',10),FP('release','Release',10,1000,'ms',150),FP('makeup','Makeup',0,24,'dB',0),FP('mix','Mix',0,100,'%',100)];
 FXT.comp.ins=['in'];FXT.comp.hint='Evens out level. Limiter mode catches peaks at the threshold. OTT squashes three bands up and down at once (ratio = depth, attack = speed).';
 FXT.chorus.params.unshift(OPT('mode','Mode',['Chorus','Flanger','Ensemble'],0));FXT.chorus.hint='Thickens the sound. Modes: chorus, flanger (jet sweep) and ensemble (lush string-machine chorus).';
-FXT.limiter.params=[FP('ceiling','Ceiling',-12,0,'dB',-0.3),FP('release','Release',10,500,'ms',60),FP('mix','Mix',0,100,'%',100)];
+FXT.limiter.params=[OPT('brick','Mode',['Classic (fast compressor)','Brick wall'],1,{stat:1,old:0}),FP('ceiling','Ceiling',-12,0,'dB',-0.3),FP('release','Release',10,500,'ms',60),FP('mix','Mix',0,100,'%',100)];
 FXT.lfo.params=[FP('rate','Rate',0.02,20,'Hz',1,{sync:1}),OPT('shape','Shape',['Sine','Triangle','Saw','Square','Random steps'],0),FP('depth','Depth',0,100,'%',100),OPT('retrig','Restart on note',['Off','On'],0)];
 FXT.env.hint='Envelope follower: turns how loud its audio input is into a control signal.';
 ['delay','chorus','phaser'].forEach(k=>{FXT[k].fbOk=1;});

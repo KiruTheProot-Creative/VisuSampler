@@ -19,10 +19,9 @@ juce_add_plugin(NodeFX
   FORMATS ${NFX_FORMATS}
   PRODUCT_NAME "NodeFX")
 
-# the editor: VisuMaker's page in NodeFX mode, the core module it imports, fonts
-juce_add_binary_data(NodeFXUI SOURCES ../../maker/nodefx.html ../../maker/app.js
-  ../../../packages/core/src/index.js ../../../packages/core/src/util.js ../../../packages/core/src/dsp.js ../../../packages/core/src/modes.js
-  ../../../packages/core/src/zone.js ../../../packages/core/src/vsamp.js ../../../packages/core/src/bake.js
+# the editor: its own small page (apps/maker build.py: only the Effects editor's parts), the one core module it
+# imports, the fonts
+juce_add_binary_data(NodeFXUI SOURCES ../../maker/nodefx.html ../../maker/nodefx.js ../../../packages/core/src/util.js
   ../../../assets/fonts/Figtree.ttf ../../../assets/fonts/Unbounded.ttf ../../../assets/fonts/JetBrainsMono.ttf ../../../assets/fonts/Pacifico.ttf ../../../assets/fonts/VT323.ttf)
 juce_add_binary_data(NodeFXPresets HEADER_NAME NodeFXData.h NAMESPACE nodefx SOURCES presets/factoryPresets.json)
 target_sources(NodeFX PRIVATE NodeFXProcessor.cpp NodeFXEditor.cpp)
