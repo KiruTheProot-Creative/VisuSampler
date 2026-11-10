@@ -86,6 +86,8 @@ preset('Weird','Glitch Box',g=>{const c=g.node('crush',{bits:6,rate:6000,mix:80}
   g.wire(q,'out',c,'p:rate',70);g.macro('Bits',c,'bits');g.macro('Glitch rate',q,'rate');g.macro('Gate',v,'gate');return chain(g,[c,v]);});
 preset('Weird','Talking Vowels',g=>{const m=g.node('morph',{morph:40,shift:0,res:75},{name:'Vowels'}),u=g.node('util',{gain:9},{name:'Level'}),l=g.node('lfo',{rate:0.7,shape:1,depth:100},{name:'Talk'});
   g.wire(l,'out',m,'p:morph',80);g.macro('Vowel',m,'morph');g.macro('Talk speed',l,'rate');g.macro('Resonance',m,'res');return chain(g,[m,u]);});
+preset('Weird','Ring Bells',g=>{const r=g.node('ring',{freq:620,wave:0,speed:0.3,depth:3,mix:60},{name:'Ring mod'}),v=g.node('reverb',{type:2,size:70,decay:3.5,damp:30,mix:30},{name:'Plate'});
+  g.macro('Carrier',r,'freq');g.macro('Wobble',r,'depth');g.macro('Ring mix',r,'mix');g.macro('Space',v,'mix');return chain(g,[r,v]);});
 preset('Weird','Hellforge Lite',g=>{
   const p1=g.node('pfuzz',{fuzz:75,level:-6},{name:'Fuzz',col:0,row:0}),p2=g.node('phaser',{rate:0.3,depth:70,fb:45,mix:45},{name:'Phaser',col:1,row:0});
   const a=g.node('amp',{amp:0,gain:70,mid:4},{name:'Mini amp',col:0,row:1}),u=g.node('util',{gain:-20},{name:'Feedback',col:1,row:1});

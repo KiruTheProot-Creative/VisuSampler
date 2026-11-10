@@ -421,6 +421,36 @@ struct PhaserM : Module {
     }
 };
 
+/* Ring modulator (as on the CS-80): the sound times a carrier tone, giving the sum and difference of their frequencies
+   (bells, metal, robot voices). Sweep bends the carrier by up to 4 octaves with every note (Attack, then Decay back);
+   Speed and Depth wobble it with an LFO. A signal patched into "carrier" replaces the built-in tone. */
+struct RingM : Module {
+    int freq_, wave_, sweep_, attack_, decay_, speed_, depth_; double ph = 0, lph = 0;
+    explicit RingM(Node& nd) { freq_ = nd.idx("freq"); wave_ = nd.idx("wave"); sweep_ = nd.idx("sweep"); attack_ = nd.idx("attack"); decay_ = nd.idx("decay"); speed_ = nd.idx("speed"); depth_ = nd.idx("depth"); }
+    static float env(double t, float a, float d) {   // 0 -> 1 over Attack, then back to 0 over Decay; 0 with no note
+        if (t < 0) return 0; if (t < a) return (float) (t / a); return (float) std::exp(-(t - a) / std::max(1e-3f, d * .25f));
+    }
+    void run(Node& nd, int n, Control& c) override {
+        bool ext = false; for (auto& e : nd.incoming) if (e.dstPort == "carrier") ext = true;
+        Stereo& x = nd.ins[0]; Stereo& cr = nd.ins[1];
+        if (ext) { for (int i = 0; i < n; ++i) { nd.wet.l[i] = x.l[i] * cr.l[i]; nd.wet.r[i] = x.r[i] * cr.r[i]; } return; }
+        const float f0 = nd.P(freq_, 440), sw = nd.P(sweep_, 0), a = nd.P(attack_, 0) / 1000, d = std::max(1.f, nd.P(decay_, 600)) / 1000;
+        const float sp = nd.P(speed_, 0), dp = nd.P(depth_, 0); const int wave = (int) std::lround(nd.P(wave_, 0));
+        const double t0 = c.tOn >= 0 ? c.time - c.tOn : -1, dt = (double) n / sr_;
+        const float e0 = t0 < 0 ? 0 : env(t0, a, d), e1 = t0 < 0 ? 0 : env(t0 + dt, a, d);
+        for (int i = 0; i < n; ++i) {
+            const float e = e0 + (e1 - e0) * (float) i / (float) n;
+            const float lfo = sp > 0 ? (float) std::sin(2 * kPi * lph) : 0.f; lph += sp / sr_; if (lph >= 1) lph -= 1;
+            const double f = std::min((double) f0 * std::pow(2.0, (sw * e + dp * lfo) / 12.0), sr_ * .45);
+            ph += f / sr_; if (ph >= 1) ph -= std::floor(ph);
+            const float sn = (float) std::sin(2 * kPi * ph);
+            const float car = wave == 1 ? std::tanh(sn * 6.f) / std::tanh(6.f)                     // square, softened (no harsh aliasing)
+                            : wave == 2 ? (float) (1 - 4 * std::fabs(ph - .5)) : sn;               // triangle, sine
+            nd.wet.l[i] = x.l[i] * car; nd.wet.r[i] = x.r[i] * car;
+        }
+    }
+};
+
 struct TremM : Module {
     Lfo lfo; int rate_, depth_, shape_, mode_;
     explicit TremM(Node& nd) { rate_ = nd.idx("rate"); depth_ = nd.idx("depth"); shape_ = nd.idx("shape"); mode_ = nd.idx("mode"); }
@@ -844,7 +874,7 @@ static const std::vector<TypeInfo>& types() {
 }
 static const std::vector<std::string> kFx = { "delay", "reverb", "chorus", "phaser", "dist", "filter", "eq", "comp", "limiter", "conv", "shimmer", "flanger", "trem", "rotary",
     "vibrato", "peq", "crush", "lofi", "transient", "morph", "vintage", "tapeecho", "bbd", "ensemble", "tapemach", "digiverb", "gatedverb", "spring", "vinyl", "radio",
-    "pod", "pfuzz", "pwah", "pcomp", "pvibe", "amp" };
+    "pod", "pfuzz", "pwah", "pcomp", "pvibe", "amp", "ring" };
 
 bool System::setParam(const std::string& nodeId, const std::string& key, float value, bool syncPos) {
     auto inGraph = [&](Graph* g) {
@@ -883,6 +913,7 @@ static std::unique_ptr<Module> makeModule(Node& nd, const Library& lib) {
     if (t == "bbd") return std::make_unique<ModDelayM>(nd, .009f, .004f, 0.f, true, true, true);
     if (t == "phaser") return std::make_unique<PhaserM>(nd);
     if (t == "trem") return std::make_unique<TremM>(nd);
+    if (t == "ring") return std::make_unique<RingM>(nd);
     if (t == "rotary") return std::make_unique<RotaryM>(nd);
     if (t == "filter") return std::make_unique<FilterM>(nd);
     if (t == "eq") return std::make_unique<EqM>(nd, false);
@@ -1029,6 +1060,7 @@ static std::unique_ptr<Graph> buildGraph(const Json& g, const Json& ranges, cons
         const bool isFx = std::find(kFx.begin(), kFx.end(), nd->type) != kFx.end();
         if (ti) { nd->inNames = ti->ins; nd->outNames = ti->outs; nd->raw = ti->raw; nd->isMod = ti->mod; nd->io = nd->type == "input" || nd->type == "output"; }
         else { nd->inNames = { "in" }; nd->outNames = { "dry", "wet", "mix" }; nd->supported = isFx; if (!isFx) unsupported.push_back("fx:" + nd->type); }
+        if (nd->type == "ring") nd->inNames = { "in", "carrier" };   // a second input: any signal as the carrier
         if (nd->inNames.empty()) nd->inNames = { "in" };   // modules without inputs still get one silent buffer
         nd->ins.resize(nd->inNames.size()); nd->outs.resize(std::max<size_t>(1, nd->outNames.size()));
         for (auto& s : nd->ins) s.clear(kBlock); for (auto& s : nd->outs) s.clear(kBlock); nd->wet.clear(kBlock);

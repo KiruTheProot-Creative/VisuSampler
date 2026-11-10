@@ -122,6 +122,11 @@ const FXI={
     const g=gainN(c,.7);inp.connect(g);dg.connect(g.gain);
     return{in:{in:inp},wet:g,set(k,v){if(k==='rate')setP(o.frequency,v>50?1000/v:v);if(k==='depth'){setP(dg.gain,v/200);setP(g.gain,1-v/200);}},stop(){o.stop();}};
   },
+  ring(c,n){
+    const inp=gainN(c),g=gainN(c,0),car=gainN(c,1),o=osc(c,['sine','square','triangle'][Math.round(n.p.wave)]||'sine',n.p.freq||440);
+    inp.connect(g);o.connect(car);car.connect(g.gain);
+    return{in:{in:inp,carrier:car},wet:g,set(k,v){if(k==='freq')setP(o.frequency,v);},stop(){o.stop();}};
+  },
   rotary(c,n){
     const inp=gainN(c),sat=c.createWaveShaper(),lo=biq(c,'lowpass',800,.7),hi=biq(c,'highpass',800,.7),oh=osc(c,'sine',.8),ol=osc(c,'sine',.7);
     const dh=c.createDelay(.02),dlo=c.createDelay(.02),gh=gainN(c,.0008),gl=gainN(c,.0006),ph=c.createStereoPanner(),pl=c.createStereoPanner(),ah=gainN(c,.8),al=gainN(c,.9),ahm=gainN(c,.2),alm=gainN(c,.1),out=gainN(c);

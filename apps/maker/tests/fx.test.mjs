@@ -47,5 +47,10 @@ const up=await p.evaluate(()=>{const v=window.__vs,g=v.S.fx.graphs.master;
   return{fresh:fresh.p.os,lim:lim.p.brick,old:old.p.os,oldLim:oldLim.p.brick,opts:v.FXT.dist.params.find(q=>q.k==='os').opts};});
 ok(up.fresh===1&&up.lim===1,'new Distortion modules are oversampled and new Limiters are brick walls');
 ok(up.old===0&&up.oldLim===0,'modules saved before those settings existed keep their old sound (Oversampling off, classic Limiter)');
+/* the ring mod (CS-80 style): a second input for the carrier, in the module list */
+const rm=await p.evaluate(()=>{const v=window.__vs,d=v.FXT.ring;const n=v.fxNode('ring',300,500);v.S.fx.graphs.master.nodes.push(n);v.fxRender();
+  return{ins:d&&d.ins,label:d&&d.label,freq:n.p.freq,drawn:!!document.querySelector('.fxn [data-port="carrier"],.fxn .port[title*="carrier" i],.fxn [data-p="carrier"]')||document.querySelector('#fxNodes').innerHTML.includes('carrier')};});
+ok(rm.label==='Ring mod'&&rm.ins.join()==='in,carrier'&&rm.freq===440,'Ring mod module: in + carrier inputs, 440 Hz to start');
+ok(rm.drawn,'its carrier input is drawn on the node');
 ok(app.errs.length===0,'no page errors '+app.errs.join(' | '));
 console.log(fails.length?'FAILED '+fails.length:'ALL OK');await app.close();process.exit(fails.length?1:0);

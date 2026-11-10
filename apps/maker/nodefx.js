@@ -547,6 +547,8 @@ Object.assign(FXT,{
     params:[FP('rate','Rate',0.02,5,'Hz',0.25),FP('depth','Depth',0,100,'%',60),FP('fb','Feedback',-95,95,'%',50),MIXP]},
   trem:{label:'Tremolo / Auto-pan',kind:'fx',cat:'Modulation',ins:['in'],outs:AO,cpu:.5,lat:0,hint:'Rhythmic volume or stereo movement.',
     params:[FP('rate','Rate',0.1,20,'Hz',5,{sync:1}),FP('depth','Depth',0,100,'%',60),OPT('shape','Shape',['Sine','Triangle','Square'],0,{stat:1}),OPT('mode','Mode',['Tremolo','Auto-pan'],0,{stat:1}),FP('mix','Mix',0,100,'%',100)]},
+  ring:{label:'Ring mod',kind:'fx',cat:'Modulation',ins:['in','carrier'],outs:AO,cpu:.5,lat:0,hint:'The sound times a carrier tone, as on the CS-80: bells, metal, robot voices. Sweep bends the carrier with every note played (Attack, then Decay); Speed and Depth wobble it. Patch any signal into carrier to use it instead of the built-in tone.',
+    params:[FP('freq','Freq',1,5000,'Hz',440,{log:1}),OPT('wave','Wave',['Sine','Square','Triangle'],0,{stat:1}),FP('sweep','Sweep',-48,48,'st',0),FP('attack','Attack',0,5000,'ms',0),FP('decay','Decay',1,5000,'ms',600),FP('speed','Speed',0,20,'Hz',0),FP('depth','Depth',0,24,'st',0),FP('mix','Mix',0,100,'%',100)]},
   rotary:{label:'Rotary speaker',kind:'fx',cat:'Modulation',ins:['in'],outs:AO,cpu:2,lat:0,fbOk:1,hint:'Spinning-speaker swirl. Switching the speed ramps up and down like the real thing.',
     params:[OPT('speed','Speed',['Slow','Fast'],0),FP('drive','Drive',0,100,'%',20),FP('mix','Mix',0,100,'%',100)]},
   vibrato:{label:'Vibrato',kind:'fx',cat:'Modulation',ins:['in'],outs:AO,cpu:1,lat:0,fbOk:1,hint:'Pitch wobble with no dry sound mixed in.',

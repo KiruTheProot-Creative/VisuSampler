@@ -2545,6 +2545,8 @@ Object.assign(FXT,{
     params:[FP('rate','Rate',0.02,5,'Hz',0.25),FP('depth','Depth',0,100,'%',60),FP('fb','Feedback',-95,95,'%',50),MIXP]},
   trem:{label:'Tremolo / Auto-pan',kind:'fx',cat:'Modulation',ins:['in'],outs:AO,cpu:.5,lat:0,hint:'Rhythmic volume or stereo movement.',
     params:[FP('rate','Rate',0.1,20,'Hz',5,{sync:1}),FP('depth','Depth',0,100,'%',60),OPT('shape','Shape',['Sine','Triangle','Square'],0,{stat:1}),OPT('mode','Mode',['Tremolo','Auto-pan'],0,{stat:1}),FP('mix','Mix',0,100,'%',100)]},
+  ring:{label:'Ring mod',kind:'fx',cat:'Modulation',ins:['in','carrier'],outs:AO,cpu:.5,lat:0,hint:'The sound times a carrier tone, as on the CS-80: bells, metal, robot voices. Sweep bends the carrier with every note played (Attack, then Decay); Speed and Depth wobble it. Patch any signal into carrier to use it instead of the built-in tone.',
+    params:[FP('freq','Freq',1,5000,'Hz',440,{log:1}),OPT('wave','Wave',['Sine','Square','Triangle'],0,{stat:1}),FP('sweep','Sweep',-48,48,'st',0),FP('attack','Attack',0,5000,'ms',0),FP('decay','Decay',1,5000,'ms',600),FP('speed','Speed',0,20,'Hz',0),FP('depth','Depth',0,24,'st',0),FP('mix','Mix',0,100,'%',100)]},
   rotary:{label:'Rotary speaker',kind:'fx',cat:'Modulation',ins:['in'],outs:AO,cpu:2,lat:0,fbOk:1,hint:'Spinning-speaker swirl. Switching the speed ramps up and down like the real thing.',
     params:[OPT('speed','Speed',['Slow','Fast'],0),FP('drive','Drive',0,100,'%',20),FP('mix','Mix',0,100,'%',100)]},
   vibrato:{label:'Vibrato',kind:'fx',cat:'Modulation',ins:['in'],outs:AO,cpu:1,lat:0,fbOk:1,hint:'Pitch wobble with no dry sound mixed in.',
@@ -3184,6 +3186,11 @@ const FXI={
     if(n.p.mode>.5){const p=c.createStereoPanner();inp.connect(p);dg.connect(p.pan);return{in:{in:inp},wet:p,set(k,v){if(k==='rate')setP(o.frequency,v>50?1000/v:v);if(k==='depth')setP(dg.gain,v/100);},stop(){o.stop();}};}
     const g=gainN(c,.7);inp.connect(g);dg.connect(g.gain);
     return{in:{in:inp},wet:g,set(k,v){if(k==='rate')setP(o.frequency,v>50?1000/v:v);if(k==='depth'){setP(dg.gain,v/200);setP(g.gain,1-v/200);}},stop(){o.stop();}};
+  },
+  ring(c,n){
+    const inp=gainN(c),g=gainN(c,0),car=gainN(c,1),o=osc(c,['sine','square','triangle'][Math.round(n.p.wave)]||'sine',n.p.freq||440);
+    inp.connect(g);o.connect(car);car.connect(g.gain);
+    return{in:{in:inp,carrier:car},wet:g,set(k,v){if(k==='freq')setP(o.frequency,v);},stop(){o.stop();}};
   },
   rotary(c,n){
     const inp=gainN(c),sat=c.createWaveShaper(),lo=biq(c,'lowpass',800,.7),hi=biq(c,'highpass',800,.7),oh=osc(c,'sine',.8),ol=osc(c,'sine',.7);

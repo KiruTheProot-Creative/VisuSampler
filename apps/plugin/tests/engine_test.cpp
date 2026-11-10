@@ -712,6 +712,39 @@ static void testFxQuality() {
         r->process(l.data(), rr.data(), 96000); double pk = 0; bool fin = true; for (float v : l) { if (!std::isfinite(v)) fin = false; pk = std::max(pk, (double) std::fabs(v)); }
         CHECK(fin && pk < 5, "fx quality: a resonant filter swept by a fast LFO stays calm (peak %.2f)", pk); }
       else CHECK(false, "fx quality: sweep chain builds (%s)", err.c_str()); }
+    /* 5. ring mod: 1000 Hz times a 300 Hz carrier = 700 Hz + 1300 Hz, and nothing left at 1000 Hz */
+    { auto r = chain("ring", "{\"freq\":300,\"wave\":0,\"sweep\":0,\"attack\":0,\"decay\":600,\"speed\":0,\"depth\":0,\"mix\":100}");
+      if (!r) CHECK(false, "ring mod: chain builds");
+      else { std::vector<float> l(48000), rr(48000); for (int i = 0; i < 48000; ++i) l[(size_t) i] = rr[(size_t) i] = (float) (.5 * std::sin(2 * PI * 1000 * i / sr));
+        r->process(l.data(), rr.data(), 48000);
+        const double lo = toneDb(l, 4800, 48000, 700, sr), hi = toneDb(l, 4800, 48000, 1300, sr), mid = toneDb(l, 4800, 48000, 1000, sr);
+        CHECK(lo > -15 && hi > -15 && mid < lo - 60, "ring mod: sum and difference tones (700 Hz %.0f dB, 1300 Hz %.0f dB), the original gone (1000 Hz %.0f dB)", lo, hi, mid); } }
+    /* the carrier input: the sound times itself = twice the frequency */
+    { const std::string g = "{\"nodes\":[{\"id\":\"i\",\"type\":\"input\",\"p\":{}},{\"id\":\"m\",\"type\":\"ring\",\"p\":{\"freq\":300,\"mix\":100}},{\"id\":\"o\",\"type\":\"output\",\"p\":{}}],"
+          "\"cables\":[{\"from\":{\"n\":\"i\",\"p\":\"out\"},\"to\":{\"n\":\"m\",\"p\":\"in\"}},{\"from\":{\"n\":\"i\",\"p\":\"out\"},\"to\":{\"n\":\"m\",\"p\":\"carrier\"}},{\"from\":{\"n\":\"m\",\"p\":\"wet\"},\"to\":{\"n\":\"o\",\"p\":\"in\"}}]}";
+      Json in; in.type = Json::Obj; in.o = { { "graph", Json::parse(g.data(), g.size()) }, { "fxRanges", cat["ranges"] } }; std::string err; auto r = FxRack::build(in, 48000, err);
+      if (!r) CHECK(false, "ring mod: carrier chain builds (%s)", err.c_str());
+      else { std::vector<float> l(48000), rr(48000); for (int i = 0; i < 48000; ++i) l[(size_t) i] = rr[(size_t) i] = (float) (.5 * std::sin(2 * PI * 1000 * i / sr));
+        r->process(l.data(), rr.data(), 48000);
+        const double two = toneDb(l, 4800, 48000, 2000, sr), own = toneDb(l, 4800, 48000, 300, sr) , one = toneDb(l, 4800, 48000, 1000, sr);
+        CHECK(two > -20 && own < -80 && one < -80, "ring mod: a patched carrier replaces the built-in tone (2000 Hz %.0f dB, 300 Hz %.0f dB)", two, own); } }
+}
+
+/* the ring mod's sweep follows the notes (instruments; NodeFX plays no notes) */
+static void testRingSweep() {
+    const std::string ct = readText(std::string(TEST_DATA_DIR) + "/fx-catalog.json"); const Json cat = Json::parse(ct.data(), ct.size());
+    const std::string g = "{\"nodes\":[{\"id\":\"i\",\"type\":\"input\",\"p\":{}},{\"id\":\"m\",\"type\":\"ring\",\"p\":{\"freq\":200,\"wave\":0,\"sweep\":24,\"attack\":0,\"decay\":400,\"speed\":0,\"depth\":0,\"mix\":100}},{\"id\":\"o\",\"type\":\"output\",\"p\":{}}],"
+        "\"cables\":[{\"from\":{\"n\":\"i\",\"p\":\"out\"},\"to\":{\"n\":\"m\",\"p\":\"in\"}},{\"from\":{\"n\":\"m\",\"p\":\"wet\"},\"to\":{\"n\":\"o\",\"p\":\"in\"}}]}";
+    Json in; in.type = Json::Obj; in.o = { { "graph", Json::parse(g.data(), g.size()) }, { "fxRanges", cat["ranges"] } };
+    std::string err; auto r = FxRack::build(in, 48000, err);
+    CHECK(r != nullptr, "ring sweep: builds (%s)", err.c_str());
+    if (!r) return;
+    r->noteOn(60, 1.f);   // a note: the carrier jumps 2 octaves up (800 Hz) and falls back to 200 Hz
+    std::vector<float> l(96000, .5f), rr(96000, .5f);   // a constant input shows the carrier itself
+    r->process(l.data(), rr.data(), 96000);
+    auto zc = [&](size_t a, size_t b) { int z = 0; for (size_t i = a + 1; i < b; ++i) if ((l[i - 1] < 0) != (l[i] < 0)) ++z; return z * 48000.0 / 2 / (double) (b - a); };
+    const double early = zc(0, 960), late = zc(72000, 96000);
+    CHECK(early > 650 && late > 180 && late < 220, "ring sweep: with a note the carrier starts high and falls back (%.0f Hz at first, %.0f Hz after 1.5 s)", early, late);
 }
 
 static void testCompat() {
@@ -760,7 +793,7 @@ static void testCompat() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testFxRack(); testNodeFXFactory(); testFxQuality(); testCompat();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testFxRack(); testNodeFXFactory(); testFxQuality(); testRingSweep(); testCompat();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }
