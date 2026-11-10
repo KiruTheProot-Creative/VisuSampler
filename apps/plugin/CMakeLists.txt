@@ -8,7 +8,7 @@ option(VISU_BUILD_TESTS "Build the engine tests" ON)
 set(VISU_BUILD_ID "dev" CACHE STRING "Build id shown in VisuPlayer and its log (the release workflow passes the commit)")
 option(VISU_BUILD_MAKER_AUDIO "Build VisuMakerAudio, VisuMaker's native audio (needs JUCE, fetched automatically)" OFF)
 
-add_library(visu_engine STATIC engine/Vsamp.cpp engine/Inflate.cpp engine/Library.cpp engine/Engine.cpp engine/Fx.cpp engine/Stream.cpp engine/FxRack.cpp)
+add_library(visu_engine STATIC engine/Vsamp.cpp engine/Inflate.cpp engine/Library.cpp engine/Engine.cpp engine/Fx.cpp engine/Stream.cpp engine/FxRack.cpp engine/Synth.cpp)
 find_package(Threads REQUIRED)
 target_link_libraries(visu_engine PUBLIC Threads::Threads)
 target_include_directories(visu_engine PUBLIC engine)

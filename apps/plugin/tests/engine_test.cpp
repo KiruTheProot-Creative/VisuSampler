@@ -5,6 +5,7 @@
 #include <cstdio>
 #include "Engine.h"
 #include "FxRack.h"
+#include "Synth.h"
 #include <cmath>
 #include <complex>
 #include <cstdio>
@@ -747,6 +748,69 @@ static void testRingSweep() {
     CHECK(early > 650 && late > 180 && late < 220, "ring sweep: with a note the carrier starts high and falls back (%.0f Hz at first, %.0f Hz after 1.5 s)", early, late);
 }
 
+/* HyperSynth's sound engine (step 1 of its roadmap: the gate is clean aliasing and usable CPU) */
+static void testSynth() {
+    using namespace visu::hs;
+    const auto& P = params(); const double sr = 48000, PI = 3.14159265358979;
+    { bool uniq = true, sane = true; for (size_t i = 0; i < P.size(); ++i) { for (size_t j = i + 1; j < P.size(); ++j) if (P[i].id == P[j].id) uniq = false; if (P[i].def < P[i].min || P[i].def > P[i].max) sane = false; }
+      CHECK(P.size() > 150 && uniq && sane, "hypersynth: %zu parameters, unique ids, defaults in range", P.size()); }
+    auto set = [](Synth& s, const char* id, float v) { const int i = paramIndex(id); if (i < 0) std::printf("      no parameter %s\n", id); s.setParam(i, v); };
+    auto render = [&](Synth& s, size_t n) { std::vector<float> l(n), r(n); for (size_t at = 0; at < n; at += 512) s.process(l.data() + at, r.data() + at, (int) std::min<size_t>(512, n - at)); return std::make_pair(l, r); };
+    auto peakOf = [](const std::vector<float>& v) { double p = 0; bool fin = true; for (float x : v) { if (!std::isfinite(x)) fin = false; p = std::max(p, (double) std::fabs(x)); } return fin ? p : -1.0; };
+    auto rms = [](const std::vector<float>& v, size_t a, size_t b) { double s = 0; for (size_t i = a; i < b; ++i) s += (double) v[i] * v[i]; return std::sqrt(s / (double) (b - a)); };
+    /* the init sound */
+    { Synth s; s.prepare(sr); s.noteOn(60, .8f); auto o = render(s, 24000); const double pk = peakOf(o.first);
+      CHECK(pk > .05 && pk < 1, "hypersynth: the init sound plays (peak %.3f)", pk); }
+    /* aliasing: a high saw (2637 Hz); its 19th harmonic (50.1 kHz) would fold back to 2103 Hz */
+    double al[2] = {}; const char* how[2] = { "Analog (polyBLEP)", "Wavetable (band-limited copies)" };
+    for (int m = 0; m < 2; ++m) {
+        Synth s; s.prepare(sr); set(s, "l1.lp.cut", 20000); set(s, "l1.lp.type", 0); set(s, "l1.lp.key", 0);
+        if (m == 1) { set(s, "l1.o1.mode", 0); set(s, "l1.o1.pos", 2.f / 3); }
+        s.noteOn(100, 1); auto o = render(s, 48000);
+        al[m] = toneDb(o.first, 8000, 48000, 2103.4, sr) - toneDb(o.first, 8000, 48000, 2637.0, sr);
+        CHECK(al[m] < (m ? -70 : -40), "hypersynth: %s saw at 2637 Hz, folded-back harmonic %.0f dB under the note", how[m], al[m]);
+    }
+    /* Hyper unison: 9 voices spread wide, about as loud as one */
+    { Synth a, b; for (Synth* s : { &a, &b }) { s->prepare(sr); set(*s, "l1.o1.shape", 0); }
+      set(b, "l1.o1.voices", 9); set(b, "l1.o1.detune", 30); set(b, "l1.o1.spread", 1);
+      a.noteOn(48, 1); b.noteOn(48, 1); auto oa = render(a, 48000), ob = render(b, 48000);
+      double c = 0, nl = 0, nr = 0; for (size_t i = 4800; i < 48000; ++i) { c += (double) ob.first[i] * ob.second[i]; nl += (double) ob.first[i] * ob.first[i]; nr += (double) ob.second[i] * ob.second[i]; }
+      const double corr = c / std::sqrt(nl * nr + 1e-30), lv = 20 * std::log10(rms(ob.first, 4800, 48000) / rms(oa.first, 4800, 48000));
+      CHECK(corr < .8 && std::fabs(lv) < 4, "hypersynth: 9 Hyper voices make it wide (L/R correlation %.2f) at about the same level (%+.1f dB)", corr, lv); }
+    /* the low-pass filter */
+    { Synth open, shut; for (Synth* s : { &open, &shut }) { s->prepare(sr); set(*s, "l1.lp.key", 0); set(*s, "l1.lp.res", 0); }
+      set(open, "l1.lp.cut", 20000); set(shut, "l1.lp.cut", 400); open.noteOn(45, 1); shut.noteOn(45, 1);
+      auto oo = render(open, 48000), os = render(shut, 48000);
+      const double drop = (toneDb(os.first, 8000, 48000, 2200, sr) - toneDb(os.first, 8000, 48000, 110, sr)) - (toneDb(oo.first, 8000, 48000, 2200, sr) - toneDb(oo.first, 8000, 48000, 110, sr));
+      CHECK(drop < -40, "hypersynth: the 24 dB low-pass at 400 Hz takes the 20th harmonic down %.0f dB more", drop); }
+    /* envelope: released notes end, and their voices free up */
+    { Synth s; s.prepare(sr); set(s, "l1.aenv.r", 100); s.noteOn(60, 1); render(s, 4800); s.noteOff(60); auto o = render(s, 24000);
+      CHECK(rms(o.first, 0, 960) > .01 && peakOf(std::vector<float>(o.first.begin() + 19200, o.first.end())) < 1e-4 && s.activeVoices() == 0, "hypersynth: a 100 ms release fades out and frees the voice"); }
+    /* two layers and the crossfade */
+    { double lo[2], hi[2];
+      for (int x = 0; x < 2; ++x) { Synth s; s.prepare(sr); set(s, "play", 2); set(s, "xfade", (float) x); set(s, "l1.o1.shape", 3); set(s, "l2.o1.shape", 3); set(s, "l2.o1.oct", 2);
+        s.noteOn(57, 1); auto o = render(s, 48000); lo[x] = toneDb(o.first, 8000, 48000, 220, sr); hi[x] = toneDb(o.first, 8000, 48000, 880, sr); }
+      CHECK(lo[0] - hi[0] > 60 && hi[1] - lo[1] > 60, "hypersynth: Crossfade I..II (layer I alone %+.0f dB, layer II alone %+.0f dB)", lo[0] - hi[0], hi[1] - lo[1]); }
+    /* voices: 40 notes on a 16-voice setting, mono keeps one */
+    { Synth s; s.prepare(sr); for (int k = 30; k < 70; ++k) s.noteOn(k, .7f); auto o = render(s, 9600);
+      Synth m; m.prepare(sr); set(m, "mode", 2); set(m, "glide", 80); for (int k : { 60, 64, 67 }) m.noteOn(k, 1); render(m, 4800);
+      CHECK(s.activeVoices() == 16 && peakOf(o.first) >= 0 && m.activeVoices() == 1, "hypersynth: 40 notes play on 16 voices (stealing the oldest), legato keeps 1 (%d voices, %d in legato)", s.activeVoices(), m.activeVoices()); }
+    /* presets (.hsyn) */
+    { Synth a; a.prepare(sr); set(a, "l1.o1.voices", 7); set(a, "l2.lp.cut", 900); set(a, "play", 2);
+      const std::string js = a.presetJson("Test \"Pad\"", "Pads");
+      Synth b; std::string name, cat, err; const bool ok = b.loadPreset(js, &err, &name, &cat);
+      bool same = true; for (size_t i = 0; i < P.size(); ++i) if (std::fabs(a.param((int) i) - b.param((int) i)) > 1e-3f) same = false;
+      Synth c; c.setParam(paramIndex("l1.o1.voices"), 5); c.loadPreset("{\"format\":\"hsyn\",\"v\":1,\"params\":{\"l2.lp.cut\":500,\"from.the.future\":3}}");
+      const bool older = c.param(paramIndex("l1.o1.voices")) == P[(size_t) paramIndex("l1.o1.voices")].old && c.param(paramIndex("l2.lp.cut")) == 500;
+      CHECK(ok && same && name == "Test \"Pad\"" && cat == "Pads" && older && !c.loadPreset("{\"format\":\"nfx\"}"), "hypersynth: presets round-trip; missing settings get their saved-before value, unknown ones are skipped"); }
+    /* CPU: a big sound, 8 notes x 2 layers x 3 oscillators x 16 Hyper voices */
+    { Synth s; s.prepare(sr); set(s, "play", 2);
+      for (int L = 1; L <= 2; ++L) for (int k = 1; k <= 3; ++k) { char id[32]; std::snprintf(id, sizeof id, "l%d.o%d.on", L, k); set(s, id, 1); std::snprintf(id, sizeof id, "l%d.o%d.voices", L, k); set(s, id, 16); }
+      for (int k : { 48, 52, 55, 59, 60, 64, 67, 71 }) s.noteOn(k, .8f);
+      const auto t0 = std::chrono::steady_clock::now(); auto o = render(s, 480000); const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+      CHECK(peakOf(o.first) >= 0 && secs < 10, "hypersynth: worst case (768 oscillators at once) runs at %.0f%% of one core", secs / 10 * 100); }
+}
+
 static void testCompat() {
     const std::string dir = COMPAT_DIR, jp = dir + "/compat.json"; std::string txt = readText(jp);
     Json db = txt.empty() ? Json() : Json::parse(txt.data(), txt.size());
@@ -793,7 +857,7 @@ static void testCompat() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testFxRack(); testNodeFXFactory(); testFxQuality(); testRingSweep(); testCompat();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testFxRack(); testNodeFXFactory(); testFxQuality(); testRingSweep(); testSynth(); testCompat();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }
