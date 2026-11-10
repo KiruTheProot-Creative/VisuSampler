@@ -170,7 +170,7 @@ void NodeFXProcessor::setStateInformation(const void* data, int size)
 {
     auto x = getXmlFromBinary(data, size);
     if (!x || !x->hasTagName("NodeFXState")) return;
-    for (int i = 0; i < kMacros; ++i) *macros_[(size_t) i] = (float) x->getDoubleAttribute("macro" + juce::String(i + 1), 0);
+    for (int i = 0; i < kMacros; ++i) *static_cast<juce::AudioParameterFloat*>(macros_[(size_t) i]) = (float) x->getDoubleAttribute("macro" + juce::String(i + 1), 0);
     *mix_ = (float) x->getDoubleAttribute("mix", 1); *out_ = (float) x->getDoubleAttribute("out", 0);
     setRack(x->getStringAttribute("rack"), true);
 }
