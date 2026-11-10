@@ -22,17 +22,22 @@ NodeFXEditor::NodeFXEditor(NodeFXProcessor& p) : AudioProcessorEditor(&p), proc_
     startTimerHz(30);
 }
 
-/* the page and what it loads, built in (BinaryData names are the file names with dots as underscores) */
+/* the page and what it loads, built in. JUCE hands over just the path ("/apps/maker/nodefx.html",
+   "/packages/core/src/index.js", "/assets/fonts/Figtree.ttf"); every file is found by its own name. */
 std::optional<juce::WebBrowserComponent::Resource> NodeFXEditor::resource(const juce::String& url)
 {
-    const auto path = url.fromFirstOccurrenceOf(juce::WebBrowserComponent::getResourceProviderRoot(), false, false).upToFirstOccurrenceOf("?", false, false);
-    const auto file = path.fromLastOccurrenceOf("/", false, false);
-    const auto name = file.replaceCharacter('.', '_').replaceCharacter('-', '_');
-    int size = 0;
-    if (const char* d = BinaryData::getNamedResource(name.toRawUTF8(), size)) {
-        std::vector<std::byte> v((size_t) size); std::memcpy(v.data(), d, (size_t) size);
-        return juce::WebBrowserComponent::Resource { std::move(v), mimeFor(file) };
+    auto file = url.upToFirstOccurrenceOf("?", false, false).upToFirstOccurrenceOf("#", false, false).fromLastOccurrenceOf("/", false, false);
+    if (file.isEmpty()) file = "nodefx.html";
+    for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
+    {
+        if (file != BinaryData::originalFilenames[i]) continue;
+        int size = 0;
+        if (const char* d = BinaryData::getNamedResource(BinaryData::namedResourceList[i], size)) {
+            std::vector<std::byte> v((size_t) size); std::memcpy(v.data(), d, (size_t) size);
+            return juce::WebBrowserComponent::Resource { std::move(v), mimeFor(file) };
+        }
     }
+    DBG("NodeFX: no built-in file for " << url);
     return std::nullopt;
 }
 
