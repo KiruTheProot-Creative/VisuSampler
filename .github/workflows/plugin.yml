@@ -35,15 +35,18 @@ jobs:
         run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
       - name: Build
         run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone NodeFX_VST3 NodeFX_Standalone HyperSynth_VST3 HyperSynth_Standalone --parallel 4
-      - name: Collect VST3 and standalone
+      - name: Collect each plugin by itself
         shell: bash
         run: |
-          mkdir -p out
-          find build -name "*.vst3" -maxdepth 6 -exec cp -R {} out/ \;
-          find build -path "*Standalone*" -name "VisuPlayer.exe" -exec cp {} out/ \;
-          find build -path "*Standalone*" -name "NodeFX.exe" -exec cp {} out/ \;
-          ls -la out
+          for P in VisuPlayer NodeFX HyperSynth; do
+            mkdir -p "out/$P"
+            find build -maxdepth 6 -type d -name "$P.vst3" -exec cp -R {} "out/$P/" \;
+            find build -path "*Standalone*" -name "$P.exe" -exec cp {} "out/$P/" \;
+          done
+          ls -laR out | head -40
       - uses: actions/upload-artifact@v4
-        with:
-          name: VisuPlayer-${{ runner.os }}
-          path: out
+        with: { name: "VisuPlayer-${{ runner.os }}", path: out/VisuPlayer }
+      - uses: actions/upload-artifact@v4
+        with: { name: "NodeFX-${{ runner.os }}", path: out/NodeFX }
+      - uses: actions/upload-artifact@v4
+        with: { name: "HyperSynth-${{ runner.os }}", path: out/HyperSynth }

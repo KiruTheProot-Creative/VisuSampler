@@ -9,7 +9,7 @@ on:
 permissions:
   contents: write
 jobs:
-  player:
+  plugins:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,33 +21,31 @@ jobs:
         run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DVISU_BUILD_ID="${GITHUB_SHA::7}" -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
       - name: Build
         run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone NodeFX_VST3 NodeFX_Standalone HyperSynth_VST3 HyperSynth_Standalone --parallel 4
-      - name: Package
+      - name: "Package each plugin by itself: its zip, and its parts for the setup"
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force out | Out-Null
-          $vst = Get-ChildItem build -Recurse -Directory -Filter "VisuPlayer.vst3" | Select-Object -First 1
-          Compress-Archive -Path $vst.FullName -DestinationPath out/VisuPlayer-VST3-Windows.zip
-          $exe = Get-ChildItem build -Recurse -Filter "VisuPlayer.exe" | Where-Object { $_.FullName -match "Standalone" } | Select-Object -First 1
-          New-Item -ItemType Directory -Force parts | Out-Null
-          Copy-Item $exe.FullName parts/VisuPlayer.exe
-          Copy-Item $vst.FullName parts/VisuPlayer.vst3 -Recurse
-          $nvst = Get-ChildItem build -Recurse -Directory -Filter "NodeFX.vst3" | Select-Object -First 1
-          $nexe = Get-ChildItem build -Recurse -Filter "NodeFX.exe" | Where-Object { $_.FullName -match "Standalone" } | Select-Object -First 1
-          if (-not $nvst -or -not $nexe) { throw "NodeFX was not built" }
-          Compress-Archive -Path $nvst.FullName -DestinationPath out/NodeFX-VST3-Windows.zip
-          Copy-Item $nexe.FullName parts/NodeFX.exe
-          Copy-Item $nvst.FullName parts/NodeFX.vst3 -Recurse
-          $hvst = Get-ChildItem build -Recurse -Directory -Filter "HyperSynth.vst3" | Select-Object -First 1
-          $hexe = Get-ChildItem build -Recurse -Filter "HyperSynth.exe" | Where-Object { $_.FullName -match "Standalone" } | Select-Object -First 1
-          if (-not $hvst -or -not $hexe) { throw "HyperSynth was not built" }
-          Compress-Archive -Path $hvst.FullName -DestinationPath out/HyperSynth-VST3-Windows.zip
-          Copy-Item $hexe.FullName parts/HyperSynth.exe
-          Copy-Item $hvst.FullName parts/HyperSynth.vst3 -Recurse
-          Get-ChildItem out, parts
+          foreach ($P in "VisuPlayer", "NodeFX", "HyperSynth") {
+            $vst = Get-ChildItem build -Recurse -Directory -Filter "$P.vst3" | Select-Object -First 1
+            $exe = Get-ChildItem build -Recurse -Filter "$P.exe" | Where-Object { $_.FullName -match "Standalone" } | Select-Object -First 1
+            if (-not $vst -or -not $exe) { throw "$P was not built" }
+            New-Item -ItemType Directory -Force "out/$P", "parts/$P" | Out-Null
+            Compress-Archive -Path $vst.FullName -DestinationPath "out/$P/$P-VST3-Windows.zip"
+            Copy-Item $exe.FullName "parts/$P/$P.exe"
+            Copy-Item $vst.FullName "parts/$P/$P.vst3" -Recurse
+          }
+          Get-ChildItem out, parts -Recurse -Depth 1
       - uses: actions/upload-artifact@v4
-        with: { name: player, path: out }
+        with: { name: VisuPlayer, path: out/VisuPlayer }
       - uses: actions/upload-artifact@v4
-        with: { name: player-parts, path: parts }
+        with: { name: VisuPlayer-parts, path: parts/VisuPlayer }
+      - uses: actions/upload-artifact@v4
+        with: { name: NodeFX, path: out/NodeFX }
+      - uses: actions/upload-artifact@v4
+        with: { name: NodeFX-parts, path: parts/NodeFX }
+      - uses: actions/upload-artifact@v4
+        with: { name: HyperSynth, path: out/HyperSynth }
+      - uses: actions/upload-artifact@v4
+        with: { name: HyperSynth-parts, path: parts/HyperSynth }
   maker:
     runs-on: windows-latest
     steps:
@@ -79,16 +77,16 @@ jobs:
         working-directory: apps/maker-desktop
         env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
       - uses: actions/upload-artifact@v4
-        with: { name: maker-app, path: apps/maker-desktop/dist/win-unpacked }
+        with: { name: VisuMaker-app, path: apps/maker-desktop/dist/win-unpacked }
   installer:
-    needs: [player, maker]
+    needs: [plugins, maker]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: maker-app, path: dl/maker }
+        with: { name: VisuMaker-app, path: dl/maker }
       - uses: actions/download-artifact@v4
-        with: { name: player-parts, path: dl/player }
+        with: { pattern: "*-parts", path: dl/parts }
       - name: Inno Setup
         shell: pwsh
         run: |
@@ -100,7 +98,7 @@ jobs:
         shell: pwsh
         run: |
           $b = "$env:GITHUB_SHA".Substring(0,7); $w = "$env:GITHUB_WORKSPACE"
-          & $env:ISCC "/DVersion=0.0.1" "/DBuild=$b" "/DRoot=$w" "/DMakerDir=$w\dl\maker" "/DVst3Dir=$w\dl\player\VisuPlayer.vst3" "/DStandaloneExe=$w\dl\player\VisuPlayer.exe" "/DNodeFXVst3Dir=$w\dl\player\NodeFX.vst3" "/DNodeFXExe=$w\dl\player\NodeFX.exe" "/DHyperSynthVst3Dir=$w\dl\player\HyperSynth.vst3" "/DHyperSynthExe=$w\dl\player\HyperSynth.exe" "/DOutDir=$w\out" apps\installer\KiruCAS.iss
+          & $env:ISCC "/DVersion=0.0.1" "/DBuild=$b" "/DRoot=$w" "/DMakerDir=$w\dl\maker" "/DVst3Dir=$w\dl\parts\VisuPlayer-parts\VisuPlayer.vst3" "/DStandaloneExe=$w\dl\parts\VisuPlayer-parts\VisuPlayer.exe" "/DNodeFXVst3Dir=$w\dl\parts\NodeFX-parts\NodeFX.vst3" "/DNodeFXExe=$w\dl\parts\NodeFX-parts\NodeFX.exe" "/DHyperSynthVst3Dir=$w\dl\parts\HyperSynth-parts\HyperSynth.vst3" "/DHyperSynthExe=$w\dl\parts\HyperSynth-parts\HyperSynth.exe" "/DOutDir=$w\out" apps\installer\KiruCAS.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
           Get-ChildItem out
       - name: Install it, try it, uninstall it
@@ -122,13 +120,13 @@ jobs:
           if (Test-Path "HKLM:\Software\Classes\VisuMaker.Project") { throw "the .vmproj file type is still registered" }
           "uninstalled cleanly"
       - uses: actions/upload-artifact@v4
-        with: { name: installer, path: out }
+        with: { name: KiruCAS-Setup, path: out }
   publish:
-    needs: [player, installer]
+    needs: [plugins, installer]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
-        with: { path: dl }
+        with: { path: dl, pattern: "{KiruCAS-Setup,VisuPlayer,NodeFX,HyperSynth}" }
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -149,4 +147,4 @@ jobs:
           Libraries exported from VisuMaker go to `Documents\VisuSampler\Libraries`, where VisuPlayer finds them.
           The builds are not code-signed, so Windows SmartScreen may ask before the first start ("More info", then "Run anyway").
           MD
-          gh release create "$TAG" dl/installer/* dl/player/* --repo "$REPO" --target "${GITHUB_SHA}" --title "Kiru CAS 0.0.1 (${TAG})" --notes-file notes.md --prerelease
+          gh release create "$TAG" dl/KiruCAS-Setup/* dl/VisuPlayer/* dl/NodeFX/* dl/HyperSynth/* --repo "$REPO" --target "${GITHUB_SHA}" --title "Kiru CAS 0.0.1 (${TAG})" --notes-file notes.md --prerelease
