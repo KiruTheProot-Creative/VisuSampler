@@ -64,6 +64,12 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
 #screen .glass::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(155deg,#ffffff12,#ffffff05 30%,#0000 45%),repeating-linear-gradient(0deg,#ffffff05 0 1px,#0000 1px 3px)}
 .tabs{display:flex;gap:12px;font-size:11px}.tabs a{color:#3f6f86;cursor:pointer}.tabs a.on{color:var(--lcd);text-shadow:0 0 5px #4fc3f7a6}
 #scr{width:100%;height:190px}
+#wtbar{position:absolute;right:14px;top:34px;display:none;gap:6px;align-items:center;z-index:2;font-size:11px}
+#wtbar.show{display:flex}
+#wtbar button{font:inherit;font-size:11px;letter-spacing:1px;color:#3f6f86;background:#08141a;border:1px solid #1f4b60;border-radius:3px;padding:3px 7px;cursor:pointer}
+#wtbar button.on{color:var(--lcd);border-color:#4fc3f7;text-shadow:0 0 5px #4fc3f7a6}
+#wtbar button:disabled{opacity:.4;cursor:default}
+#wtName{color:var(--lcd);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fields{display:flex;justify-content:space-between;font-size:10.5px;color:var(--lcdq)}
 .fld{display:flex;flex-direction:column;align-items:center;cursor:ns-resize}.fld b{color:var(--lcd);font-weight:500;font-size:12px}
 /* keyboard */
@@ -138,6 +144,7 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
   </section>
   <section id="screen" aria-label="Screen"><div class="glass">
     <div class="tabs" id="stabs"><a data-s="o0">OSC 1</a><a data-s="o1">OSC 2</a><a data-s="o2">OSC 3</a><a data-s="filter">FILTER</a><a data-s="env">ENV</a></div>
+    <div id="wtbar"><span id="wtName"></span><button id="wtFac" title="The factory table chosen with the TABLE knob">FACTORY</button><button id="wtCus" title="The table imported into this oscillator">CUSTOM</button><button id="wtImp" title="Import a wavetable (.wav from Serum or Vital) or any sound: its single cycles become the frames">IMPORT…</button></div>
     <canvas id="scr" width="752" height="380"></canvas>
     <div class="fields" id="fields"></div>
   </div></section>
@@ -220,7 +227,7 @@ function call(name,...params){
 function on(ev,fn){const b=B();if(b)b.addEventListener(ev,fn);else(window.__hsEvents=window.__hsEvents||{})[ev]=fn;}
 
 /* ---------- state ---------- */
-const H={defs:[],idx:{},vals:[],layer:'l1',osc:0,screen:'o0',name:'Init',category:'Basics',presets:[],keys:new Set(),uiKeys:new Set(),flashT:0};
+const H={tabs:[],custom:{},defs:[],idx:{},vals:[],layer:'l1',osc:0,screen:'o0',name:'Init',category:'Basics',presets:[],keys:new Set(),uiKeys:new Set(),flashT:0};
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const pid=p=>p.replace('?',H.layer);
 const def=id=>H.defs[H.idx[id]];
@@ -285,10 +292,12 @@ function paint(){
   $('#subOct').textContent=def(H.layer+'.subOct').opts[Math.round(val(H.layer+'.subOct'))].toUpperCase();
   $('#layerTitle').textContent=H.layer==='l1'?'LAYER I':'LAYER II';
   $$('#stabs a').forEach(a=>a.classList.toggle('on',a.dataset.s===H.screen));
-  paintFields();lcdIdle();drawScreen();
+  paintFields();paintWtBar();lcdIdle();drawScreen();
 }
 function lcdIdle(){if(Date.now()<H.flashT)return;$('#lcdTop').textContent=(H.category||'').toUpperCase()+' · EDITING '+(H.layer==='l1'?'LAYER I':'LAYER II');$('#lcdMain').textContent=H.name||'Init';}
-function lcdShow(id){const d=def(id);if(!d)return;$('#lcdTop').textContent=d.name.toUpperCase();$('#lcdMain').textContent=fmt(d,val(id));H.flashT=Date.now()+1400;clearTimeout(lcdShow.t);lcdShow.t=setTimeout(lcdIdle,1450);}
+function lcdShow(id){const d=def(id);if(!d)return;$('#lcdTop').textContent=d.name.toUpperCase();let txt=fmt(d,val(id));
+  if(/\.table$/.test(id)){const p=id.slice(0,-5),c=H.custom[id.slice(0,5)];if(val(p+'wtsrc')>.5&&c)txt='CUSTOM: '+c.name;}
+  $('#lcdMain').textContent=txt;H.flashT=Date.now()+1400;clearTimeout(lcdShow.t);lcdShow.t=setTimeout(lcdIdle,1450);}
 
 /* the screen: the selected oscillator's fine settings, or the filters, or the envelopes */
 function paintFields(){
@@ -304,12 +313,23 @@ const TAB_SPECTRA=[
   (x,h)=>{const b=1+x*x*60;return Math.exp(-(h-1)/b)/Math.sqrt(h);},
   (x,h)=>{const F1=[4.9,3.5,1.8,3.8,2],F2=[7.3,12.3,15.3,5.6,5.8],s=x*4,i=Math.min(3,Math.floor(s)),fr=s-i,f1=F1[i]*(1-fr)+F1[i+1]*fr,f2=F2[i]*(1-fr)+F2[i+1]*fr;return(Math.exp(-Math.pow((h-f1)/1.4,2))+.7*Math.exp(-Math.pow((h-f2)/2.2,2))+.02)/Math.sqrt(h);},
   (x,h)=>{const top=4+Math.floor(x*120);let z=(Math.imul(h,2654435761)^0x9e3779b9)>>>0;z^=z>>>15;z=Math.imul(z,2246822519)>>>0;z^=z>>>13;return h<=top?(.25+.75*((z>>>0)%1000)/1000)/Math.pow(h,.7):0;}];
+/* the wavetable an oscillator plays: its imported one (CUSTOM) or a factory one, as frames of 128 points */
+function tableFrames(p){const c=H.custom[p.slice(0,5)];if(val(p+'wtsrc')>.5&&c&&c.frames&&c.frames.length)return c.frames;const t=H.tabs[Math.round(val(p+'table'))];return t&&t.frames;}
+function frameAt(fr,pos,x){const fi=Math.max(0,Math.min(1,pos))*(fr.length-1),a=Math.floor(fi),b=Math.min(fr.length-1,a+1),t=fi-a;
+  const at=(f,x)=>{const n=f.length,q=x*n,i=Math.floor(q)%n,k=q-Math.floor(q);return f[i]*(1-k)+f[(i+1)%n]*k;};return at(fr[a],x)*(1-t)+at(fr[b],x)*t;}
+async function refreshCustom(){for(let L=0;L<2;L++)for(let k=0;k<3;k++){const r=await call('tablePreview',L,k);H.custom[`l${L+1}.o${k+1}`]=r&&r.frames?r:null;}paint();}
+function paintWtBar(){
+  const bar=$('#wtbar');if(!bar)return;const osc=H.screen[0]==='o',p=osc?`${H.layer}.o${+H.screen[1]+1}.`:'';const wt=osc&&Math.round(val(p+'mode'))===0;bar.classList.toggle('show',wt);if(!wt)return;
+  const c=H.custom[p.slice(0,5)],cus=val(p+'wtsrc')>.5&&!!c;$('#wtFac').classList.toggle('on',!cus);$('#wtCus').classList.toggle('on',cus);$('#wtCus').disabled=!c;
+  $('#wtName').textContent=cus?c.name+' · '+c.count+' frames':((H.tabs[Math.round(val(p+'table'))]||{}).name||'');
+}
 function wave(p,x){   // one cycle of an oscillator, x 0..1 (for the screen)
   const m=Math.round(val(p+'mode'));
   if(m===3){const s=Math.round(val(p+'shape')),pw=val(p+'pw');return s===0?2*x-1:s===1?(x<pw?1:-1):s===2?1-4*Math.abs(x-.5):Math.sin(2*Math.PI*x);}
   if(m===4)return Math.sin(2*Math.PI*x+val(p+'fm')*8*Math.sin(2*Math.PI*val(p+'ratio')*x));
   if(m===5)return Math.sin(x*997.3)*Math.cos(x*3111.7);
-  if(m===0){const f=TAB_SPECTRA[Math.round(val(p+'table'))]||TAB_SPECTRA[0],pos=val(p+'pos');let y=0;for(let h=1;h<=40;h++)y+=f(pos,h)*Math.sin(2*Math.PI*h*x);return y;}
+  if(m===0){const pos=val(p+'pos'),fr=tableFrames(p);if(fr)return frameAt(fr,pos,x);
+    const f=TAB_SPECTRA[Math.round(val(p+'table'))]||TAB_SPECTRA[0];let y=0;for(let h=1;h<=40;h++)y+=f(pos,h)*Math.sin(2*Math.PI*h*x);return y;}
   return 0;
 }
 function drawScreen(){
@@ -361,6 +381,15 @@ function wire(){
     const md=e.target.closest('[data-mode]');if(md){const k=+md.dataset.mode;H.screen='o'+k;cyc(`${H.layer}.o${k+1}.mode`,MODES_READY);return;}
     const row=e.target.closest('.osc');if(row&&!e.target.closest('.kn')){H.screen='o'+row.dataset.k;paint();}
   });
+  const wtP=()=>`${H.layer}.o${+H.screen[1]+1}.`;
+  $('#wtFac').onclick=()=>{setVal(wtP()+'wtsrc',0,true);lcdShow(wtP()+'table');};
+  $('#wtCus').onclick=()=>{if(H.custom[wtP().slice(0,5)]){setVal(wtP()+'wtsrc',1,true);lcdShow(wtP()+'table');}};
+  $('#wtImp').onclick=async()=>{const p=wtP(),L=H.layer==='l1'?0:1,k=+H.screen[1];$('#wtImp').disabled=true;
+    try{const r=await call('importTable',L,k);if(!r||r.cancelled)return;
+      if(r.error){$('#lcdTop').textContent='IMPORT';$('#lcdMain').textContent=r.error;H.flashT=Date.now()+4000;return;}
+      if(r.values)H.vals=r.values.slice();H.custom[p.slice(0,5)]=r.preview||null;paint();
+      $('#lcdTop').textContent='IMPORTED · '+((r.preview&&r.preview.count)||1)+' FRAMES';$('#lcd').title=r.how||'';$('#lcdMain').textContent=r.name;H.flashT=Date.now()+3000;}
+    finally{$('#wtImp').disabled=false;}};
   $('#stabs').onclick=e=>{const a=e.target.closest('a');if(a){H.screen=a.dataset.s;paint();}};
   /* keyboard: click and slide; computer keys A..K (Z / X: octave) */
   const kb=$('#keys');let held=null;
@@ -393,7 +422,7 @@ function wire(){
 function paintKeys(){const all=new Set([...H.keys,...H.uiKeys]);$$('#keys [data-key]').forEach(k=>k.classList.toggle('on',all.has(+k.dataset.key)));}
 async function listPresets(){H.presets=(await call('listPresets'))||[];}
 async function loadPreset(id){const r=await call('loadPreset',id);if(!r||r.error){$('#pMsg').textContent=(r&&r.error)||'could not load';return;}
-  H.name=r.name;H.category=r.category;H.cur=id;if(r.values)H.vals=r.values.slice();H.flashT=0;clearTimeout(lcdShow.t);paint();renderBrowser();}
+  H.name=r.name;H.category=r.category;H.cur=id;if(r.values)H.vals=r.values.slice();H.flashT=0;clearTimeout(lcdShow.t);paint();renderBrowser();refreshCustom();}
 function step(dir){if(!H.presets.length)return;let i=H.presets.findIndex(p=>p.id===H.cur);i=(i+dir+H.presets.length)%H.presets.length;loadPreset(H.presets[i].id);}
 async function openBrowser(){await listPresets();renderBrowser();$('#pName').value=H.name;$('#pCat').value=H.category;$('#browser').classList.add('open');}
 function renderBrowser(){
@@ -407,9 +436,10 @@ function fit(){const s=Math.min(window.innerWidth/1600,window.innerHeight/880);w
 async function start(){
   const st=await call('getState');if(!st){document.body.textContent='HyperSynth could not reach the plugin.';return;}
   H.defs=st.defs;H.defs.forEach((d,i)=>{H.idx[d.id]=i;d.opts=d.opts||[];});H.vals=st.values.slice();H.name=st.name||'Init';H.category=st.category||'Basics';
-  buildOscs();buildSliders();buildKeys();wire();fit();paint();await listPresets();
+  H.tabs=(await call('tablePreviews'))||[];
+  buildOscs();buildSliders();buildKeys();wire();fit();paint();await listPresets();await refreshCustom();
   const cur=H.presets.find(p=>p.name===H.name&&p.category===H.category);if(cur)H.cur=cur.id;
-  on('values',e=>{(e.i||[]).forEach((i,j)=>{H.vals[i]=e.v[j];});if(e.name)H.name=e.name;paint();});
+  on('values',e=>{(e.i||[]).forEach((i,j)=>{H.vals[i]=e.v[j];});const fresh=e.name&&e.name!==H.name;if(e.name)H.name=e.name;paint();if(fresh)refreshCustom();});
   on('play',e=>{H.keys=new Set(e.keys||[]);paintKeys();});
   window.addEventListener('resize',fit);
 }

@@ -118,10 +118,19 @@ void HyperSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 }
 
 /* ---------- state and presets: the same .hsyn text ---------- */
+void HyperSynthProcessor::copyTables(const visu::hs::Synth& from, visu::hs::Synth& to) const
+{
+    for (int L = 0; L < 2; ++L) for (int k = 0; k < 3; ++k) {
+        std::vector<float> fr; std::string nm;
+        if (from.customTable(L, k, &fr, &nm)) to.setCustomTable(L, k, fr, nm); else to.clearCustomTable(L, k);
+    }
+}
+
 juce::String HyperSynthProcessor::stateJson(const juce::String& name, const juce::String& category) const
 {
     visu::hs::Synth s;
     for (int i = 0; i < (int) params_.size(); ++i) s.setParam(i, value(i));
+    copyTables(synth_, s);   // imported wavetables travel with the preset and the project
     return juce::String::fromUTF8(s.presetJson(name.toStdString(), category.toStdString()).c_str());
 }
 
@@ -130,6 +139,7 @@ bool HyperSynthProcessor::applyJson(const juce::String& json, juce::String* erro
     visu::hs::Synth s; std::string err, name, cat;
     if (!s.loadPreset(json.toStdString(), &err, &name, &cat)) { if (error) *error = juce::String(err); return false; }
     for (int i = 0; i < (int) params_.size(); ++i) setFromUi(i, s.param(i));
+    copyTables(s, synth_);
     setNames(juce::String::fromUTF8(name.c_str()), juce::String::fromUTF8(cat.c_str()));
     return true;
 }
@@ -221,6 +231,59 @@ bool HyperSynthProcessor::deletePreset(const juce::String& id)
     if (!id.startsWith("u:") || id.contains("..")) return false;
     const auto f = presetFolder().getChildFile(id.substring(2));
     return f.isAChildOf(presetFolder()) && f.hasFileExtension("hsyn") && f.deleteFile();
+}
+
+/* ---------- wavetable import ---------- */
+static int clmFrameSize(const juce::File& f)   // Serum / Vital wavetable .wav files say their frame size in a "clm " chunk ("<!>2048 ...")
+{
+    juce::FileInputStream in(f); if (!in.openedOk()) return 0;
+    char hdr[12]; if (in.read(hdr, 12) != 12 || std::memcmp(hdr, "RIFF", 4) != 0 || std::memcmp(hdr + 8, "WAVE", 4) != 0) return 0;
+    for (int guard = 0; guard < 64 && !in.isExhausted(); ++guard) {
+        char id[4]; if (in.read(id, 4) != 4) break; const auto size = (juce::uint32) in.readInt();
+        if (std::memcmp(id, "clm ", 4) == 0) { juce::MemoryBlock mb; in.readIntoMemoryBlock(mb, (int) juce::jmin<juce::uint32>(size, 256));
+            const auto txt = mb.toString(); const int at = txt.indexOf("<!>"); return at >= 0 ? txt.substring(at + 3).getIntValue() : 0; }
+        if (!in.setPosition(in.getPosition() + size + (size & 1))) break;
+    }
+    return 0;
+}
+
+void HyperSynthProcessor::importTable(int layer, int osc, std::function<void(juce::var)> done)
+{
+    chooser_ = std::make_unique<juce::FileChooser>("Import a wavetable or any sound", juce::File::getSpecialLocation(juce::File::userDocumentsDirectory), "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
+    chooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this, layer, osc, done](const juce::FileChooser& fc) {
+        auto* o = new juce::DynamicObject(); const auto f = fc.getResult();
+        if (!f.existsAsFile()) { o->setProperty("cancelled", true); done(juce::var(o)); return; }
+        juce::AudioFormatManager fm; fm.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(f));
+        if (!r) { o->setProperty("error", "HyperSynth can't read " + f.getFileName()); done(juce::var(o)); return; }
+        const auto n = (int) juce::jmin<juce::int64>(r->lengthInSamples, (juce::int64) (r->sampleRate * 120));   // up to 2 minutes
+        juce::AudioBuffer<float> buf((int) r->numChannels, n); r->read(&buf, 0, n, 0, true, true);
+        std::vector<float> mono((size_t) n, 0.f);
+        for (int c = 0; c < buf.getNumChannels(); ++c) { const float* d = buf.getReadPointer(c); for (int i = 0; i < n; ++i) mono[(size_t) i] += d[i] / (float) buf.getNumChannels(); }
+        std::string how; const int clm = clmFrameSize(f);
+        const auto frames = visu::hs::framesFromAudio(mono.data(), mono.size(), r->sampleRate, clm, &how, 128);
+        const auto name = f.getFileNameWithoutExtension();
+        if (frames.empty() || !synth_.setCustomTable(layer, osc, frames, name.toStdString())) { o->setProperty("error", juce::String(how.empty() ? "nothing usable in that file" : how)); done(juce::var(o)); return; }
+        const juce::String p = "l" + juce::String(layer + 1) + ".o" + juce::String(osc + 1) + ".";
+        setFromUi(indexOf(p + "mode"), 0); setFromUi(indexOf(p + "wtsrc"), 1);
+        o->setProperty("name", name); o->setProperty("how", juce::String(how)); o->setProperty("preview", tablePreview(layer, osc)); o->setProperty("values", values());
+        done(juce::var(o));
+    });
+}
+
+juce::var HyperSynthProcessor::tablePreview(int layer, int osc) const
+{
+    std::vector<float> fr; std::string nm;
+    if (!synth_.customTable(layer, osc, &fr, &nm)) return {};
+    const int F = (int) (fr.size() / 2048), show = juce::jmin(F, 24);
+    juce::Array<juce::var> frames;
+    for (int s = 0; s < show; ++s) {
+        const int f = show == 1 ? 0 : s * (F - 1) / (show - 1); juce::Array<juce::var> pts;
+        for (int i = 0; i < 128; ++i) pts.add(fr[(size_t) f * 2048 + (size_t) i * 16]);
+        frames.add(pts);
+    }
+    auto* o = new juce::DynamicObject(); o->setProperty("name", juce::String::fromUTF8(nm.c_str())); o->setProperty("count", F); o->setProperty("frames", frames);
+    return juce::var(o);
 }
 
 juce::AudioProcessorEditor* HyperSynthProcessor::createEditor() { return new HyperSynthEditor(*this); }

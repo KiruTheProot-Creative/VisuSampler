@@ -8,6 +8,7 @@ import {chromium} from './_helper.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(here,'../../..'),hs=path.join(root,'apps/plugin/hypersynth');
 const files=new Map([['hypersynth.html',path.join(hs,'ui/hypersynth.html')],['Unbounded.ttf',path.join(root,'assets/fonts/Unbounded.ttf')],['JetBrainsMono.ttf',path.join(root,'assets/fonts/JetBrainsMono.ttf')]]);
 const defs=JSON.parse(fs.readFileSync(path.join(root,'apps/plugin/tests/golden/hypersynth-params.json'),'utf8'));
+const tables=JSON.parse(fs.readFileSync(path.join(root,'apps/plugin/tests/golden/hypersynth-tables.json'),'utf8'));
 const factory=JSON.parse(fs.readFileSync(path.join(hs,'presets/factoryPresets.json'),'utf8'));
 const fails=[],errs=[],missing=[];const ok=(c,m)=>{console.log((c?'ok  ':'FAIL ')+m);if(!c)fails.push(m);};
 const b=await chromium.launch(),p=await b.newPage({viewport:{width:1440,height:792}});
@@ -15,7 +16,7 @@ p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='erro
 await p.route('**/*',r=>{const u=new URL(r.request().url());if(u.origin!=='https://juce.backend')return r.abort();
   const f=files.get(u.pathname.split('/').pop()||'hypersynth.html');if(!f){missing.push(u.pathname);return r.fulfill({status:404,body:''});}
   return r.fulfill({status:200,contentType:f.endsWith('.html')?'text/html':'font/ttf',body:fs.readFileSync(f)});});
-await p.addInitScript(([defs,factory])=>{
+await p.addInitScript(([defs,factory,tables])=>{
   const vals=defs.map(d=>d.def),ls={};window.__calls=[];window.__notes=[];
   const idx=id=>defs.findIndex(d=>d.id===id);
   const answer=(name,a)=>{
@@ -24,13 +25,19 @@ await p.addInitScript(([defs,factory])=>{
     if(name==='note'){window.__notes.push(a);return true;}
     if(name==='listPresets')return factory.map(f=>({id:'f:'+f.category+'/'+f.name,name:f.name,category:f.category,factory:true}));
     if(name==='loadPreset'){const f=factory.find(f=>'f:'+f.category+'/'+f.name===a[0]);defs.forEach((d,i)=>{vals[i]=f.params[d.id]!=null?f.params[d.id]:d.def;});return{name:f.name,category:f.category,values:vals.slice()};}
+    if(name==='tablePreviews')return tables;
+    if(name==='tablePreview')return window.__custom&&a[0]===0&&a[1]===1?window.__custom:null;
+    if(name==='importTable'){   // like the plugin: OSC 2 of layer I gets a 2-frame table, Wavetable mode, CUSTOM source
+      const fr=[0,1].map(f=>Array.from({length:128},(_,i)=>Math.sin(2*Math.PI*i/128)*(f?.5:1)+(f?.5*Math.sin(6*Math.PI*i/128):0)));
+      window.__custom={name:'My Growl',count:2,frames:fr};vals[idx('l1.o2.mode')]=0;vals[idx('l1.o2.wtsrc')]=1;
+      return{name:'My Growl',how:'single cycles of a 110 Hz sound',preview:window.__custom,values:vals.slice()};}
     if(name==='savePreset')return{id:'u:'+a[1]+'/'+a[0]+'.hsyn'};
     return true;};
   window.__vals=vals;
   window.__JUCE__={backend:{addEventListener:(n,f)=>{(ls[n]=ls[n]||[]).push(f);},removeEventListener:()=>{},
     emitEvent:(n,d)=>{if(n!=='__juce__invoke')return;window.__calls.push([d.name,d.params]);const result=answer(d.name,d.params);setTimeout(()=>(ls.__juce__complete||[]).forEach(f=>f({promiseId:d.resultId,result})),2);}},
     __fire:(n,e)=>(ls[n]||[]).forEach(f=>f(e))};
-},[defs,factory]);
+},[defs,factory,tables]);
 await p.goto('https://juce.backend/hypersynth.html');await p.waitForTimeout(800);
 ok(missing.length===0,'everything the panel loads is built into the plugin'+(missing.length?' (missing '+missing.join()+')':''));
 ok(errs.length===0,'no script errors'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
@@ -54,6 +61,21 @@ ok(l2==='l2.lp.cut','the LAYER II tab edits layer II ('+l2+')');
 await p.click('.tab[data-tab="l1"]');await p.click('[data-mode="0"]');
 const m1=await p.evaluate(()=>({mode:document.querySelector('[data-mode="0"]').textContent,a:document.querySelector('.kn[data-k="0"][data-slot="a"]').dataset.id}));
 ok(m1.mode==='FM'&&m1.a==='l1.o1.ratio','clicking the mode switches OSC 1 to FM, its knobs to RATIO / FM AMT');
+/* wavetables: OSC 2 to Wavetable, the factory tables are drawn, a sound is imported */
+await p.click('#stabs a[data-s="o1"]');for(let i=0;i<4&&(await p.textContent('[data-mode="1"]'))!=='WAVETABLE';i++)await p.click('[data-mode="1"]');
+const wt=await p.evaluate(()=>({mode:document.querySelector('[data-mode="1"]').textContent,bar:document.querySelector('#wtbar').classList.contains('show'),name:document.querySelector('#wtName').textContent,tabs:window.__hs.tabs.length}));
+ok(wt.mode==='WAVETABLE'&&wt.bar&&wt.name==='Basic Shapes'&&wt.tabs===tables.length,`OSC 2 in Wavetable mode shows its table on the screen (${JSON.stringify(wt)})`);
+await p.evaluate(()=>window.__JUCE__.__fire('values',{i:[window.__hs.idx['l1.o2.table']],v:[16]}));
+const t16=await p.evaluate(()=>document.querySelector('#wtName').textContent);
+ok(t16==='Resonant Saw','all '+tables.length+' factory tables can be chosen and drawn (table 17: '+t16+')');
+await p.click('#wtImp');await p.waitForTimeout(150);
+const im=await p.evaluate(()=>({name:document.querySelector('#wtName').textContent,cus:document.querySelector('#wtCus').classList.contains('on'),lcd:document.querySelector('#lcdTop').textContent}));
+ok(/My Growl · 2 frames/.test(im.name)&&im.cus&&/IMPORTED · 2 FRAMES/.test(im.lcd),'IMPORT… brings a sound in as a custom table ('+JSON.stringify(im)+')');
+await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-wavetable.png')});
+await p.click('#wtFac');const fac=await p.evaluate(()=>({src:window.__vals[window.__hs.idx['l1.o2.wtsrc']],name:document.querySelector('#wtName').textContent}));
+await p.click('#wtCus');const back=await p.evaluate(()=>window.__vals[window.__hs.idx['l1.o2.wtsrc']]);
+ok(fac.src===0&&!/My Growl/.test(fac.name)&&back===1,'FACTORY / CUSTOM switch between the two, the import stays ('+JSON.stringify(fac)+')');
+ok(errs.length===0,'still no script errors'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
 /* keyboard */
 const kb=await p.locator('#keys .wk[data-key="60"]').boundingBox();
 await p.mouse.move(kb.x+kb.width/2,kb.y+kb.height*.8);await p.mouse.down();await p.waitForTimeout(80);await p.mouse.up();

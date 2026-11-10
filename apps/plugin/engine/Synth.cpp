@@ -3,6 +3,7 @@
 #include "Json.h"
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <complex>
 #include <cstdio>
 #include <cstring>
@@ -45,6 +46,7 @@ static std::vector<ParamDef> buildParams() {
             opt(o + "shape", on + "shape", { "Saw", "Square", "Triangle", "Sine" }, 0);
             num(o + "pw", on + "pulse width", .05f, .95f, .5f);
             opt(o + "table", on + "wavetable", tables, 0);
+            opt(o + "wtsrc", on + "wavetable source", { "Factory", "Custom" }, 0);
             num(o + "pos", on + "position", 0, 1, 0);
             num(o + "ratio", on + "FM ratio", .5f, 16, 2, "", true);
             num(o + "fm", on + "FM amount", 0, 1, .3f);
@@ -85,9 +87,16 @@ int paramIndex(const std::string& id) {
     const auto& p = params(); for (size_t i = 0; i < p.size(); ++i) if (p[i].id == id) return (int) i; return -1;
 }
 
-/* ---------- wavetables: built from spectra, one band-limited copy per octave (no aliasing) ---------- */
+/* ---------- wavetables: one band-limited copy per octave of every frame (no aliasing) ---------- */
 static constexpr int kTab = 2048, kMips = 11;    // mip m holds harmonics up to 1024 >> m
-struct Wavetable { std::string name; int frames = 0; std::vector<float> data; };   // [frame][mip][kTab + 1]
+// each octave copy is only as long as it needs to be (2048, 2048, 1024, 512 ... 64 samples), plus one wrap sample
+static constexpr int mipLen(int m) { return (4096 >> m) > kTab ? kTab : ((4096 >> m) < 64 ? 64 : (4096 >> m)); }
+static constexpr int mipOff(int m) { return m == 0 ? 0 : mipOff(m - 1) + mipLen(m - 1) + 1; }
+static constexpr int kFrame = mipOff(kMips);     // floats per frame, all copies
+struct Wavetable {
+    std::string name; int frames = 0; std::vector<float> data;   // [frame][kFrame]: the octave copies at mipOff(m)
+    std::vector<float> src;                                      // an imported table: its frames as loaded (kTab each), for saving
+};
 
 static void fft(std::vector<std::complex<double>>& a, bool inv) {
     const size_t n = a.size();
@@ -97,27 +106,46 @@ static void fft(std::vector<std::complex<double>>& a, bool inv) {
         for (size_t i = 0; i < n; i += len) { std::complex<double> w(1); for (size_t j = 0; j < len / 2; ++j) { auto u = a[i + j], t = a[i + j + len / 2] * w; a[i + j] = u + t; a[i + j + len / 2] = u - t; w *= wl; } }
     }
 }
-// amp[h] for h = 1..1024 (sine phase); writes every mip of one frame
-static void renderFrame(const std::vector<double>& amp, float* out) {
-    std::vector<std::complex<double>> X(kTab);
-    float gain = 1;
+// spec[h] (h = 1..1024): the frame's harmonics as an FFT of kTab samples would give them. Writes every mip of one frame,
+// all scaled so the full-band copy peaks at 1 (or by `gainOut` when given: the same gain for a whole table).
+static void renderSpectrum(const std::vector<std::complex<double>>& spec, float* out, const float* fixedGain = nullptr) {
+    float gain = fixedGain ? *fixedGain : 1;
     for (int m = 0; m < kMips; ++m) {
-        const int H = 1024 >> m; std::fill(X.begin(), X.end(), std::complex<double>(0));
-        for (int h = 1; h <= H && h < (int) amp.size(); ++h) { X[(size_t) h] = std::complex<double>(0, -amp[(size_t) h] * kTab / 2); X[(size_t) (kTab - h)] = std::conj(X[(size_t) h]); }
+        const int H = 1024 >> m, N = mipLen(m); std::vector<std::complex<double>> X((size_t) N);
+        const double sc = (double) N / kTab;
+        for (int h = 1; h <= H && h < (int) spec.size() && h < N / 2; ++h) { X[(size_t) h] = spec[(size_t) h] * sc; X[(size_t) (N - h)] = std::conj(X[(size_t) h]); }
         fft(X, true);
-        float* d = out + (size_t) m * (kTab + 1);
-        for (int i = 0; i < kTab; ++i) d[i] = (float) (X[(size_t) i].real() / kTab);
-        if (m == 0) { float pk = 0; for (int i = 0; i < kTab; ++i) pk = std::max(pk, std::fabs(d[i])); gain = pk > 1e-9f ? 1 / pk : 1; }
-        for (int i = 0; i < kTab; ++i) d[i] *= gain;
-        d[kTab] = d[0];
+        float* d = out + mipOff(m);
+        for (int i = 0; i < N; ++i) d[i] = (float) (X[(size_t) i].real() / N);
+        if (m == 0 && !fixedGain) { float pk = 0; for (int i = 0; i < N; ++i) pk = std::max(pk, std::fabs(d[i])); gain = pk > 1e-9f ? 1 / pk : 1; }
+        for (int i = 0; i < N; ++i) d[i] *= gain;
+        d[N] = d[0];
     }
+}
+// amp[h] in sine phase (the original five tables)
+static void renderFrame(const std::vector<double>& amp, float* out) {
+    std::vector<std::complex<double>> spec(1025);
+    for (int h = 1; h <= 1024 && h < (int) amp.size(); ++h) spec[(size_t) h] = std::complex<double>(0, -amp[(size_t) h] * kTab / 2);
+    renderSpectrum(spec, out);
+}
+// one cycle as kTab samples -> its spectrum (DC dropped)
+static std::vector<std::complex<double>> spectrumOf(const float* cycle) {
+    std::vector<std::complex<double>> X(kTab); for (int i = 0; i < kTab; ++i) X[(size_t) i] = cycle[i];
+    fft(X, false); X.resize(1025); X[0] = 0; return X;
 }
 static std::vector<Wavetable> buildTables() {
     std::vector<Wavetable> t;
     const int F = 32, NH = 1025;
     auto table = [&](const std::string& name, auto spectrum) {
-        Wavetable w; w.name = name; w.frames = F; w.data.assign((size_t) F * kMips * (kTab + 1), 0.f);
-        for (int f = 0; f < F; ++f) { std::vector<double> a(NH, 0.0); spectrum((double) f / (F - 1), a); renderFrame(a, w.data.data() + (size_t) f * kMips * (kTab + 1)); }
+        Wavetable w; w.name = name; w.frames = F; w.data.assign((size_t) F * kFrame, 0.f);
+        for (int f = 0; f < F; ++f) { std::vector<double> a(NH, 0.0); spectrum((double) f / (F - 1), a); renderFrame(a, w.data.data() + (size_t) f * kFrame); }
+        t.push_back(std::move(w));
+    };
+    // a table drawn in time (one cycle, x 0..1), made band-limited through its spectrum
+    auto shapeTable = [&](const std::string& name, auto cycle) {
+        Wavetable w; w.name = name; w.frames = F; w.data.assign((size_t) F * kFrame, 0.f); std::vector<float> c(kTab);
+        for (int f = 0; f < F; ++f) { const double pos = (double) f / (F - 1); for (int i = 0; i < kTab; ++i) c[(size_t) i] = (float) cycle((double) i / kTab, pos);
+            renderSpectrum(spectrumOf(c.data()), w.data.data() + (size_t) f * kFrame); }
         t.push_back(std::move(w));
     };
     auto shape = [](int s, int h) -> double {   // 0 sine, 1 triangle, 2 saw, 3 square
@@ -126,6 +154,7 @@ static std::vector<Wavetable> buildTables() {
         if (s == 2) return 1.0 / h;
         return (h % 2) ? 1.0 / h : 0;
     };
+    const double TP = 2 * kPi;
     table("Basic Shapes", [&](double x, std::vector<double>& a) {   // sine -> triangle -> saw -> square
         const double s = x * 3; const int s0 = std::min(2, (int) s); const double fr = s - s0;
         for (int h = 1; h < (int) a.size(); ++h) a[(size_t) h] = shape(s0, h) * (1 - fr) + shape(s0 + 1, h) * fr; });
@@ -141,17 +170,97 @@ static std::vector<Wavetable> buildTables() {
         const int top = 4 + (int) (x * 120);
         for (int h = 1; h < (int) a.size(); ++h) { uint32_t z = (uint32_t) h * 2654435761u ^ 0x9e3779b9u; z ^= z >> 15; z *= 2246822519u; z ^= z >> 13;
             a[(size_t) h] = h <= top ? (.25 + .75 * (z % 1000) / 1000.0) / std::pow((double) h, .7) : 0; } });
+    /* added 11 Nov 2026 (always appended: a preset stores the table's number) */
+    shapeTable("Sync Sweep", [&](double x, double p) { const double r = 1 + p * 7; double y = std::fmod(x * r, 1.0); return 2 * y - 1; });   // hard-synced saw
+    shapeTable("Phase Distortion", [&](double x, double p) {   // the Casio CZ trick: a bent sine that turns into a saw or a pulse
+        const double d = .5 - p * .47, ph = x < d ? x * .5 / d : .5 + (x - d) * .5 / (1 - d); return -std::cos(TP * ph); });
+    shapeTable("Wavefolder", [&](double x, double p) { return std::sin((.6 + p * 9) * std::sin(TP * x)); });
+    shapeTable("FM Growl", [&](double x, double p) { return std::sin(TP * x + p * 6 * std::sin(TP * 2 * x)); });
+    shapeTable("FM Metal", [&](double x, double p) { return std::sin(TP * x + p * 5 * std::sin(TP * 5 * x) + p * 2 * std::sin(TP * 9 * x)); });
+    table("Organ", [&](double x, std::vector<double>& a) {   // drawbars, from soft flute to full organ
+        const int hs[9] = { 1, 2, 3, 4, 6, 8, 10, 12, 16 }; for (int i = 0; i < 9; ++i) { const double on = std::min(1.0, std::max(0.0, x * 9 - i + 1.5)); a[(size_t) hs[i]] += (i == 0 ? 1 : .7 / std::sqrt((double) i)) * (i < 2 ? 1 : on); } });
+    table("Formant Sweep", [&](double x, std::vector<double>& a) {   // a resonant peak climbing through a saw
+        const double c = 2 * std::pow(40.0, x); for (int h = 1; h < (int) a.size(); ++h) a[(size_t) h] = (.15 + 3 * std::exp(-std::pow((h - c) / (1 + c * .12), 2))) / h; });
+    table("Odd to Even", [&](double x, std::vector<double>& a) {   // hollow (odd harmonics) to nasal (even)
+        for (int h = 1; h < (int) a.size(); ++h) a[(size_t) h] = (h == 1 ? 1 : (h % 2 ? 1 - x : x)) / h; });
+    table("Spectral Comb", [&](double x, std::vector<double>& a) {   // notches moving through a saw (a flanger frozen in each frame)
+        const double sp = 2 + x * 14; for (int h = 1; h < (int) a.size(); ++h) a[(size_t) h] = std::fabs(std::cos(kPi * h / sp)) / h; });
+    shapeTable("Bitcrush", [&](double x, double p) { const double lv = std::pow(2.0, 6 - p * 5); return std::round(std::sin(TP * x) * lv) / lv; });
+    table("Harmonics", [&](double x, std::vector<double>& a) {   // one harmonic at a time, 1 to 32
+        const double hp = 1 + x * 31; const int h0 = (int) hp; const double fr = hp - h0; a[(size_t) h0] = 1 - fr; if (h0 + 1 <= 32) a[(size_t) h0 + 1] = fr; });
+    table("Resonant Saw", [&](double x, std::vector<double>& a) {   // an analog filter sweep with resonance, frozen
+        const double fc = 1.5 * std::pow(60.0, x), q = 6;
+        for (int h = 1; h < (int) a.size(); ++h) { const double r = h / fc; a[(size_t) h] = 1.0 / h / std::sqrt(std::pow(1 - r * r, 2) + std::pow(r / q, 2)); } });
     return t;
 }
 static const std::vector<Wavetable>& tables() { static const std::vector<Wavetable> t = buildTables(); return t; }
 const std::vector<std::string>& wavetableNames() {
-    static const std::vector<std::string> n = { "Basic Shapes", "PWM", "Harmonic Sweep", "Vowels", "Digital Grit" }; return n;
+    static const std::vector<std::string> n = { "Basic Shapes", "PWM", "Harmonic Sweep", "Vowels", "Digital Grit",
+        "Sync Sweep", "Phase Distortion", "Wavefolder", "FM Growl", "FM Metal", "Organ", "Formant Sweep", "Odd to Even", "Spectral Comb", "Bitcrush", "Harmonics", "Resonant Saw" };
+    return n;
 }
+
+std::vector<float> wavetablePreview(int table, int frames, int points) {
+    const auto& t = tables(); std::vector<float> out; if (table < 0 || table >= (int) t.size() || frames < 1 || points < 2) return out;
+    const auto& w = t[(size_t) table]; out.resize((size_t) frames * (size_t) points);
+    for (int f = 0; f < frames; ++f) { const int src = frames == 1 ? 0 : f * (w.frames - 1) / (frames - 1); const float* d = w.data.data() + (size_t) src * kFrame;
+        for (int i = 0; i < points; ++i) out[(size_t) f * points + i] = d[(size_t) i * kTab / points]; }
+    return out;
+}
+
+/* ---------- imported wavetables ---------- */
+// frames (kTab samples each) -> a playable table with its octave copies; the frames are kept for saving
+static std::unique_ptr<Wavetable> makeCustom(const std::vector<float>& frames, const std::string& name) {
+    const int F = (int) (frames.size() / kTab); if (F < 1) return nullptr;
+    auto w = std::make_unique<Wavetable>(); w->name = name; w->frames = F; w->src.assign(frames.begin(), frames.begin() + (size_t) F * kTab);
+    w->data.assign((size_t) std::max(2, F) * kFrame, 0.f);
+    float pk = 0; for (float v : w->src) pk = std::max(pk, std::fabs(v)); const float g = pk > 1e-9f ? 1 / pk : 1;   // one gain for all frames: their levels stay as they were
+    for (int f = 0; f < F; ++f) renderSpectrum(spectrumOf(w->src.data() + (size_t) f * kTab), w->data.data() + (size_t) f * kFrame, &g);
+    if (F == 1) { std::copy(w->data.begin(), w->data.begin() + kFrame, w->data.begin() + kFrame); w->frames = 2; }   // one frame: Position has nothing to move through
+    return w;
+}
+
+std::vector<float> framesFromAudio(const float* x, size_t n, double sr, int frameSize, std::string* how, int maxFrames) {
+    std::vector<float> out; maxFrames = std::max(1, std::min(256, maxFrames));
+    auto resampleCycle = [&](double start, double len, float* dst) {   // one stretch of the sound -> kTab samples
+        for (int i = 0; i < kTab; ++i) { const double p = start + len * i / kTab; const size_t k = (size_t) p; const double f = p - (double) k;
+            dst[i] = k + 1 < n ? (float) (x[k] * (1 - f) + x[k + 1] * f) : (k < n ? x[k] : 0.f); }
+        double dc = 0; for (int i = 0; i < kTab; ++i) dc += dst[i]; dc /= kTab; for (int i = 0; i < kTab; ++i) dst[i] -= (float) dc;
+    };
+    auto slice = [&](int fs, const char* why) {   // a wavetable file: frames side by side
+        const int F = std::min(maxFrames, std::max(1, (int) (n / (size_t) fs))); out.assign((size_t) F * kTab, 0.f);
+        const int total = (int) (n / (size_t) fs), stepF = std::max(1, total / F);
+        for (int f = 0; f < F; ++f) resampleCycle((double) f * stepF * fs, fs, out.data() + (size_t) f * kTab);
+        if (how) *how = why;
+    };
+    if (n < 16) { if (how) *how = "the file is empty"; return out; }
+    if (frameSize > 0) { slice(frameSize, "a wavetable file: its frames"); return out; }
+    if (n % kTab == 0 && n / kTab >= 2 && n / kTab <= 256) { slice(kTab, "a wavetable file (2048-sample frames)"); return out; }
+    if (n <= (size_t) kTab) { slice((int) n, "one short cycle"); return out; }
+    /* any other sound: find its pitch (YIN), then take single cycles from across the file */
+    const size_t W = std::min<size_t>(n / 2, 8192), mid = n / 2 - W / 2; const int minP = std::max(2, (int) (sr / 2000)), maxP = std::min((int) W - 1, (int) (sr / 25));
+    std::vector<double> d((size_t) maxP + 2, 0.0); double run = 0; double period = 0;
+    for (int tau = 1; tau <= maxP; ++tau) { double s2 = 0; for (size_t i = 0; i + (size_t) tau < W; ++i) { const double e = x[mid + i] - x[mid + i + (size_t) tau]; s2 += e * e; } run += s2; d[(size_t) tau] = run > 0 ? s2 * tau / run : 1; }
+    for (int tau = minP; tau < maxP; ++tau) if (d[(size_t) tau] < .15 && d[(size_t) tau] <= d[(size_t) tau + 1]) {
+        const double a = d[(size_t) tau - 1], b = d[(size_t) tau], c = d[(size_t) tau + 1], den = a - 2 * b + c; period = tau + (std::fabs(den) > 1e-12 ? .5 * (a - c) / den : 0); break; }
+    if (period <= 0) { slice(kTab, "no clear pitch: slices of the sound"); return out; }
+    const int F = std::min(maxFrames, std::max(1, (int) ((double) n / period) - 1)); out.assign((size_t) F * kTab, 0.f);
+    for (int f = 0; f < F; ++f) {
+        double s0 = F == 1 ? 0 : (double) f * ((double) n - period - 2) / (F - 1);
+        // start each cycle where the sound rises through zero, so neighbouring frames line up
+        const size_t lim = std::min(n - 1, (size_t) (s0 + period)); for (size_t i = (size_t) s0; i + 1 < lim; ++i) if (x[i] <= 0 && x[i + 1] > 0) { s0 = (double) i + x[i] / (double) (x[i] - x[i + 1]); break; }
+        if (s0 + period + 1 >= (double) n) s0 = std::max(0.0, (double) n - period - 2);
+        resampleCycle(s0, period, out.data() + (size_t) f * kTab);
+    }
+    if (how) { char b[96]; std::snprintf(b, sizeof b, "single cycles at %.1f Hz, %d frames across the sound", sr / period, F); *how = b; }
+    return out;
+}
+
 static inline int mipFor(double dt) {   // the octave copy whose harmonics all stay under half the sample rate
     const double maxH = .5 / std::max(dt, 1e-9); int m = 0; while (m < kMips - 1 && (double) (1024 >> m) > maxH) ++m; return m;
 }
-static inline float tabRead(const float* d, double ph) {
-    const double x = ph * kTab; const int i = (int) x; const float f = (float) (x - i); return d[i] + (d[i + 1] - d[i]) * f;
+static inline float tabRead(const float* d, double ph, int len) {
+    const double x = ph * len; const int i = (int) x; const float f = (float) (x - i); return d[i] + (d[i + 1] - d[i]) * f;
 }
 
 /* ---------- small DSP parts ---------- */
@@ -195,7 +304,7 @@ struct Voice {
 };
 
 /* per-layer parameter indices, found once */
-struct OscIdx { int on, mode, shape, pw, table, pos, ratio, fm, oct, semi, fine, level, pan, voices, detune, spread, blend, phase; };
+struct OscIdx { int on, mode, shape, pw, table, wtsrc, pos, ratio, fm, oct, semi, fine, level, pan, voices, detune, spread, blend, phase; };
 struct LayerIdx { int level, pan, vel, sub, subOct, noise, hpCut, hpRes, lpType, lpCut, lpRes, lpDrive, lpEnv, lpKey, fa, fd, fs, fr, aa, ad, as, ar; OscIdx o[3]; };
 
 struct Synth::Impl {
@@ -209,6 +318,15 @@ struct Synth::Impl {
     std::vector<int> stack;                 // mono: the keys held, newest last
     LayerIdx li[2]; int iMaster, iPlay, iXfade, iVoices, iMode, iGlide, iBend, iVib, iVibRate;
     uint32_t rnd = 0x1234567u;
+    /* imported wavetables: the audio thread reads the pointer; replaced ones are freed a few seconds later */
+    std::atomic<const Wavetable*> custom[2][3] = {};
+    std::unique_ptr<Wavetable> customOwn[2][3];
+    std::vector<std::pair<std::unique_ptr<Wavetable>, std::chrono::steady_clock::time_point>> retired;
+    void retire(std::unique_ptr<Wavetable> w) {
+        const auto now = std::chrono::steady_clock::now();
+        retired.erase(std::remove_if(retired.begin(), retired.end(), [&](auto& r) { return now - r.second > std::chrono::seconds(3); }), retired.end());
+        if (w) retired.emplace_back(std::move(w), now);
+    }
     inline float rand01() { rnd ^= rnd << 13; rnd ^= rnd >> 17; rnd ^= rnd << 5; return (float) (rnd & 0xffffff) / 16777216.f; }
 
     Impl() : vals(params().size()) {
@@ -222,7 +340,7 @@ struct Synth::Impl {
             x.hpCut = I(l + "hp.cut"); x.hpRes = I(l + "hp.res"); x.lpType = I(l + "lp.type"); x.lpCut = I(l + "lp.cut"); x.lpRes = I(l + "lp.res"); x.lpDrive = I(l + "lp.drive"); x.lpEnv = I(l + "lp.env"); x.lpKey = I(l + "lp.key");
             x.fa = I(l + "fenv.a"); x.fd = I(l + "fenv.d"); x.fs = I(l + "fenv.s"); x.fr = I(l + "fenv.r"); x.aa = I(l + "aenv.a"); x.ad = I(l + "aenv.d"); x.as = I(l + "aenv.s"); x.ar = I(l + "aenv.r");
             for (int k = 0; k < 3; ++k) { const std::string o = l + "o" + std::to_string(k + 1) + "."; OscIdx& q = x.o[k];
-                q.on = I(o + "on"); q.mode = I(o + "mode"); q.shape = I(o + "shape"); q.pw = I(o + "pw"); q.table = I(o + "table"); q.pos = I(o + "pos"); q.ratio = I(o + "ratio"); q.fm = I(o + "fm");
+                q.on = I(o + "on"); q.mode = I(o + "mode"); q.shape = I(o + "shape"); q.pw = I(o + "pw"); q.table = I(o + "table"); q.wtsrc = I(o + "wtsrc"); q.pos = I(o + "pos"); q.ratio = I(o + "ratio"); q.fm = I(o + "fm");
                 q.oct = I(o + "oct"); q.semi = I(o + "semi"); q.fine = I(o + "fine"); q.level = I(o + "level"); q.pan = I(o + "pan"); q.voices = I(o + "voices"); q.detune = I(o + "detune");
                 q.spread = I(o + "spread"); q.blend = I(o + "blend"); q.phase = I(o + "phase"); }
         }
@@ -346,13 +464,14 @@ struct Synth::Impl {
                     }
                     os.ph[u] = ph; }
             } else if (mode == MWave) {
-                const Wavetable& tb = tabs[(size_t) std::min((int) tabs.size() - 1, std::max(0, (int) std::lround(P(q.table))))];
+                const Wavetable* own = P(q.wtsrc) > .5f ? custom[L][k].load(std::memory_order_acquire) : nullptr;
+                const Wavetable& tb = own ? *own : tabs[(size_t) std::min((int) tabs.size() - 1, std::max(0, (int) std::lround(P(q.table))))];
                 const double fp = P(q.pos) * (tb.frames - 1); const int f0 = std::min(tb.frames - 2, (int) fp); const float ff = (float) (fp - f0);
                 double maxDt = 0; for (int u = 0; u < U; ++u) maxDt = std::max(maxDt, dt[u]);
                 const int m = mipFor(maxDt * 1.06);   // a little headroom for vibrato and bends
-                const float* A = tb.data.data() + ((size_t) f0 * kMips + m) * (kTab + 1); const float* B = A + (size_t) kMips * (kTab + 1);
+                const float* A = tb.data.data() + (size_t) f0 * kFrame + mipOff(m); const float* B = A + kFrame; const int len = mipLen(m);
                 for (int u = 0; u < U; ++u) { double ph = os.ph[u]; const double d = dt[u]; const float a = gl[u], b = gr[u];
-                    for (int i = 0; i < n; ++i) { const float s = tabRead(A, ph) * (1 - ff) + tabRead(B, ph) * ff; ph += d; if (ph >= 1) ph -= 1; bufL[i] += s * a; bufR[i] += s * b; }
+                    for (int i = 0; i < n; ++i) { const float s = tabRead(A, ph, len) * (1 - ff) + tabRead(B, ph, len) * ff; ph += d; if (ph >= 1) ph -= 1; bufL[i] += s * a; bufR[i] += s * b; }
                     os.ph[u] = ph; }
             } else if (mode == MFm) {
                 const double ratio = P(q.ratio), idx = P(q.fm) * 8;
@@ -424,6 +543,39 @@ void Synth::process(float* left, float* right, int n) {
 }
 int Synth::activeVoices() const { int c = 0; for (int i = 0; i < kMaxVoices; ++i) c += d_->v[i].active; return c; }
 
+bool Synth::setCustomTable(int layer, int osc, const std::vector<float>& frames, const std::string& name) {
+    if (layer < 0 || layer > 1 || osc < 0 || osc > 2) return false;
+    auto w = makeCustom(frames, name); if (!w) return false;
+    d_->custom[layer][osc].store(w.get(), std::memory_order_release);
+    d_->retire(std::move(d_->customOwn[layer][osc])); d_->customOwn[layer][osc] = std::move(w);
+    return true;
+}
+void Synth::clearCustomTable(int layer, int osc) {
+    if (layer < 0 || layer > 1 || osc < 0 || osc > 2 || !d_->customOwn[layer][osc]) return;
+    d_->custom[layer][osc].store(nullptr, std::memory_order_release); d_->retire(std::move(d_->customOwn[layer][osc]));
+}
+bool Synth::customTable(int layer, int osc, std::vector<float>* frames, std::string* name) const {
+    if (layer < 0 || layer > 1 || osc < 0 || osc > 2 || !d_->customOwn[layer][osc]) return false;
+    if (frames) *frames = d_->customOwn[layer][osc]->src;
+    if (name) *name = d_->customOwn[layer][osc]->name;
+    return true;
+}
+
+/* imported tables go into the .hsyn as 16-bit samples, base64 */
+static const char* kB64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static std::string b64(const std::vector<uint8_t>& in) {
+    std::string o; o.reserve((in.size() + 2) / 3 * 4);
+    for (size_t i = 0; i < in.size(); i += 3) { const uint32_t v = (uint32_t) in[i] << 16 | (i + 1 < in.size() ? (uint32_t) in[i + 1] << 8 : 0) | (i + 2 < in.size() ? in[i + 2] : 0);
+        o += kB64[v >> 18 & 63]; o += kB64[v >> 12 & 63]; o += i + 1 < in.size() ? kB64[v >> 6 & 63] : '='; o += i + 2 < in.size() ? kB64[v & 63] : '='; }
+    return o;
+}
+static std::vector<uint8_t> unb64(const std::string& s) {
+    int rev[256]; for (int& r : rev) r = -1; for (int i = 0; i < 64; ++i) rev[(unsigned char) kB64[i]] = i;
+    std::vector<uint8_t> o; uint32_t acc = 0; int bits = 0;
+    for (char c : s) { const int v = rev[(unsigned char) c]; if (v < 0) continue; acc = acc << 6 | (uint32_t) v; bits += 6; if (bits >= 8) { bits -= 8; o.push_back((uint8_t) (acc >> bits & 255)); } }
+    return o;
+}
+
 static std::string jsonStr(const std::string& s) {
     std::string o = "\""; for (char c : s) { if (c == '"' || c == '\\') { o += '\\'; o += c; } else if ((unsigned char) c < 0x20) { char b[8]; std::snprintf(b, sizeof b, "\\u%04x", c); o += b; } else o += c; } return o + "\"";
 }
@@ -431,7 +583,18 @@ std::string Synth::presetJson(const std::string& name, const std::string& catego
     std::string s = "{\"format\":\"hsyn\",\"v\":1,\"name\":" + jsonStr(name) + ",\"category\":" + jsonStr(category) + ",\"params\":{";
     const auto& d = params();
     for (size_t i = 0; i < d.size(); ++i) { char b[64]; std::snprintf(b, sizeof b, "%.7g", (double) d_->vals[i].load()); s += (i ? "," : "") + jsonStr(d[i].id) + ":" + b; }
-    return s + "}}";
+    s += "}";
+    std::string tabs;
+    for (int L = 0; L < 2; ++L) for (int k = 0; k < 3; ++k) {
+        std::vector<float> fr; std::string nm; if (!customTable(L, k, &fr, &nm)) continue;
+        float pk = 0; for (float v : fr) pk = std::max(pk, std::fabs(v)); const float g = pk > 1e-9f ? 32767.f / pk : 1;
+        std::vector<uint8_t> raw(fr.size() * 2); for (size_t i = 0; i < fr.size(); ++i) { const int16_t q = (int16_t) std::lround(clampf(fr[i] * g, -32767, 32767)); raw[i * 2] = (uint8_t) (q & 255); raw[i * 2 + 1] = (uint8_t) ((uint16_t) q >> 8); }
+        char key[16]; std::snprintf(key, sizeof key, "l%d.o%d", L + 1, k + 1);
+        char sc[32]; std::snprintf(sc, sizeof sc, "%.9g", (double) (pk > 1e-9f ? pk : 1.f));
+        tabs += (tabs.empty() ? "" : ",") + jsonStr(key) + ":{\"name\":" + jsonStr(nm) + ",\"frames\":" + std::to_string(fr.size() / kTab) + ",\"scale\":" + sc + ",\"pcm16\":\"" + b64(raw) + "\"}";
+    }
+    if (!tabs.empty()) s += ",\"tables\":{" + tabs + "}";
+    return s + "}";
 }
 bool Synth::loadPreset(const std::string& json, std::string* error, std::string* name, std::string* category) {
     const Json j = Json::parse(json.data(), json.size());
@@ -440,6 +603,16 @@ bool Synth::loadPreset(const std::string& json, std::string* error, std::string*
     for (size_t i = 0; i < d.size(); ++i) {
         const Json& v = ps[d[i].id.c_str()];
         setParam((int) i, v.type == Json::Num ? (float) v.n : d[i].old);   // missing: the value it had before this parameter existed
+    }
+    const Json& tj = j["tables"];   // imported wavetables (a preset without them has none)
+    for (int L = 0; L < 2; ++L) for (int k = 0; k < 3; ++k) {
+        char key[16]; std::snprintf(key, sizeof key, "l%d.o%d", L + 1, k + 1); const Json& t = tj[key];
+        if (t.type != Json::Obj) { clearCustomTable(L, k); continue; }
+        const auto raw = unb64(t["pcm16"].str()); std::vector<float> fr(raw.size() / 2);
+        const float scale = t["scale"].type == Json::Num ? (float) t["scale"].n : 1.f;
+        for (size_t i = 0; i < fr.size(); ++i) fr[i] = (float) (int16_t) ((uint16_t) raw[i * 2] | (uint16_t) raw[i * 2 + 1] << 8) / 32767.f * scale;
+        fr.resize(fr.size() / kTab * kTab);
+        if (fr.empty() || !setCustomTable(L, k, fr, t["name"].str())) clearCustomTable(L, k);
     }
     if (name) *name = j["name"].str();
     if (category) *category = j["category"].str();

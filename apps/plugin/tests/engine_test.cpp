@@ -795,6 +795,43 @@ static void testSynth() {
     { Synth s; s.prepare(sr); set(s, "voices", 16); for (int k = 30; k < 70; ++k) s.noteOn(k, .7f); auto o = render(s, 9600);
       Synth m; m.prepare(sr); set(m, "mode", 2); set(m, "glide", 80); for (int k : { 60, 64, 67 }) m.noteOn(k, 1); render(m, 4800);
       CHECK(s.activeVoices() == 16 && peakOf(o.first) >= 0 && m.activeVoices() == 1, "hypersynth: 40 notes play on 16 voices (stealing the oldest), legato keeps 1 (%d voices, %d in legato)", s.activeVoices(), m.activeVoices()); }
+    /* the wavetables: every factory table stays clean on a high note (no folded-back tones below the note) */
+    { const auto& names = wavetableNames(); std::string dirty; double worst = -999;
+      for (size_t t = 0; t < names.size(); ++t) {
+        Synth s; s.prepare(sr); set(s, "l1.o1.mode", 0); set(s, "l1.o1.table", (float) t); set(s, "l1.o1.pos", .7f); set(s, "l1.lp.cut", 20000); set(s, "l1.lp.type", 0); set(s, "l1.lp.key", 0);
+        s.noteOn(100, 1); auto o = render(s, 48000);
+        const double all = 20 * std::log10(rms(o.first, 8000, 48000) + 1e-12); double below = -999;
+        for (double f = 150; f < 2450; f += 50) below = std::max(below, toneDb(o.first, 8000, 48000, f, sr));
+        worst = std::max(worst, below - all); if (below - all > -60) dirty += " " + names[t];
+      }
+      CHECK(names.size() == 17 && dirty.empty(), "hypersynth: %zu factory wavetables, all alias-free on a 2.6 kHz note (worst %.0f dB)%s", names.size(), worst, dirty.c_str()); }
+    /* importing: a wavetable file is cut into its frames; any other sound gives single cycles at its pitch */
+    { std::vector<float> wt(8 * 2048); for (int f = 0; f < 8; ++f) for (int i = 0; i < 2048; ++i) wt[(size_t) (f * 2048 + i)] = (float) std::sin(2 * PI * (f + 1) * i / 2048.0);
+      std::string how; auto fr = framesFromAudio(wt.data(), wt.size(), 48000, 0, &how);
+      double e = 0; for (size_t i = 0; i < fr.size(); ++i) e = std::max(e, (double) std::fabs(fr[i] - wt[i]));
+      CHECK(fr.size() == wt.size() && e < 1e-3, "hypersynth import: a wavetable file (8 frames of 2048) comes in as its 8 frames (%s)", how.c_str());
+      std::vector<float> clm(5 * 256); for (size_t i = 0; i < clm.size(); ++i) clm[i] = (float) std::sin(2 * PI * (double) (i % 256) / 256);
+      auto f2 = framesFromAudio(clm.data(), clm.size(), 48000, 256, &how);
+      CHECK(f2.size() == 5 * 2048, "hypersynth import: a file with 256-sample frames (its clm chunk) becomes 5 frames of 2048");
+      std::vector<float> saw(48000); for (size_t i = 0; i < saw.size(); ++i) { double ph = std::fmod(i * 220.0 / 48000, 1.0); saw[i] = (float) (.5 * (2 * ph - 1) * (1 - .5 * i / 48000.0)); }
+      auto f3 = framesFromAudio(saw.data(), saw.size(), 48000, 0, &how, 64);
+      auto harm = [&](int h) { std::complex<double> acc = 0; for (int i = 0; i < 2048; ++i) acc += std::polar((double) f3[(size_t) i], -2 * PI * h * i / 2048.0); return 20 * std::log10(std::abs(acc) + 1e-12); };
+      const double h1 = harm(1), h2 = harm(2), h3 = harm(3);
+      CHECK(f3.size() == 64 * 2048 && std::fabs(h2 - h1 + 6.02) < 1.5 && std::fabs(h3 - h1 + 9.54) < 1.5, "hypersynth import: a 220 Hz saw recording becomes 64 single-cycle frames with a saw's harmonics (%s)", how.c_str());
+      std::vector<float> nz(48000); uint32_t z = 9; for (auto& v : nz) { z = z * 1664525u + 1013904223u; v = (float) ((z >> 8) / 8388608.0 - 1); }
+      auto f4 = framesFromAudio(nz.data(), nz.size(), 48000, 0, &how);
+      CHECK(!f4.empty() && how.find("no clear pitch") != std::string::npos, "hypersynth import: noise has no pitch, so it is sliced instead (%s)", how.c_str());
+      /* an imported table plays, alias-free, and travels inside the preset */
+      Synth s; s.prepare(sr); CHECK(s.setCustomTable(0, 0, f3, "My Saw"), "hypersynth import: the table loads into oscillator 1");
+      set(s, "l1.o1.mode", 0); set(s, "l1.o1.wtsrc", 1); set(s, "l1.lp.cut", 20000); set(s, "l1.lp.type", 0); set(s, "l1.lp.key", 0);
+      s.noteOn(100, 1); auto o = render(s, 48000);
+      const double fund = toneDb(o.first, 8000, 48000, 2637, sr), alias = toneDb(o.first, 8000, 48000, 2103.4, sr);
+      CHECK(fund > -30 && alias - fund < -70, "hypersynth import: it plays (note %.0f dB) without aliasing (%.0f dB under)", fund, alias - fund);
+      const std::string js = s.presetJson("Imported", "User"); Synth t; t.loadPreset(js); std::vector<float> back; std::string nm;
+      double err = 0; const bool has = t.customTable(0, 0, &back, &nm); if (has) for (size_t i = 0; i < back.size() && i < f3.size(); ++i) err = std::max(err, (double) std::fabs(back[i] - f3[i]));
+      Synth u; u.setCustomTable(0, 0, f3, "x"); u.loadPreset("{\"format\":\"hsyn\",\"v\":1,\"params\":{}}");
+      CHECK(has && nm == "My Saw" && back.size() == f3.size() && err < 2e-4 && js.size() < 400000 && !u.customTable(0, 0, nullptr, nullptr),
+            "hypersynth import: the table is saved inside the .hsyn (%zu KB) and comes back; a preset without one clears it", js.size() / 1024); }
     /* fast playing over long releases: nothing is cut at the default, and a voice taken for a new note fades (no click) */
     for (int lim : { 32, 6 }) {
         Synth s; s.prepare(sr); set(s, "l1.aenv.a", 20); set(s, "l1.aenv.r", 2500); set(s, "l1.o1.voices", 5); set(s, "l1.lp.cut", 4000); if (lim < 32) set(s, "voices", (float) lim);
@@ -837,6 +874,15 @@ static void testSynth() {
                 (d.id == "voices" || d.id.find(".voices") != std::string::npos || d.id.find(".oct") != std::string::npos) ? "true" : "false");
               for (size_t k = 0; k < d.opts.size(); ++k) std::fprintf(f, "%s\"%s\"", k ? "," : "", d.opts[k].c_str()); std::fputs("]}", f); }
             std::fputs("]", f); std::fclose(f); } }
+    { const auto& names = wavetableNames(); int good = 0;
+      for (int t = 0; t < (int) names.size(); ++t) { auto v = wavetablePreview(t, 9, 128); float pk = 0; for (float x : v) pk = std::max(pk, std::fabs(x)); if (v.size() == 9 * 128 && pk > .3f && pk < 1.2f) ++good; }
+      CHECK(good == (int) names.size() && wavetablePreview(99, 9, 128).empty(), "hypersynth: every factory table can be drawn on the screen (%d/%d)", good, (int) names.size());
+      if (const char* out = std::getenv("HS_TABLES_OUT")) {   // what the plugin's tablePreviews() returns, for the panel's test
+        std::FILE* f = std::fopen(out, "wb"); if (f) { std::fputs("[", f);
+          for (int t = 0; t < (int) names.size(); ++t) { auto v = wavetablePreview(t, 9, 128); std::fprintf(f, "%s{\"name\":\"%s\",\"frames\":[", t ? "," : "", names[(size_t) t].c_str());
+            for (int fr = 0; fr < 9; ++fr) { std::fputs(fr ? ",[" : "[", f); for (int i = 0; i < 128; ++i) std::fprintf(f, "%s%.3f", i ? "," : "", v[(size_t) fr * 128 + i]); std::fputs("]", f); }
+            std::fputs("]}", f); }
+          std::fputs("]", f); std::fclose(f); } } }
     /* CPU: a big sound, 8 notes x 2 layers x 3 oscillators x 16 Hyper voices */
     { Synth s; s.prepare(sr); set(s, "play", 2);
       for (int L = 1; L <= 2; ++L) for (int k = 1; k <= 3; ++k) { char id[32]; std::snprintf(id, sizeof id, "l%d.o%d.on", L, k); set(s, id, 1); std::snprintf(id, sizeof id, "l%d.o%d.voices", L, k); set(s, id, 16); }

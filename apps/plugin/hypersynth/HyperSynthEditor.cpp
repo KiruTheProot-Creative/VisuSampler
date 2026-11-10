@@ -64,6 +64,17 @@ juce::WebBrowserComponent::Options HyperSynthEditor::makeOptions()
             if (a.size() >= 3) proc_.uiNote((int) a[0], (float) (double) a[1], (bool) a[2]); reply(done, juce::var(true)); })
         .withNativeFunction("bend", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.uiBend((float) (double) a[0]); reply(done, juce::var(true)); })
         .withNativeFunction("mod", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.uiMod((float) (double) a[0]); reply(done, juce::var(true)); })
+        .withNativeFunction("importTable", [this](const juce::Array<juce::var>& a, auto done) {
+            if (a.size() < 2) { done(juce::var()); return; }
+            proc_.importTable((int) a[0], (int) a[1], [this, done](juce::var r) { for (int i = 0; i < proc_.numParams(); ++i) shown_[(size_t) i] = proc_.value(i); done(r); }); })
+        .withNativeFunction("tablePreview", [this, reply](const juce::Array<juce::var>& a, auto done) {
+            reply(done, a.size() >= 2 ? proc_.tablePreview((int) a[0], (int) a[1]) : juce::var()); })
+        .withNativeFunction("tablePreviews", [reply](const juce::Array<juce::var>&, auto done) {   // the factory tables, for drawing
+            juce::Array<juce::var> all; const auto& names = visu::hs::wavetableNames();
+            for (int t = 0; t < (int) names.size(); ++t) { const auto v = visu::hs::wavetablePreview(t, 9, 128); juce::Array<juce::var> frames;
+                for (int f = 0; f < 9; ++f) { juce::Array<juce::var> pts; for (int i = 0; i < 128; ++i) pts.add(v[(size_t) f * 128 + (size_t) i]); frames.add(pts); }
+                auto* o = new juce::DynamicObject(); o->setProperty("name", juce::String(names[(size_t) t])); o->setProperty("frames", frames); all.add(juce::var(o)); }
+            reply(done, all); })
         .withNativeFunction("listPresets", [this, reply](const juce::Array<juce::var>&, auto done) { reply(done, proc_.listPresets()); })
         .withNativeFunction("loadPreset", [this, reply](const juce::Array<juce::var>& a, auto done) {
             auto r = a.isEmpty() ? juce::var() : proc_.loadPreset(a[0].toString());

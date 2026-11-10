@@ -23,8 +23,15 @@ struct ParamDef {
 const std::vector<ParamDef>& params();
 int paramIndex(const std::string& id);          // -1 when unknown
 
-// the factory wavetables (names, in the order of the "table" parameter)
+// the factory wavetables (names, in the order of the "table" parameter; new ones are only ever added at the end)
 const std::vector<std::string>& wavetableNames();
+// a factory table for drawing: `frames` frames spread over its Position range, `points` samples per cycle each (peak 1)
+std::vector<float> wavetablePreview(int table, int frames, int points);
+
+// any sound -> wavetable frames (2048 samples each). A wavetable file is cut into its frames (frameSize from its "clm"
+// chunk when known, else 2048); any other sound has its pitch found, and single cycles are taken from across the file.
+// how: what was done, in words.
+std::vector<float> framesFromAudio(const float* mono, size_t n, double sampleRate, int frameSize, std::string* how, int maxFrames = 64);
 
 class Synth {
 public:
@@ -45,6 +52,11 @@ public:
     void resetParams();                         // every parameter to its default (the init sound)
     // adds the synth's output to nothing: overwrites l and r
     void process(float* left, float* right, int n);
+    // an imported wavetable for one oscillator (layer 0/1, osc 0..2), used while its "wtsrc" is Custom. Any thread but
+    // the audio thread; the audio thread picks it up without waiting. Saved in presets and the DAW project.
+    bool setCustomTable(int layer, int osc, const std::vector<float>& frames, const std::string& name);
+    void clearCustomTable(int layer, int osc);
+    bool customTable(int layer, int osc, std::vector<float>* frames, std::string* name) const;
     // presets
     std::string presetJson(const std::string& name, const std::string& category) const;
     bool loadPreset(const std::string& json, std::string* error = nullptr, std::string* name = nullptr, std::string* category = nullptr);

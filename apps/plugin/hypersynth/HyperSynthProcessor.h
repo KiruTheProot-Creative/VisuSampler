@@ -51,6 +51,9 @@ public:
     juce::var loadPreset(const juce::String& id);         // {name, category} or {error}
     juce::var savePreset(const juce::String& name, const juce::String& category);
     bool deletePreset(const juce::String& id);
+    // wavetable import: a file picker, then the sound -> frames -> oscillator `osc` (0..2) of `layer` (0/1)
+    void importTable(int layer, int osc, std::function<void(juce::var)> done);
+    juce::var tablePreview(int layer, int osc) const;   // {name, frames: [[...128 samples], ...]} or void
     static juce::File presetFolder();
     static juce::String versionText();
     static juce::String communityUrl() { return "https://discord.gg/JFnu6HTwgs"; }
@@ -65,6 +68,8 @@ private:
     void setNames(const juce::String& n, const juce::String& c) { const juce::ScopedLock l(nameLock_); name_ = n; category_ = c; }
     void handle(const juce::MidiMessage&);
 
+    void copyTables(const visu::hs::Synth& from, visu::hs::Synth& to) const;
+    std::unique_ptr<juce::FileChooser> chooser_;
     visu::hs::Synth synth_;
     std::vector<juce::RangedAudioParameter*> params_;
     std::vector<float> sent_;                             // what the engine has (audio thread)
