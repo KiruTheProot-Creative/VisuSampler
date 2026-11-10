@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdio>
 #include "Engine.h"
+#include "FxRack.h"
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -575,6 +576,43 @@ static void testVslib() {
     std::string e3; CHECK(!Library::load(lib, "nope", e3, 48000) && e3.find("nope") != std::string::npos, "vslib: an instrument that is not there is reported (%s)", e3.c_str());
 }
 
+/* NodeFX: an effect chain on live audio (FxRack) */
+static void testFxRack() {
+    const std::string dir = TEST_DATA_DIR; std::string err;
+    auto rack = [&](const char* n) { err.clear(); auto r = FxRack::build(readText(dir + "/rack-" + n + ".json"), 48000, err); return r; };
+    /* a delay of 100 ms: an impulse comes back 4800 samples later, in odd block sizes */
+    { auto r = rack("delay"); CHECK(r != nullptr, "nodefx: a chain builds (%s)", err.c_str());
+      if (r) { std::vector<float> l(48000, 0.f), rr(48000, 0.f); l[0] = rr[0] = 1;
+        for (int at = 0; at < 48000; at += 333) r->process(l.data() + at, rr.data() + at, std::min(333, 48000 - at));
+        int pk = 0; for (int i = 1; i < 48000; ++i) if (std::fabs(l[i]) > std::fabs(l[pk])) pk = i;
+        CHECK(std::abs(pk - 4800) <= 4 && std::fabs(l[pk]) > .3, "nodefx: the delay echoes after 100 ms (peak at %d, %.2f)", pk, l[pk]);
+        CHECK(r->setParam("dly", "time", 200, false), "nodefx: a parameter changes live");
+        std::vector<float> a(48000, 0.f), b(48000, 0.f); a[0] = b[0] = 1;
+        for (int at = 0; at < 48000; at += 512) r->process(a.data() + at, b.data() + at, std::min(512, 48000 - at));
+        int p2 = 0; for (int i = 1; i < 48000; ++i) if (std::fabs(a[i]) > std::fabs(a[p2])) p2 = i;
+        CHECK(std::abs(p2 - 9600) <= 400, "nodefx: and the echo moves to 200 ms (peak at %d)", p2); } }
+    /* a macro (tag) on the filter cutoff: closing it quietens a bright tone */
+    { auto r = rack("macro");
+      if (!r) CHECK(false, "nodefx: macro chain builds (%s)", err.c_str());
+      else { auto level = [&](float macro) { r->setTag(r->tagIndex("Tone"), macro); std::vector<float> l(9600), rr(9600);
+               for (int i = 0; i < 9600; ++i) l[i] = rr[i] = .5f * std::sin(i * 2 * 3.14159265 * 8000 / 48000.0);
+               r->process(l.data(), rr.data(), 9600); double e = 0; for (int i = 4800; i < 9600; ++i) e += l[i] * l[i]; return std::sqrt(e / 4800); };
+             const double open = level(1), shut = level(0);
+             CHECK(r->numTags() == 1 && r->tagIndex("m1") == 0 && open > .2 && shut < open * .2, "nodefx: a macro moves the filter (open %.3f, closed %.3f)", open, shut); } }
+    /* an amp fed back into itself stays silent with no input, and bounded with input */
+    { auto r = rack("amp"); if (r) { std::vector<float> l(48000, 0.f), rr(48000, 0.f); r->process(l.data(), rr.data(), 48000); double pk = 0; for (float v : l) pk = std::max(pk, (double) std::fabs(v));
+        std::vector<float> a(48000), b(48000); for (int i = 0; i < 48000; ++i) a[i] = b[i] = .8f * std::sin(i * .05); r->process(a.data(), b.data(), 48000); double pk2 = 0; for (float v : a) pk2 = std::max(pk2, (double) std::fabs(v));
+        CHECK(pk < 1e-6 && pk2 < 4 && pk2 > .05, "nodefx: an amp feedback loop is silent without input and bounded with it (%.2g / %.2f)", pk, pk2); } else CHECK(false, "nodefx: amp chain builds"); }
+    /* an unknown module passes the sound through and is reported; an empty chain changes nothing */
+    { auto r = rack("unknown"); bool listed = r && std::find(r->unsupported().begin(), r->unsupported().end(), "fx:nosuchfx") != r->unsupported().end();
+      std::vector<float> l(256, .25f), rr(256, .25f); if (r) r->process(l.data(), rr.data(), 256);
+      CHECK(listed && std::fabs(l[200] - .25f) < 1e-6, "nodefx: an unknown module is listed and passes sound through"); }
+    { auto r = rack("thru"); std::vector<float> l(1000), rr(1000); for (int i = 0; i < 1000; ++i) l[i] = rr[i] = std::sin(i * .1f) * .5f; auto l0 = l;
+      if (r) r->process(l.data(), rr.data(), 1000); double d = 0; for (int i = 0; i < 1000; ++i) d = std::max(d, (double) std::fabs(l[i] - l0[i]));
+      CHECK(r && r->empty() && d < 1e-7, "nodefx: an empty chain leaves the sound exactly as it was"); }
+    { std::string e; CHECK(!FxRack::build("{\"nope\":1}", 48000, e) && !e.empty(), "nodefx: something that is not a chain is refused (%s)", e.c_str()); }
+}
+
 static void testCompat() {
     const std::string dir = COMPAT_DIR, jp = dir + "/compat.json"; std::string txt = readText(jp);
     Json db = txt.empty() ? Json() : Json::parse(txt.data(), txt.size());
@@ -621,7 +659,7 @@ static void testCompat() {
 }
 
 int main() {
-    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testCompat();
+    testJson(); testGolden(); testKeepSpeed(); testPlay(); testLiveModes(); testGroupEnv(); testGroupLinks(); testVFilter(); testKeyswitch(); testLayers(); testRoundRobin(); testGroupPatches(); testStreaming(); testDemo(); testLibrarySwap(); testFx(); testVslib(); testFxRack(); testCompat();
     std::printf("\n%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

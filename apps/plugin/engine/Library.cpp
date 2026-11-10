@@ -326,11 +326,7 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
             const Json& lk = j["links"]; GroupCfg::Link* L4[4] = { &g.lVol, &g.lPan, &g.lTune, &g.lFine }; const char* K2[4] = { "vol", "pan", "tune", "fine" };
             for (int k = 0; k < 4; ++k) { const Json& x = lk[K2[k]]; L4[k]->tagId = x["tag"].str(""); L4[k]->from = (float) x["from"].num(0); L4[k]->to = (float) x["to"].num(0); } } }
     /* tags (knob values) and effect chains */
-    const Json& tj = m["project"]["tags"];
-    for (size_t i = 0; i < tj.size(); ++i) { fx::TagDef d; d.id = tj[i]["id"].str(); d.name = tj[i]["name"].str(); d.kind = tj[i]["kind"].str("number"); d.basis = tj[i]["basis"].str("note");
-        d.steps = (int) tj[i]["steps"].size(); d.def = (float) tj[i]["value"].num(tj[i]["def"].num(0)); L->tags.push_back(d); }
-    L->tagValues.reset(new std::atomic<float>[std::max<size_t>(1, L->tags.size())]);
-    for (size_t i = 0; i < L->tags.size(); ++i) L->tagValues[i].store(L->tags[i].def);
+    readTags(m["project"]["tags"], *L);
     std::vector<GroupCfg*> withLinks; for (auto& g : L->groups) withLinks.push_back(&g); withLinks.push_back(&L->layers[0]); withLinks.push_back(&L->layers[1]);
     for (GroupCfg* gp : withLinks) { GroupCfg& g = *gp;
         for (GroupCfg::Link* lk : { &g.lVol, &g.lPan, &g.lTune, &g.lFine }) if (!lk->tagId.empty()) for (size_t i = 0; i < L->tags.size(); ++i) if (L->tags[i].id == lk->tagId) lk->tag = (int) i;
@@ -347,6 +343,27 @@ std::shared_ptr<Library> Library::fromFile(const VsampFile& f, std::string& erro
     return L;
 }
 
+void Library::readTags(const Json& tj, Library& L) {
+    for (size_t i = 0; i < tj.size(); ++i) { fx::TagDef d; d.id = tj[i]["id"].str(); d.name = tj[i]["name"].str(); d.kind = tj[i]["kind"].str("number"); d.basis = tj[i]["basis"].str("note");
+        d.steps = (int) tj[i]["steps"].size(); d.def = (float) tj[i]["value"].num(tj[i]["def"].num(0)); L.tags.push_back(d); }
+    L.tagValues.reset(new std::atomic<float>[std::max<size_t>(1, L.tags.size())]);
+    for (size_t i = 0; i < L.tags.size(); ++i) L.tagValues[i].store(L.tags[i].def);
+}
+std::shared_ptr<Library> Library::fromFx(const std::string& json, std::string& error, double sampleRate) {
+    const Json in = Json::parse(json.data(), json.size());
+    if (in.type != Json::Obj || in["graph"].type != Json::Obj) { error = "Not an effect chain."; return nullptr; }
+    auto L = std::make_shared<Library>();
+    L->info.name = in["name"].str("Effect chain");
+    readTags(in["tags"], *L);
+    /* System::build reads the chains from a manifest: put the graph where a library keeps its master chain */
+    auto obj = [](std::vector<std::pair<std::string, Json>> kv) { Json j; j.type = Json::Obj; j.o = std::move(kv); return j; };
+    const Json mj = obj({ { "project", obj({ { "fx", obj({ { "master", in["graph"] } }) } }) }, { "fxRanges", in["fxRanges"] } });
+    std::vector<std::string> bad;
+    L->fx = fx::System::build(mj, *L, L->tags, {}, bad);
+    L->fx->prepare(sampleRate);
+    L->unsupported = bad; L->sampleRate = sampleRate;
+    return L;
+}
 bool Library::setTag(const std::string& name, float value) const {
     for (size_t i = 0; i < tags.size(); ++i) if (tags[i].name == name) { tagValues[i].store(std::min(1.f, std::max(0.f, value))); return true; }
     return false;

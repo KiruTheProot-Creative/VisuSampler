@@ -134,7 +134,12 @@ public:
     bool setTag(const std::string& name, float value) const;
     std::unique_ptr<fx::System> fx;       // the library's effect chains (state changes while playing)
     double sampleRate = 48000;
+    // NodeFX: a "library" that is only an effect chain. json: {"graph":{nodes,cables}, "fxRanges":{...}, "tags":[...]}
+    // (the master chain, ranges and tags in VisuMaker's formats). The chain runs on whatever is written into
+    // fx->groupIn(-1) (the master input).
+    static std::shared_ptr<Library> fromFx(const std::string& json, std::string& error, double sampleRate = 48000);
 private:
+    static void readTags(const Json& tj, Library& L);
     static std::shared_ptr<Library> fromFile(const VsampFile& f, std::string& error, double sampleRate, const Library* reuse = nullptr);
 };
 
