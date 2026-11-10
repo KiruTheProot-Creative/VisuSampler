@@ -51,4 +51,5 @@ endif()
 if(VISU_BUILD_PLUGIN)
   add_subdirectory(plugin)
   add_subdirectory(nodefx)   # NodeFX, the effect plugin
+  add_subdirectory(hypersynth)   # HyperSynth, the two-layer synthesizer
 endif()

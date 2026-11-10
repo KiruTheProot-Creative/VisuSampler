@@ -34,7 +34,7 @@ jobs:
         shell: bash
         run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
       - name: Build
-        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone NodeFX_VST3 NodeFX_Standalone --parallel 4
+        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone NodeFX_VST3 NodeFX_Standalone HyperSynth_VST3 HyperSynth_Standalone --parallel 4
       - name: Collect VST3 and standalone
         shell: bash
         run: |

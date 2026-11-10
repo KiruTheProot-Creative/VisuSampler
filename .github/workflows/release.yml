@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: cmake -S apps/plugin -B build -DCMAKE_BUILD_TYPE=Release -DVISU_BUILD_PLUGIN=ON -DVISU_BUILD_TESTS=OFF -DVISU_BUILD_ID="${GITHUB_SHA::7}" -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/nuget"
       - name: Build
-        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone NodeFX_VST3 NodeFX_Standalone --parallel 4
+        run: cmake --build build --config Release --target VisuPlayer_VST3 VisuPlayer_Standalone NodeFX_VST3 NodeFX_Standalone HyperSynth_VST3 HyperSynth_Standalone --parallel 4
       - name: Package
         shell: pwsh
         run: |
@@ -37,6 +37,12 @@ jobs:
           Compress-Archive -Path $nvst.FullName -DestinationPath out/NodeFX-VST3-Windows.zip
           Copy-Item $nexe.FullName parts/NodeFX.exe
           Copy-Item $nvst.FullName parts/NodeFX.vst3 -Recurse
+          $hvst = Get-ChildItem build -Recurse -Directory -Filter "HyperSynth.vst3" | Select-Object -First 1
+          $hexe = Get-ChildItem build -Recurse -Filter "HyperSynth.exe" | Where-Object { $_.FullName -match "Standalone" } | Select-Object -First 1
+          if (-not $hvst -or -not $hexe) { throw "HyperSynth was not built" }
+          Compress-Archive -Path $hvst.FullName -DestinationPath out/HyperSynth-VST3-Windows.zip
+          Copy-Item $hexe.FullName parts/HyperSynth.exe
+          Copy-Item $hvst.FullName parts/HyperSynth.vst3 -Recurse
           Get-ChildItem out, parts
       - uses: actions/upload-artifact@v4
         with: { name: player, path: out }
@@ -94,7 +100,7 @@ jobs:
         shell: pwsh
         run: |
           $b = "$env:GITHUB_SHA".Substring(0,7); $w = "$env:GITHUB_WORKSPACE"
-          & $env:ISCC "/DVersion=0.0.1" "/DBuild=$b" "/DRoot=$w" "/DMakerDir=$w\dl\maker" "/DVst3Dir=$w\dl\player\VisuPlayer.vst3" "/DStandaloneExe=$w\dl\player\VisuPlayer.exe" "/DNodeFXVst3Dir=$w\dl\player\NodeFX.vst3" "/DNodeFXExe=$w\dl\player\NodeFX.exe" "/DOutDir=$w\out" apps\installer\KiruCAS.iss
+          & $env:ISCC "/DVersion=0.0.1" "/DBuild=$b" "/DRoot=$w" "/DMakerDir=$w\dl\maker" "/DVst3Dir=$w\dl\player\VisuPlayer.vst3" "/DStandaloneExe=$w\dl\player\VisuPlayer.exe" "/DNodeFXVst3Dir=$w\dl\player\NodeFX.vst3" "/DNodeFXExe=$w\dl\player\NodeFX.exe" "/DHyperSynthVst3Dir=$w\dl\player\HyperSynth.vst3" "/DHyperSynthExe=$w\dl\player\HyperSynth.exe" "/DOutDir=$w\out" apps\installer\KiruCAS.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
           Get-ChildItem out
       - name: Install it, try it, uninstall it
@@ -102,17 +108,17 @@ jobs:
         run: |
           $p = Start-Process out\KiruCAS-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=install.log' -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; throw "setup exit code $($p.ExitCode)" }
-          $app = "$env:ProgramFiles\Kiru CAS"; $vst = "$env:CommonProgramFiles\VST3\VisuPlayer.vst3"; $nvst = "$env:CommonProgramFiles\VST3\NodeFX.vst3"
-          foreach ($f in "$app\VisuMaker\VisuMaker.exe", "$app\VisuMaker\resources\native\VisuMakerAudio.exe", "$app\VisuPlayer\VisuPlayer.exe", "$app\NodeFX\NodeFX.exe", "$app\LICENSE.txt", $vst, $nvst) {
+          $app = "$env:ProgramFiles\Kiru CAS"; $vst = "$env:CommonProgramFiles\VST3\VisuPlayer.vst3"; $nvst = "$env:CommonProgramFiles\VST3\NodeFX.vst3"; $hvst = "$env:CommonProgramFiles\VST3\HyperSynth.vst3"
+          foreach ($f in "$app\VisuMaker\VisuMaker.exe", "$app\VisuMaker\resources\native\VisuMakerAudio.exe", "$app\VisuPlayer\VisuPlayer.exe", "$app\NodeFX\NodeFX.exe", "$app\HyperSynth\HyperSynth.exe", "$app\LICENSE.txt", $vst, $nvst, $hvst) {
             if (-not (Test-Path $f)) { throw "missing after install: $f" } else { "installed: $f" } }
-          foreach ($b in $vst, $nvst) { if ((Get-ChildItem $b -Recurse -Filter *.vst3 -File).Count -lt 1) { throw "the VST3 bundle $b has no plugin binary" } }
+          foreach ($b in $vst, $nvst, $hvst) { if ((Get-ChildItem $b -Recurse -Filter *.vst3 -File).Count -lt 1) { throw "the VST3 bundle $b has no plugin binary" } }
           $cls = (Get-ItemProperty "HKLM:\Software\Classes\.vmproj").'(default)'
           if ($cls -ne 'VisuMaker.Project') { throw ".vmproj is not linked to VisuMaker ($cls)" } else { ".vmproj opens with VisuMaker" }
           $m = Start-Process "$app\VisuMaker\VisuMaker.exe" -ArgumentList '--smoke' -Wait -PassThru
           if ($m.ExitCode -ne 0) { throw "the installed VisuMaker did not start (exit $($m.ExitCode))" } else { "the installed VisuMaker starts and plays" }
           $u = Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
           Start-Sleep -Seconds 3
-          foreach ($f in "$app\VisuMaker\VisuMaker.exe", $vst, $nvst, "$app\NodeFX\NodeFX.exe") { if (Test-Path $f) { throw "still there after uninstall: $f" } }
+          foreach ($f in "$app\VisuMaker\VisuMaker.exe", $vst, $nvst, $hvst, "$app\NodeFX\NodeFX.exe", "$app\HyperSynth\HyperSynth.exe") { if (Test-Path $f) { throw "still there after uninstall: $f" } }
           if (Test-Path "HKLM:\Software\Classes\VisuMaker.Project") { throw "the .vmproj file type is still registered" }
           "uninstalled cleanly"
       - uses: actions/upload-artifact@v4
@@ -131,10 +137,11 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           case "$TAG" in v*) ;; *) TAG="build-$(date -u +%Y%m%d-%H%M)";; esac
           cat > notes.md <<'MD'
-          Windows builds of the Kiru Creative Audio Suite (Kiru CAS): VisuSampler (VisuMaker + VisuPlayer) and NodeFX.
+          Windows builds of the Kiru Creative Audio Suite (Kiru CAS): VisuSampler (VisuMaker + VisuPlayer), NodeFX and HyperSynth.
 
-          - **KiruCAS-Setup.exe**: the Kiru CAS setup, installs VisuMaker (the library designer), the VisuPlayer VST3 plugin and standalone, and NodeFX (VST3 effect and standalone); pick the parts you want. Uninstall from Windows Settings, your libraries and presets stay. It replaces an earlier VisuSampler setup in place.
+          - **KiruCAS-Setup.exe**: the Kiru CAS setup, installs VisuMaker (the library designer), the VisuPlayer VST3 plugin and standalone, NodeFX (VST3 effect and standalone) and HyperSynth (VST3 synth and standalone); pick the parts you want. Uninstall from Windows Settings, your libraries and presets stay. It replaces an earlier VisuSampler setup in place.
           - **VisuPlayer-VST3-Windows.zip**: only the plugin, for installing by hand: put `VisuPlayer.vst3` into `C:\Program Files\Common Files\VST3`.
+          - **HyperSynth-VST3-Windows.zip**: HyperSynth, the two-layer synthesizer, by itself (same place). Presets are `.hsyn` files in `Documents\VisuSampler\HyperSynth Presets`.
           - **NodeFX-VST3-Windows.zip**: NodeFX, the node-based effect plugin, by itself (same place). Its presets are `.nfx` files in `Documents\VisuSampler\NodeFX Presets`.
 
           VisuSampler is free software under the GNU GPL v3 (or later). Libraries you make with VisuMaker and presets you make with NodeFX are yours.

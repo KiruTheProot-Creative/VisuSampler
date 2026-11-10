@@ -1,8 +1,8 @@
 ; Kiru Creative Audio Suite (Kiru CAS) installer (Inno Setup 6): KCS's audio tools and plugins in one setup.
-; Today: VisuMaker, VisuPlayer (VST3 + standalone) and NodeFX (VST3 + standalone).
+; Today: VisuMaker, VisuPlayer, NodeFX and HyperSynth (the plugins as VST3 + standalone).
 ; The AppId is the one the earlier "VisuSampler" setup used, so this setup upgrades that install in place.
 ; Built by .github/workflows/release.yml:
-;   iscc /DVersion=0.0.1 /DBuild=abc1234 /DRoot=<repo> /DMakerDir=<win-unpacked> /DVst3Dir=<VisuPlayer.vst3> /DStandaloneExe=<VisuPlayer.exe> /DNodeFXVst3Dir=<NodeFX.vst3> /DNodeFXExe=<NodeFX.exe> /DOutDir=<out> KiruCAS.iss
+;   iscc /DVersion=0.0.1 /DBuild=abc1234 /DRoot=<repo> /DMakerDir=<win-unpacked> /DVst3Dir=<VisuPlayer.vst3> /DStandaloneExe=<VisuPlayer.exe> /DNodeFXVst3Dir=<NodeFX.vst3> /DNodeFXExe=<NodeFX.exe> /DHyperSynthVst3Dir=<HyperSynth.vst3> /DHyperSynthExe=<HyperSynth.exe> /DOutDir=<out> KiruCAS.iss
 
 #ifndef Version
   #define Version "0.0.1"
@@ -42,7 +42,7 @@ VersionInfoProductName=Kiru Creative Audio Suite
 SetupLogging=yes
 
 [Types]
-Name: "full"; Description: "Everything (VisuMaker, VisuPlayer and NodeFX)"
+Name: "full"; Description: "Everything (VisuMaker, VisuPlayer, NodeFX and HyperSynth)"
 Name: "player"; Description: "Only VisuPlayer (to play libraries)"
 Name: "custom"; Description: "Let me choose"; Flags: iscustom
 
@@ -52,6 +52,9 @@ Name: "vst3"; Description: "VisuPlayer VST3 plugin (for your DAW)"; Types: full 
 Name: "standalone"; Description: "VisuPlayer standalone app (play without a DAW)"; Types: full player custom
 #ifdef NodeFXVst3Dir
 Name: "nodefx"; Description: "NodeFX: node-based effects plugin (VST3 and standalone)"; Types: full custom
+#endif
+#ifdef HyperSynthVst3Dir
+Name: "hypersynth"; Description: "HyperSynth: two-layer synthesizer (VST3 and standalone)"; Types: full custom
 #endif
 
 [Tasks]
@@ -65,6 +68,10 @@ Source: "{#StandaloneExe}"; DestDir: "{app}\VisuPlayer"; DestName: "VisuPlayer.e
 Source: "{#NodeFXVst3Dir}\*"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; Components: nodefx; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#NodeFXExe}"; DestDir: "{app}\NodeFX"; DestName: "NodeFX.exe"; Components: nodefx; Flags: ignoreversion
 #endif
+#ifdef HyperSynthVst3Dir
+Source: "{#HyperSynthVst3Dir}\*"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; Components: hypersynth; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#HyperSynthExe}"; DestDir: "{app}\HyperSynth"; DestName: "HyperSynth.exe"; Components: hypersynth; Flags: ignoreversion
+#endif
 Source: "{#Root}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "{#Root}\NOTICE.md"; DestDir: "{app}"; DestName: "NOTICE.txt"; Flags: ignoreversion
 Source: "{#Root}\TERMS.md"; DestDir: "{app}"; DestName: "TERMS.txt"; Flags: ignoreversion
@@ -74,6 +81,9 @@ Name: "{group}\VisuMaker"; Filename: "{app}\VisuMaker\VisuMaker.exe"; Components
 Name: "{group}\VisuPlayer"; Filename: "{app}\VisuPlayer\VisuPlayer.exe"; Components: standalone
 #ifdef NodeFXVst3Dir
 Name: "{group}\NodeFX"; Filename: "{app}\NodeFX\NodeFX.exe"; Components: nodefx
+#endif
+#ifdef HyperSynthVst3Dir
+Name: "{group}\HyperSynth"; Filename: "{app}\HyperSynth\HyperSynth.exe"; Components: hypersynth
 #endif
 Name: "{group}\License"; Filename: "{app}\LICENSE.txt"
 Name: "{group}\Terms of use"; Filename: "{app}\TERMS.txt"
@@ -95,6 +105,7 @@ Filename: "{app}\VisuMaker\VisuMaker.exe"; Description: "Start VisuMaker"; Flags
 ; only what the installer put there; libraries, projects, presets and logs in Documents stay
 Type: dirifempty; Name: "{commoncf64}\VST3\VisuPlayer.vst3"
 Type: dirifempty; Name: "{commoncf64}\VST3\NodeFX.vst3"
+Type: dirifempty; Name: "{commoncf64}\VST3\HyperSynth.vst3"
 Type: dirifempty; Name: "{app}"
 
 [Code]

@@ -7,6 +7,7 @@ This installs:
   * VisuPlayer - plays them: a VST3 plugin for your DAW, and a standalone app.
   * NodeFX     - a node-based effect: cable effects together, 8 macro knobs, .nfx presets.
                  A VST3 plugin and a standalone app.
+  * HyperSynth - a two-layer synthesizer (CS-80 style), VST3 plugin and standalone app.
 
 You can pick which parts to install on the next pages.
 

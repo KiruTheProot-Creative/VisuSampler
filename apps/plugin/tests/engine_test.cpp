@@ -803,6 +803,30 @@ static void testSynth() {
       Synth c; c.setParam(paramIndex("l1.o1.voices"), 5); c.loadPreset("{\"format\":\"hsyn\",\"v\":1,\"params\":{\"l2.lp.cut\":500,\"from.the.future\":3}}");
       const bool older = c.param(paramIndex("l1.o1.voices")) == P[(size_t) paramIndex("l1.o1.voices")].old && c.param(paramIndex("l2.lp.cut")) == 500;
       CHECK(ok && same && name == "Test \"Pad\"" && cat == "Pads" && older && !c.loadPreset("{\"format\":\"nfx\"}"), "hypersynth: presets round-trip; missing settings get their saved-before value, unknown ones are skipped"); }
+    /* the factory presets: each plays, stays clean, and ends */
+    { const std::string ft = readText(std::string(TEST_DATA_DIR) + "/../../hypersynth/presets/factoryPresets.json"); const Json fac = Json::parse(ft.data(), ft.size());
+      int good = 0; std::string bad;
+      for (size_t i = 0; i < fac.size(); ++i) {
+        const Json& pr = fac[i]; std::string js = "{\"format\":\"hsyn\",\"v\":1,\"params\":{";
+        bool first = true; for (auto& kv : pr["params"].o) { char b2[64]; std::snprintf(b2, sizeof b2, "%.7g", kv.second.num()); js += (first ? "\"" : ",\"") + kv.first + "\":" + b2; first = false; }
+        js += "}}";
+        Synth s; s.prepare(sr); const bool ok = s.loadPreset(js);
+        for (auto& kv : pr["params"].o) if (paramIndex(kv.first) < 0) { bad += " unknown:" + kv.first; }
+        const std::vector<int> chord = s.param(paramIndex("mode")) > .5f ? std::vector<int> { 40 } : std::vector<int> { 48, 55, 60, 64 };
+        for (int k : chord) s.noteOn(k, .9f);
+        auto on = render(s, 4 * 48000); for (int k : chord) s.noteOff(k); auto off = render(s, 6 * 48000);
+        const double pk = std::max(peakOf(on.first), peakOf(on.second)), tail = peakOf(std::vector<float>(off.first.end() - 4800, off.first.end()));
+        if (ok && pk > .02 && pk < 1.0 && tail < 1e-3) ++good; else { char m[160]; std::snprintf(m, sizeof m, " %s(peak %.3f tail %.4f)", pr["name"].str().c_str(), pk, tail); bad += m; }
+        if (std::getenv("HS_LEVELS")) std::printf("         %s / %s: peak %.3f\n", pr["category"].str().c_str(), pr["name"].str().c_str(), pk);
+      }
+      CHECK(good == (int) fac.size() && bad.empty(), "hypersynth: all %d factory presets play cleanly (peak under 1) and end%s", (int) fac.size(), bad.c_str()); }
+    if (const char* out = std::getenv("HS_PARAMS_OUT")) {   // the parameter list, for the panel's test
+        std::FILE* f = std::fopen(out, "wb"); if (f) { std::fputs("[", f);
+            for (size_t i = 0; i < P.size(); ++i) { const auto& d = P[i]; std::fprintf(f, "%s{\"id\":\"%s\",\"name\":\"%s\",\"unit\":\"%s\",\"min\":%g,\"max\":%g,\"def\":%g,\"log\":%s,\"whole\":%s,\"opts\":[",
+                i ? "," : "", d.id.c_str(), d.name.c_str(), d.unit.c_str(), d.min, d.max, d.def, d.log ? "true" : "false",
+                (d.id == "voices" || d.id.find(".voices") != std::string::npos || d.id.find(".oct") != std::string::npos) ? "true" : "false");
+              for (size_t k = 0; k < d.opts.size(); ++k) std::fprintf(f, "%s\"%s\"", k ? "," : "", d.opts[k].c_str()); std::fputs("]}", f); }
+            std::fputs("]", f); std::fclose(f); } }
     /* CPU: a big sound, 8 notes x 2 layers x 3 oscillators x 16 Hyper voices */
     { Synth s; s.prepare(sr); set(s, "play", 2);
       for (int L = 1; L <= 2; ++L) for (int k = 1; k <= 3; ++k) { char id[32]; std::snprintf(id, sizeof id, "l%d.o%d.on", L, k); set(s, id, 1); std::snprintf(id, sizeof id, "l%d.o%d.voices", L, k); set(s, id, 16); }

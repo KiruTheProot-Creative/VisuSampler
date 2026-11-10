@@ -1,0 +1,73 @@
+// HyperSynth's panel (apps/plugin/hypersynth/ui/hypersynth.html) as the plugin shows it: the page and its fonts served
+// by name on JUCE's origin, with a stand-in for the plugin (window.__JUCE__) that answers like HyperSynthEditor.
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import {fileURLToPath} from 'node:url';
+import {chromium} from './_helper.mjs';
+const here=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(here,'../../..'),hs=path.join(root,'apps/plugin/hypersynth');
+const files=new Map([['hypersynth.html',path.join(hs,'ui/hypersynth.html')],['Unbounded.ttf',path.join(root,'assets/fonts/Unbounded.ttf')],['JetBrainsMono.ttf',path.join(root,'assets/fonts/JetBrainsMono.ttf')]]);
+const defs=JSON.parse(fs.readFileSync(path.join(root,'apps/plugin/tests/golden/hypersynth-params.json'),'utf8'));
+const factory=JSON.parse(fs.readFileSync(path.join(hs,'presets/factoryPresets.json'),'utf8'));
+const fails=[],errs=[],missing=[];const ok=(c,m)=>{console.log((c?'ok  ':'FAIL ')+m);if(!c)fails.push(m);};
+const b=await chromium.launch(),p=await b.newPage({viewport:{width:1440,height:792}});
+p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error')errs.push(m.text());});
+await p.route('**/*',r=>{const u=new URL(r.request().url());if(u.origin!=='https://juce.backend')return r.abort();
+  const f=files.get(u.pathname.split('/').pop()||'hypersynth.html');if(!f){missing.push(u.pathname);return r.fulfill({status:404,body:''});}
+  return r.fulfill({status:200,contentType:f.endsWith('.html')?'text/html':'font/ttf',body:fs.readFileSync(f)});});
+await p.addInitScript(([defs,factory])=>{
+  const vals=defs.map(d=>d.def),ls={};window.__calls=[];window.__notes=[];
+  const idx=id=>defs.findIndex(d=>d.id===id);
+  const answer=(name,a)=>{
+    if(name==='getState')return{defs,values:vals.slice(),name:'Init',category:'Basics',version:'test'};
+    if(name==='setParam'){const i=idx(a[0]);if(i>=0)vals[i]=a[1];return true;}
+    if(name==='note'){window.__notes.push(a);return true;}
+    if(name==='listPresets')return factory.map(f=>({id:'f:'+f.category+'/'+f.name,name:f.name,category:f.category,factory:true}));
+    if(name==='loadPreset'){const f=factory.find(f=>'f:'+f.category+'/'+f.name===a[0]);defs.forEach((d,i)=>{vals[i]=f.params[d.id]!=null?f.params[d.id]:d.def;});return{name:f.name,category:f.category,values:vals.slice()};}
+    if(name==='savePreset')return{id:'u:'+a[1]+'/'+a[0]+'.hsyn'};
+    return true;};
+  window.__vals=vals;
+  window.__JUCE__={backend:{addEventListener:(n,f)=>{(ls[n]=ls[n]||[]).push(f);},removeEventListener:()=>{},
+    emitEvent:(n,d)=>{if(n!=='__juce__invoke')return;window.__calls.push([d.name,d.params]);const result=answer(d.name,d.params);setTimeout(()=>(ls.__juce__complete||[]).forEach(f=>f({promiseId:d.resultId,result})),2);}},
+    __fire:(n,e)=>(ls[n]||[]).forEach(f=>f(e))};
+},[defs,factory]);
+await p.goto('https://juce.backend/hypersynth.html');await p.waitForTimeout(800);
+ok(missing.length===0,'everything the panel loads is built into the plugin'+(missing.length?' (missing '+missing.join()+')':''));
+ok(errs.length===0,'no script errors'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
+const st=await p.evaluate(()=>({knobs:document.querySelectorAll('.kn[data-id]').length,sliders:document.querySelectorAll('.sl[data-id]').length,keys:document.querySelectorAll('#keys [data-key]').length,
+  name:document.querySelector('#lcdMain').textContent,scale:window.__hsScale}));
+ok(st.knobs>=25&&st.sliders===13&&st.keys===61,`the panel is built (${st.knobs} knobs, ${st.sliders} sliders, ${st.keys} keys)`);
+ok(Math.abs(st.scale-0.9)<0.01,'it scales to the window ('+st.scale.toFixed(2)+')');
+/* a knob: drag up sets the parameter in the plugin */
+const box=await p.locator('.kn[data-id="l1.lp.cut"] .dial').boundingBox();
+await p.mouse.move(box.x+box.width/2,box.y+box.height/2);await p.mouse.down();await p.mouse.move(box.x+box.width/2,box.y-60,{steps:6});await p.mouse.up();
+const cut=await p.evaluate(()=>window.__vals[window.__hs.idx['l1.lp.cut']]);
+const calls=await p.evaluate(()=>window.__calls.map(c=>c[0]));
+ok(cut!==12000&&calls.includes('gesture'),'dragging LP CUT changes the plugin parameter, inside an automation gesture ('+Math.round(cut)+' Hz)');
+const lcd=await p.evaluate(()=>document.querySelector('#lcdTop').textContent);
+ok(/LOW-PASS CUTOFF/.test(lcd),'the screen above shows what is being changed ('+lcd+')');
+/* layer II edits the other layer */
+await p.click('.tab[data-tab="l2"]');
+const l2=await p.evaluate(()=>document.querySelector('.kn[data-l="LP CUT"]').dataset.id);
+ok(l2==='l2.lp.cut','the LAYER II tab edits layer II ('+l2+')');
+/* oscillator mode: click cycles through the ready modes, the knobs follow */
+await p.click('.tab[data-tab="l1"]');await p.click('[data-mode="0"]');
+const m1=await p.evaluate(()=>({mode:document.querySelector('[data-mode="0"]').textContent,a:document.querySelector('.kn[data-k="0"][data-slot="a"]').dataset.id}));
+ok(m1.mode==='FM'&&m1.a==='l1.o1.ratio','clicking the mode switches OSC 1 to FM, its knobs to RATIO / FM AMT');
+/* keyboard */
+const kb=await p.locator('#keys .wk[data-key="60"]').boundingBox();
+await p.mouse.move(kb.x+kb.width/2,kb.y+kb.height*.8);await p.mouse.down();await p.waitForTimeout(80);await p.mouse.up();
+const notes=await p.evaluate(()=>window.__notes);
+ok(notes.length>=2&&notes[0][0]===60&&notes[0][2]===true&&notes[1][2]===false,'the keyboard plays middle C (note on, then off)');
+/* presets */
+await p.click('#lcd');await p.waitForTimeout(150);
+await p.click('.pitem:has-text("CS Brass")');await p.waitForTimeout(150);
+const ps=await p.evaluate(()=>({name:document.querySelector('#lcdMain').textContent,cut:window.__hs.vals[window.__hs.idx['l1.lp.cut']],items:document.querySelectorAll('.pitem').length}));
+ok(ps.name==='CS Brass'&&ps.cut===600&&ps.items===factory.length,'the preset browser lists '+ps.items+' presets and loads CS Brass ('+JSON.stringify(ps)+')');
+await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-browser.png')});await p.click('#pClose');await p.click('#stabs a[data-s="filter"]');await p.waitForTimeout(100);await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-ui.png')});
+/* the host moves a parameter (automation): the knob follows */
+await p.evaluate(()=>window.__JUCE__.__fire('values',{i:[window.__hs.idx['master']],v:[-24]}));
+const rot=await p.evaluate(()=>document.querySelector('.kn[data-id="master"] .cap').style.transform);
+ok(/rotate\(-[0-9]/.test(rot),'automation from the DAW moves the knob ('+rot+')');
+await b.close();
+console.log(fails.length?fails.length+' FAILED':'ALL OK');process.exit(fails.length?1:0);
