@@ -26,7 +26,7 @@ static std::vector<ParamDef> buildParams() {
     num("master", "Master", -48, 6, -3, "dB");
     opt("play", "Play", { "I", "II", "I+II" }, 0);
     num("xfade", "Crossfade", 0, 1, .5f);
-    num("voices", "Voices", 1, 32, 16);
+    num("voices", "Voices", 1, 32, 32);
     opt("mode", "Mode", { "Poly", "Mono", "Legato" }, 0);
     num("glide", "Glide", 0, 2000, 0, "ms");
     num("bend", "Bend range", 0, 24, 2, "st");
@@ -189,6 +189,7 @@ struct OscState { double ph[Synth::kMaxUnison] = {}, phm[Synth::kMaxUnison] = {}
 struct LayerVoice { OscState o[3]; double subPh = 0; Env aenv, fenv; Svf hp[2], lp1[2], lp2[2]; };
 struct Voice {
     bool active = false, gate = false, held = false; int key = 60; float vel = 1; uint64_t age = 0;
+    float fade = 1, fadeStep = 0;     // a voice taken for a new note fades out (fadeStep > 0) instead of stopping dead
     double pitch = 60, target = 60;   // glides from pitch to target
     LayerVoice L[2];
 };
@@ -202,7 +203,8 @@ struct Synth::Impl {
     std::vector<std::atomic<float>> vals;   // what the host and the panel set
     std::vector<float> p, sm;               // per block: the values in use (continuous ones glide)
     std::vector<char> isOpt;
-    Voice v[kMaxVoices];
+    static constexpr int kGhosts = 8;   // voices taken for new notes finish fading out here
+    Voice v[kMaxVoices + kGhosts];
     uint64_t clock = 0; float bend = 0, wheel = 0; bool sustain = false; double vibPh = 0, lastPitch = -1;
     std::vector<int> stack;                 // mono: the keys held, newest last
     LayerIdx li[2]; int iMaster, iPlay, iXfade, iVoices, iMode, iGlide, iBend, iVib, iVibRate;
@@ -235,21 +237,28 @@ struct Synth::Impl {
             for (int u = 0; u < kMaxUnison; ++u) { lv.o[k].ph[u] = reset ? 0 : rand01(); lv.o[k].phm[u] = 0; } }
         if (retrig) { lv.aenv.on(); lv.fenv.on(); }
     }
+    static float level(const Voice& vo) { return std::max(vo.L[0].aenv.v, vo.L[1].aenv.v); }
+    // a free voice; when all are busy: the quietest fading tail, else the oldest held note. A taken voice fades out over
+    // 5 ms in a spare slot (no click) while its slot plays the new note.
     Voice* freeVoice(int limit) {
         Voice* best = nullptr;
         for (int i = 0; i < limit; ++i) if (!v[i].active) return &v[i];
-        for (int i = 0; i < limit; ++i) if (!v[i].gate && (!best || v[i].age < best->age)) best = &v[i];   // a released one first
+        for (int i = 0; i < limit; ++i) if (!v[i].gate && (!best || level(v[i]) < level(*best))) best = &v[i];
         if (!best) for (int i = 0; i < limit; ++i) if (!best || v[i].age < best->age) best = &v[i];
+        Voice* ghost = &v[kMaxVoices];
+        for (int i = kMaxVoices; i < kMaxVoices + kGhosts; ++i) { if (!v[i].active) { ghost = &v[i]; break; } if (v[i].fade < ghost->fade) ghost = &v[i]; }
+        *ghost = *best; ghost->gate = false; ghost->held = false; ghost->fadeStep = 1.f / (float) (sr * .005); ghost->key = -1;
+        best->active = false;
         return best;
     }
     void noteOn(int key, float vel) {
         const int mode = (int) std::lround(V(iMode)); const double glideFrom = lastPitch;
         if (mode == 0) {
             Voice* vo = nullptr;
-            for (int i = 0; i < kMaxVoices; ++i) if (v[i].active && v[i].key == key) vo = &v[i];   // the same key again: that voice
+            for (int i = 0; i < kMaxVoices; ++i) if (v[i].active && v[i].key == key && v[i].fadeStep == 0) vo = &v[i];   // the same key again: that voice
             if (!vo) vo = freeVoice(std::max(1, std::min(kMaxVoices, (int) std::lround(V(iVoices)))));
             const bool wasActive = vo->active;
-            vo->active = true; vo->gate = true; vo->held = false; vo->key = key; vo->vel = vel; vo->age = ++clock;
+            vo->active = true; vo->gate = true; vo->held = false; vo->key = key; vo->vel = vel; vo->age = ++clock; vo->fade = 1; vo->fadeStep = 0;
             vo->target = key; vo->pitch = (V(iGlide) > 0 && glideFrom >= 0) ? glideFrom : key;
             for (int L = 0; L < 2; ++L) { if (!wasActive) { for (int c = 0; c < 2; ++c) { vo->L[L].hp[c] = Svf(); vo->L[L].lp1[c] = Svf(); vo->L[L].lp2[c] = Svf(); } vo->L[L].aenv.v = 0; vo->L[L].fenv.v = 0; } startLayer(*vo, L, true); }
         } else {
@@ -289,16 +298,18 @@ struct Synth::Impl {
         for (auto& vo : v) {
             if (!vo.active) continue;
             vo.pitch += (vo.target - vo.pitch) * gk;
+            const float f0 = vo.fade, f1 = std::max(0.f, vo.fade - vo.fadeStep * (float) n);
             bool alive = false;
             for (int L = 0; L < 2; ++L) {
                 if (lg[L] <= 0) { if (vo.L[L].aenv.stage) { vo.L[L].aenv.stage = 0; vo.L[L].aenv.v = 0; } continue; }
-                alive |= layer(vo, L, lg[L] * master, vo.pitch + bendSt + vibSt, outL, outR, n);
+                alive |= layer(vo, L, lg[L] * master, vo.pitch + bendSt + vibSt, outL, outR, n, f0, f1);
             }
-            if (!alive) vo.active = false;
+            vo.fade = f1;
+            if (!alive || (vo.fadeStep > 0 && f1 <= 0)) { vo.active = false; vo.fadeStep = 0; vo.fade = 1; }
         }
     }
     // one layer of one voice; false when it has gone quiet
-    bool layer(Voice& vo, int L, float gain, double pitch, float* outL, float* outR, int n) {
+    bool layer(Voice& vo, int L, float gain, double pitch, float* outL, float* outR, int n, float f0 = 1, float f1 = 1) {
         const LayerIdx& x = li[L]; LayerVoice& lv = vo.L[L];
         if (!lv.aenv.stage) return false;
         float bufL[32], bufR[32]; std::fill(bufL, bufL + n, 0.f); std::fill(bufR, bufR + n, 0.f);
@@ -378,7 +389,7 @@ struct Synth::Impl {
                 if (steep) { lv.lp2[c].tick(y, lc2.a1, lc2.a2, lc2.a3, lc2.k, lp, hp); y = lp; }
                 s[c] = y;
             }
-            const float e = lv.aenv.next(aaInc, adK, as, arK) * lvl;
+            const float e = lv.aenv.next(aaInc, adK, as, arK) * lvl * (f0 + (f1 - f0) * (float) i / (float) n);
             outL[i] += (float) s[0] * e * pl; outR[i] += (float) s[1] * e * pr;
             loud |= lv.aenv.stage != 0;
         }
@@ -392,7 +403,7 @@ void Synth::prepare(double sampleRate) { d_->sr = sampleRate > 0 ? sampleRate : 
 void Synth::noteOn(int key, float velocity) { d_->noteOn(key, clampf(velocity, 0, 1)); }
 void Synth::noteOff(int key) { d_->noteOff(key); }
 void Synth::allNotesOff(bool hard) {
-    for (auto& vo : d_->v) { if (hard) { vo.active = false; for (auto& l : vo.L) { l.aenv = Env(); l.fenv = Env(); } } else d_->release(vo); vo.held = false; }
+    for (auto& vo : d_->v) { if (hard) { vo.active = false; vo.fade = 1; vo.fadeStep = 0; for (auto& l : vo.L) { l.aenv = Env(); l.fenv = Env(); } } else d_->release(vo); vo.held = false; }
     d_->stack.clear();
 }
 void Synth::setBend(float v) { d_->bend = clampf(v, -1, 1); }
@@ -411,7 +422,7 @@ void Synth::resetParams() { const auto& d = params(); for (size_t i = 0; i < d.s
 void Synth::process(float* left, float* right, int n) {
     for (int at = 0; at < n; at += 32) d_->block(left + at, right + at, std::min(32, n - at));
 }
-int Synth::activeVoices() const { int c = 0; for (auto& vo : d_->v) c += vo.active; return c; }
+int Synth::activeVoices() const { int c = 0; for (int i = 0; i < kMaxVoices; ++i) c += d_->v[i].active; return c; }
 
 static std::string jsonStr(const std::string& s) {
     std::string o = "\""; for (char c : s) { if (c == '"' || c == '\\') { o += '\\'; o += c; } else if ((unsigned char) c < 0x20) { char b[8]; std::snprintf(b, sizeof b, "\\u%04x", c); o += b; } else o += c; } return o + "\"";

@@ -792,9 +792,19 @@ static void testSynth() {
         s.noteOn(57, 1); auto o = render(s, 48000); lo[x] = toneDb(o.first, 8000, 48000, 220, sr); hi[x] = toneDb(o.first, 8000, 48000, 880, sr); }
       CHECK(lo[0] - hi[0] > 60 && hi[1] - lo[1] > 60, "hypersynth: Crossfade I..II (layer I alone %+.0f dB, layer II alone %+.0f dB)", lo[0] - hi[0], hi[1] - lo[1]); }
     /* voices: 40 notes on a 16-voice setting, mono keeps one */
-    { Synth s; s.prepare(sr); for (int k = 30; k < 70; ++k) s.noteOn(k, .7f); auto o = render(s, 9600);
+    { Synth s; s.prepare(sr); set(s, "voices", 16); for (int k = 30; k < 70; ++k) s.noteOn(k, .7f); auto o = render(s, 9600);
       Synth m; m.prepare(sr); set(m, "mode", 2); set(m, "glide", 80); for (int k : { 60, 64, 67 }) m.noteOn(k, 1); render(m, 4800);
       CHECK(s.activeVoices() == 16 && peakOf(o.first) >= 0 && m.activeVoices() == 1, "hypersynth: 40 notes play on 16 voices (stealing the oldest), legato keeps 1 (%d voices, %d in legato)", s.activeVoices(), m.activeVoices()); }
+    /* fast playing over long releases: nothing is cut at the default, and a voice taken for a new note fades (no click) */
+    for (int lim : { 32, 6 }) {
+        Synth s; s.prepare(sr); set(s, "l1.aenv.a", 20); set(s, "l1.aenv.r", 2500); set(s, "l1.o1.voices", 5); set(s, "l1.lp.cut", 4000); if (lim < 32) set(s, "voices", (float) lim);
+        const int arp[8] = { 48, 55, 60, 64, 67, 72, 67, 64 }; int most = 0, cuts = 0; double jump = 0; float prev = 0; std::vector<float> l(6000), r(6000);
+        for (int n = 0; n < 64; ++n) { if (s.activeVoices() >= lim) ++cuts; const int k = arp[n % 8] + (n / 16) * 2; s.noteOn(k, .8f);
+            s.process(l.data(), r.data(), 3000); s.noteOff(k); s.process(l.data() + 3000, r.data() + 3000, 3000);
+            most = std::max(most, s.activeVoices()); for (float x : l) { jump = std::max(jump, (double) std::fabs(x - prev)); prev = x; } }
+        if (lim == 32) CHECK(cuts == 0 && most > 16, "hypersynth: a fast arpeggio over 2.5 s releases keeps every tail (%d voices at most of 32)", most);
+        else CHECK(cuts > 30 && jump < .15, "hypersynth: with only %d voices, %d notes take a voice, and the tails they replace fade out (biggest step %.3f)", lim, cuts, jump);
+    }
     /* presets (.hsyn) */
     { Synth a; a.prepare(sr); set(a, "l1.o1.voices", 7); set(a, "l2.lp.cut", 900); set(a, "play", 2);
       const std::string js = a.presetJson("Test \"Pad\"", "Pads");
