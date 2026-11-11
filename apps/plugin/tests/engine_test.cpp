@@ -749,6 +749,7 @@ static void testRingSweep() {
 }
 
 /* HyperSynth's sound engine (step 1 of its roadmap: the gate is clean aliasing and usable CPU) */
+static constexpr double kPiT = 3.14159265358979323846;
 static void testSynth() {
     using namespace visu::hs;
     const auto& P = params(); const double sr = 48000, PI = 3.14159265358979;
@@ -879,7 +880,7 @@ static void testSynth() {
         std::FILE* f = std::fopen(out, "wb"); if (f) { std::fputs("[", f);
             for (size_t i = 0; i < P.size(); ++i) { const auto& d = P[i]; std::fprintf(f, "%s{\"id\":\"%s\",\"name\":\"%s\",\"unit\":\"%s\",\"min\":%g,\"max\":%g,\"def\":%g,\"log\":%s,\"whole\":%s,\"opts\":[",
                 i ? "," : "", d.id.c_str(), d.name.c_str(), d.unit.c_str(), d.min, d.max, d.def, d.log ? "true" : "false",
-                (d.id == "voices" || d.id.find(".voices") != std::string::npos || d.id.find(".oct") != std::string::npos) ? "true" : "false");
+                (d.id == "voices" || d.id.find(".voices") != std::string::npos || d.id.find(".oct") != std::string::npos || d.id.find(".parts") != std::string::npos || d.id.find(".root") != std::string::npos) ? "true" : "false");
               for (size_t k = 0; k < d.opts.size(); ++k) std::fprintf(f, "%s\"%s\"", k ? "," : "", d.opts[k].c_str()); std::fputs("]}", f); }
             std::fputs("]", f); std::fclose(f); } }
     { const auto& names = wavetableNames(); int good = 0;
@@ -928,6 +929,52 @@ static void testSynth() {
       CHECK(rt.size() == 2 && rt[0].src == "lfo2" && rt[1].dst == "l1.lp.cut" && std::fabs(rt[1].amt + .5f) < 1e-4f && sh.size() == 9 && std::fabs(sh[4] - .9f) < 1e-3f
             && ld.macroName(1) == "Brightness" && old.mods().empty() && old.macroName(1) == "Macro 2",
             "hypersynth mod: routes, drawn shapes and macro names are saved in the .hsyn (unknown ones dropped); an older preset has none"); }
+    /* Spectrum and Sample modes, warps */
+    { auto mag = [&](const std::vector<float>& v, size_t a0, size_t a1, double hz) {   // the level of one frequency (Goertzel, Hann window)
+        double c = 2 * std::cos(2 * kPiT * hz / sr), q1 = 0, q2 = 0; const size_t N = a1 - a0;
+        for (size_t i = 0; i < N; ++i) { const double w = .5 - .5 * std::cos(2 * kPiT * i / (N - 1)); const double q0 = v[a0 + i] * w + c * q1 - q2; q2 = q1; q1 = q0; }
+        return std::sqrt(q1 * q1 + q2 * q2 - c * q1 * q2) / (N / 4.0); };
+      auto solo = [&](Synth& z, int mode) { z.prepare(sr); set(z, "l1.o1.mode", (float) mode); set(z, "l1.lp.cut", 20000); set(z, "l1.lp.key", 0); };
+      // Spectrum: odd only = hollow (no 2nd harmonic); stretch = bell-like partials off the harmonic grid
+      Synth a; solo(a, 1); set(a, "l1.o1.sp.odd", -1); a.noteOn(45, .9f); auto ao = render(a, 24000);
+      const double f0 = 110, h1 = mag(ao.first, 4800, 24000, f0), h2 = mag(ao.first, 4800, 24000, 2 * f0), h3 = mag(ao.first, 4800, 24000, 3 * f0);
+      Synth b; solo(b, 1); set(b, "l1.o1.sp.stretch", 1); b.noteOn(45, .9f); auto bo = render(b, 24000);
+      const double hm = 110 * std::pow(4.0, 1.15), on4 = mag(bo.first, 4800, 24000, hm), grid4 = mag(bo.first, 4800, 24000, 440);
+      CHECK(h2 < h1 * .01 && h3 > h1 * .2 && on4 > grid4 * 5, "hypersynth Spectrum: odd-only partials (2nd %.3f, 3rd %.2f of the 1st); stretched partials leave the harmonic grid (%.0fx)", h2 / h1, h3 / h1, grid4 > 0 ? on4 / grid4 : 0);
+      // Spectrum high up: nothing folds back below the note
+      Synth c; solo(c, 1); set(c, "l1.o1.sp.tilt", 1); c.noteOn(105, .9f); auto co = render(c, 24000); const double top = 440 * std::pow(2.0, 36 / 12.0);
+      double below = 0; for (double hz = 200; hz < top * .9; hz += 97) below = std::max(below, mag(co.first, 4800, 24000, hz));
+      CHECK(below < mag(co.first, 4800, 24000, top) * .01, "hypersynth Spectrum: a high note with a flat spectrum does not alias (%.4f)", below);
+      // Sample: a 220 Hz recording, its key found (A3 = 57), played on A4 sounds at 440 Hz; loops keep it going
+      std::vector<float> sm((size_t) (sr * .5)), smR(sm.size()); for (size_t i = 0; i < sm.size(); ++i) { sm[i] = (float) (.6 * std::sin(2 * kPiT * 220 * i / sr) + .2 * std::sin(2 * kPiT * 440 * i / sr)); smR[i] = sm[i] * .5f; }
+      const double key = detectKey(sm.data(), sm.size(), sr);
+      Synth d; solo(d, 2); set(d, "l1.o1.smp.root", (float) std::lround(key)); CHECK(d.setSample(0, 0, sm, smR, sr, "Test tone"), "hypersynth Sample: a sound can be loaded");
+      d.noteOn(69, .9f); auto dout = render(d, 24000); const double at440 = mag(dout.first, 2400, 19200, 440), at220 = mag(dout.first, 2400, 19200, 220);
+      CHECK(std::fabs(key - 57) < .1 && at440 > at220 * 20 && rms(dout.second, 2400, 9600) < rms(dout.first, 2400, 9600) * .7, "hypersynth Sample: its key is found (%.2f), A4 plays it an octave up (440 Hz %.2f, 220 Hz %.3f), in stereo", key, at440, at220);
+      Synth e; solo(e, 2); set(e, "l1.o1.smp.root", 57); e.setSample(0, 0, sm, {}, sr, "t"); e.noteOn(57, .9f); auto eo = render(e, 48000);
+      Synth f; solo(f, 2); set(f, "l1.o1.smp.root", 57); set(f, "l1.o1.smp.loop", 1); set(f, "l1.o1.smp.ls", .2f); set(f, "l1.o1.smp.le", .8f); f.setSample(0, 0, sm, {}, sr, "t"); f.noteOn(57, .9f); auto fo = render(f, 48000);
+      Synth g2; solo(g2, 2); set(g2, "l1.o1.smp.root", 57); set(g2, "l1.o1.smp.loop", 2); g2.setSample(0, 0, sm, {}, sr, "t"); g2.noteOn(57, .9f); auto go = render(g2, 48000);
+      const double early = rms(eo.first, 4800, 20000);
+      CHECK(rms(eo.first, 30000, 48000) < 1e-6 && rms(fo.first, 30000, 48000) > early * .5 && rms(go.first, 30000, 48000) > early * .5,
+            "hypersynth Sample: without a loop it ends with the sound (%.1g); Forward and Ping-pong loops keep it playing (%.2f, %.2f of the start)", rms(eo.first, 30000, 48000), rms(fo.first, 30000, 48000) / early, rms(go.first, 30000, 48000) / early);
+      // saved inside the .hsyn and back
+      Synth sh; sh.setSample(1, 2, sm, smR, sr, "Tone"); const auto js = sh.presetJson("S", "T"); Synth sh2; sh2.loadPreset(js); std::vector<float> l2, r2; double rt = 0; std::string nm;
+      Synth sh3; sh3.setSample(0, 0, sm, {}, sr, "x"); sh3.loadPreset("{\"format\":\"hsyn\",\"v\":1,\"params\":{}}");
+      CHECK(sh2.sample(1, 2, &l2, &r2, &rt, &nm) && nm == "Tone" && rt == sr && l2.size() == sm.size() && r2.size() == sm.size() && std::fabs(l2[1000] - sm[1000]) < 1e-3f && !sh3.sample(0, 0, nullptr, nullptr, nullptr, nullptr),
+            "hypersynth Sample: the sound is saved in the .hsyn (%zu KB) and comes back; a preset without one clears it", js.size() / 1024);
+      // warps: Sync on a sine adds harmonics; RM from OSC 1 makes sum and difference tones; Off leaves it pure
+      auto sine2 = [&](Synth& z, int warp) { z.prepare(sr); set(z, "l1.o1.mode", 3); set(z, "l1.o1.shape", 3); set(z, "l1.lp.cut", 20000); set(z, "l1.lp.key", 0);
+        set(z, "l1.o1.warp", (float) warp); set(z, "l1.o1.warpAmt", .5f); };
+      Synth w0, w1; sine2(w0, 0); sine2(w1, 1); w0.noteOn(57, .9f); w1.noteOn(57, .9f); auto w0o = render(w0, 24000), w1o = render(w1, 24000);
+      double hw0 = 0, hw1 = 0; for (int hh = 2; hh <= 8; ++hh) { hw0 += mag(w0o.first, 4800, 24000, 220.0 * hh); hw1 += mag(w1o.first, 4800, 24000, 220.0 * hh); }
+      Synth rm; rm.prepare(sr); set(rm, "l1.o1.mode", 3); set(rm, "l1.o1.shape", 3); set(rm, "l1.o2.on", 1); set(rm, "l1.o2.mode", 3); set(rm, "l1.o2.shape", 3); set(rm, "l1.o2.semi", 7);
+      set(rm, "l1.o2.warp", 8); set(rm, "l1.o2.warpAmt", 1); set(rm, "l1.o1.level", 0.01f); set(rm, "l1.lp.cut", 20000); set(rm, "l1.lp.key", 0); rm.noteOn(57, .9f); auto rmo = render(rm, 24000);
+      const double f2 = 220 * std::pow(2.0, 7 / 12.0), sum = mag(rmo.first, 4800, 24000, f2 + 220), plain = mag(rmo.first, 4800, 24000, f2);
+      CHECK(hw0 < .01 && hw1 > .2 && sum > plain * 3, "hypersynth warps: Off stays a pure sine (%.4f), Sync adds harmonics (%.2f), RM from OSC 1 makes sum tones (%.1fx)", hw0, hw1, plain > 0 ? sum / plain : 0);
+      // every warp on a wavetable stays clean and bounded
+      int fine = 0; for (int wv = 1; wv <= 8; ++wv) { Synth z; z.prepare(sr); set(z, "l1.o1.mode", 0); set(z, "l1.o1.table", 2); set(z, "l1.o1.pos", .5f); set(z, "l1.o1.warp", (float) wv); set(z, "l1.o1.warpAmt", .8f);
+        set(z, "l1.o2.on", 1); z.noteOn(48, .9f); z.noteOn(84, .9f); auto zo = render(z, 24000); const double pk = peakOf(zo.first); if (pk > .01 && pk < 1 && std::isfinite(pk)) ++fine; }
+      CHECK(fine == 8, "hypersynth warps: all 8 warps play cleanly on a wavetable (%d/8)", fine); }
     /* the FX tab: the chain the panel's test made (Ring mod -> Reverb, an LFO on the ring's frequency) runs after the synth */
     { std::string err; auto rack = visu::FxRack::build(readText(std::string(TEST_DATA_DIR) + "/hypersynth-fx.json"), sr, err);
       Synth s; s.prepare(sr); s.noteOn(57, .9f); auto dry = render(s, 48000);

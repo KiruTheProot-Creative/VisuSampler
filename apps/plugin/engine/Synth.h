@@ -32,6 +32,8 @@ std::vector<float> wavetablePreview(int table, int frames, int points);
 // chunk when known, else 2048); any other sound has its pitch found, and single cycles are taken from across the file.
 // how: what was done, in words.
 std::vector<float> framesFromAudio(const float* mono, size_t n, double sampleRate, int frameSize, std::string* how, int maxFrames = 64);
+// the note a sound plays (MIDI key, with cents as the fraction), or -1 when it has no clear pitch
+double detectKey(const float* mono, size_t n, double sampleRate);
 
 // modulation (Vital / Serum style): a source moves any continuous parameter of a voice. Sources by id:
 // lfo1..lfo4 (-1..1), env1, env2 (the mod envelopes, 0..1), macro1..macro4 (0..1), vel, wheel, at (aftertouch) 0..1,
@@ -66,6 +68,10 @@ public:
     bool setCustomTable(int layer, int osc, const std::vector<float>& frames, const std::string& name);
     void clearCustomTable(int layer, int osc);
     bool customTable(int layer, int osc, std::vector<float>* frames, std::string* name) const;
+    // Sample mode: the sound an oscillator plays (right empty = mono). Up to 30 s; saved in presets and the project.
+    bool setSample(int layer, int osc, const std::vector<float>& left, const std::vector<float>& right, double sampleRate, const std::string& name);
+    void clearSample(int layer, int osc);
+    bool sample(int layer, int osc, std::vector<float>* left, std::vector<float>* right, double* sampleRate, std::string* name) const;
     // modulation: message thread (the audio thread picks the routes up without waiting)
     static constexpr int kMaxRoutes = 64, kLfos = 4, kMacros = 4;
     void setMods(const std::vector<ModRoute>& routes);   // unknown sources / destinations are dropped

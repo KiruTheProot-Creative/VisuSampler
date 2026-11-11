@@ -11,10 +11,10 @@
 
 juce::String HyperSynthProcessor::versionText() { return juce::String(VISU_VERSION) + " (build " + VISU_BUILD_ID + ")"; }
 
-static bool isWhole(const std::string& id)   // counted things: voices, octaves
+static bool isWhole(const std::string& id)   // counted things: voices, octaves, partials, root keys
 {
     auto ends = [&](const char* s) { const std::string t(s); return id.size() >= t.size() && id.compare(id.size() - t.size(), t.size(), t) == 0; };
-    return id == "voices" || ends(".voices") || ends(".oct");
+    return id == "voices" || ends(".voices") || ends(".oct") || ends(".parts") || ends(".root");
 }
 
 HyperSynthProcessor::HyperSynthProcessor()
@@ -194,6 +194,10 @@ void HyperSynthProcessor::copyTables(const visu::hs::Synth& from, visu::hs::Synt
         std::vector<float> fr; std::string nm;
         if (from.customTable(L, k, &fr, &nm)) to.setCustomTable(L, k, fr, nm); else to.clearCustomTable(L, k);
     }
+    for (int L = 0; L < 2; ++L) for (int k = 0; k < 3; ++k) {
+        std::vector<float> l, r; double rate = 0; std::string nm;
+        if (from.sample(L, k, &l, &r, &rate, &nm)) to.setSample(L, k, l, r, rate, nm); else to.clearSample(L, k);
+    }
     to.setMods(from.mods());
     for (int l = 0; l < visu::hs::Synth::kLfos; ++l) to.setLfoShape(l, from.lfoShape(l));
     for (int m = 0; m < visu::hs::Synth::kMacros; ++m) to.setMacroName(m, from.macroName(m));
@@ -350,6 +354,46 @@ void HyperSynthProcessor::importTable(int layer, int osc, std::function<void(juc
         o->setProperty("name", name); o->setProperty("how", juce::String(how)); o->setProperty("preview", tablePreview(layer, osc)); o->setProperty("values", values());
         done(juce::var(o));
     });
+}
+
+void HyperSynthProcessor::importSample(int layer, int osc, std::function<void(juce::var)> done)
+{
+    chooser_ = std::make_unique<juce::FileChooser>("A sound for Sample mode", juce::File::getSpecialLocation(juce::File::userDocumentsDirectory), "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
+    chooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this, layer, osc, done](const juce::FileChooser& fc) {
+        auto* o = new juce::DynamicObject(); const auto f = fc.getResult();
+        if (!f.existsAsFile()) { o->setProperty("cancelled", true); done(juce::var(o)); return; }
+        juce::AudioFormatManager fm; fm.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(f));
+        if (!r) { o->setProperty("error", "HyperSynth can't read " + f.getFileName()); done(juce::var(o)); return; }
+        const auto n = (int) juce::jmin<juce::int64>(r->lengthInSamples, (juce::int64) (r->sampleRate * 30));   // up to 30 s
+        juce::AudioBuffer<float> buf((int) juce::jmin(2u, r->numChannels), n); r->read(&buf, 0, n, 0, true, buf.getNumChannels() > 1);
+        std::vector<float> L(buf.getReadPointer(0), buf.getReadPointer(0) + n), R, mono(L);
+        if (buf.getNumChannels() > 1) { R.assign(buf.getReadPointer(1), buf.getReadPointer(1) + n); for (int i = 0; i < n; ++i) mono[(size_t) i] = .5f * (L[(size_t) i] + R[(size_t) i]); }
+        const auto name = f.getFileNameWithoutExtension();
+        if (!synth_.setSample(layer, osc, L, R, r->sampleRate, name.toStdString())) { o->setProperty("error", "the sound is too short"); done(juce::var(o)); return; }
+        const double key = visu::hs::detectKey(mono.data(), mono.size(), r->sampleRate);
+        const juce::String p = "l" + juce::String(layer + 1) + ".o" + juce::String(osc + 1) + ".";
+        setFromUi(indexOf(p + "mode"), 2); setFromUi(indexOf(p + "smp.start"), 0);
+        if (key >= 0) setFromUi(indexOf(p + "smp.root"), (float) juce::jlimit(0, 127, (int) std::lround(key)));
+        static const char* nn[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+        o->setProperty("name", name);
+        o->setProperty("how", key >= 0 ? juce::String("root ") + nn[(int) std::lround(key) % 12] + juce::String((int) std::lround(key) / 12 - 1) + " found" : juce::String("no clear pitch: root C4"));
+        o->setProperty("preview", samplePreview(layer, osc)); o->setProperty("values", values());
+        done(juce::var(o));
+    });
+}
+
+juce::var HyperSynthProcessor::samplePreview(int layer, int osc) const
+{
+    std::vector<float> l, r; double rate = 0; std::string nm;
+    if (!synth_.sample(layer, osc, &l, &r, &rate, &nm) || l.empty()) return {};
+    juce::Array<juce::var> peaks; const size_t W = 300;
+    for (size_t b = 0; b < W; ++b) { const size_t a0 = l.size() * b / W, a1 = std::max(a0 + 1, l.size() * (b + 1) / W); float mx = -1, mn = 1;
+        for (size_t i = a0; i < a1 && i < l.size(); ++i) { const float v = r.empty() ? l[i] : .5f * (l[i] + r[i]); mx = std::max(mx, v); mn = std::min(mn, v); }
+        peaks.add(mx); peaks.add(mn); }
+    auto* o = new juce::DynamicObject(); o->setProperty("name", juce::String::fromUTF8(nm.c_str())); o->setProperty("seconds", (double) l.size() / rate);
+    o->setProperty("ch", r.empty() ? 1 : 2); o->setProperty("peaks", peaks);
+    return juce::var(o);
 }
 
 juce::var HyperSynthProcessor::tablePreview(int layer, int osc) const

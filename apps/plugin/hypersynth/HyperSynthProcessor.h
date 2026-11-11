@@ -55,6 +55,9 @@ public:
     // wavetable import: a file picker, then the sound -> frames -> oscillator `osc` (0..2) of `layer` (0/1)
     void importTable(int layer, int osc, std::function<void(juce::var)> done);
     juce::var tablePreview(int layer, int osc) const;   // {name, frames: [[...128 samples], ...]} or void
+    // Sample mode: a file picker, then the sound -> oscillator `osc` of `layer` (its key found, Sample mode on)
+    void importSample(int layer, int osc, std::function<void(juce::var)> done);
+    juce::var samplePreview(int layer, int osc) const;  // {name, seconds, ch, peaks: [max, min, ...] x 300} or void
     // modulation (message thread): {routes:[{src,dst,amt}], shapes:[[x,y,curve,...] x4], names:[macro names]}
     juce::var modState() const;
     void setMods(const juce::var& routes);

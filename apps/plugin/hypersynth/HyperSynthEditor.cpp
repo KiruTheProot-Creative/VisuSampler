@@ -69,6 +69,11 @@ juce::WebBrowserComponent::Options HyperSynthEditor::makeOptions()
             proc_.importTable((int) a[0], (int) a[1], [this, done](juce::var r) { for (int i = 0; i < proc_.numParams(); ++i) shown_[(size_t) i] = proc_.value(i); done(r); }); })
         .withNativeFunction("tablePreview", [this, reply](const juce::Array<juce::var>& a, auto done) {
             reply(done, a.size() >= 2 ? proc_.tablePreview((int) a[0], (int) a[1]) : juce::var()); })
+        .withNativeFunction("importSample", [this](const juce::Array<juce::var>& a, auto done) {
+            if (a.size() < 2) { done(juce::var()); return; }
+            proc_.importSample((int) a[0], (int) a[1], [this, done](juce::var r) { for (int i = 0; i < proc_.numParams(); ++i) shown_[(size_t) i] = proc_.value(i); done(r); }); })
+        .withNativeFunction("samplePreview", [this, reply](const juce::Array<juce::var>& a, auto done) {
+            reply(done, a.size() >= 2 ? proc_.samplePreview((int) a[0], (int) a[1]) : juce::var()); })
         .withNativeFunction("tablePreviews", [reply](const juce::Array<juce::var>&, auto done) {   // the factory tables, for drawing
             juce::Array<juce::var> all; const auto& names = visu::hs::wavetableNames();
             for (int t = 0; t < (int) names.size(); ++t) { const auto v = visu::hs::wavetablePreview(t, 9, 128); juce::Array<juce::var> frames;

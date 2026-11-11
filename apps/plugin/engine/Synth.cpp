@@ -102,6 +102,23 @@ static std::vector<ParamDef> buildParams() {
         num(e + "dc", en + "decay curve", -1, 1, .6f);
         num(e + "rc", en + "release curve", -1, 1, .6f);
     }
+    /* added with Spectrum / Sample modes and warps (11 Nov 2026): warps start Off, so older sounds are unchanged */
+    for (int L = 1; L <= 2; ++L) for (int k = 1; k <= 3; ++k) {
+        const std::string o = "l" + std::to_string(L) + ".o" + std::to_string(k) + ".", on = "Layer " + std::string(L == 1 ? "I" : "II") + " osc " + std::to_string(k) + " ";
+        opt(o + "warp", on + "warp", { "Off", "Sync", "Bend", "Squeeze", "Mirror", "Phase Dist", "Quantize", "FM from Osc 1", "RM from Osc 1" }, 0);
+        num(o + "warpAmt", on + "warp amount", 0, 1, .5f);
+        num(o + "sp.parts", on + "partials", 1, 64, 32);
+        num(o + "sp.tilt", on + "spectral tilt", -1, 1, 0);
+        num(o + "sp.odd", on + "odd / even", -1, 1, 0);
+        num(o + "sp.stretch", on + "stretch", -1, 1, 0);
+        num(o + "sp.form", on + "formant", 100, 8000, 800, "Hz", true);
+        num(o + "sp.fAmt", on + "formant amount", 0, 1, 0);
+        num(o + "smp.start", on + "sample start", 0, 1, 0);
+        opt(o + "smp.loop", on + "sample loop", { "Off", "Forward", "Ping-pong" }, 0);
+        num(o + "smp.ls", on + "loop start", 0, 1, 0);
+        num(o + "smp.le", on + "loop end", 0, 1, 1);
+        num(o + "smp.root", on + "root key", 0, 127, 60);
+    }
     return v;
 }
 const std::vector<ParamDef>& params() { static const std::vector<ParamDef> p = buildParams(); return p; }
@@ -216,6 +233,30 @@ static std::vector<Wavetable> buildTables() {
     return t;
 }
 static const std::vector<Wavetable>& tables() { static const std::vector<Wavetable> t = buildTables(); return t; }
+// Analog's shapes as band-limited single cycles (saw, square, triangle, sine): what a warped Analog oscillator reads
+static const std::vector<Wavetable>& analogTables() {
+    static const std::vector<Wavetable> t = [] {
+        std::vector<Wavetable> v;
+        for (int sh = 0; sh < 4; ++sh) { Wavetable w; w.frames = 2; w.data.assign((size_t) 2 * kFrame, 0.f); std::vector<double> a(1025, 0.0);
+            for (int h = 1; h <= 1024; ++h) a[(size_t) h] = sh == 0 ? 1.0 / h : sh == 1 ? (h % 2 ? 1.0 / h : 0) : sh == 2 ? (h % 2 ? ((h / 2) % 2 ? -1.0 : 1.0) / (h * h) : 0) : (h == 1 ? 1 : 0);
+            renderFrame(a, w.data.data()); std::copy(w.data.begin(), w.data.begin() + kFrame, w.data.begin() + kFrame); v.push_back(std::move(w)); }
+        return v; }();
+    return t;
+}
+enum Warp { WOff = 0, WSync, WBend, WSqueeze, WMirror, WPd, WQuant, WFm, WRm };
+static inline double warpPhase(int w, double ph, float a, float o1) {   // where in the cycle a warped oscillator reads
+    switch (w) {
+        case WSync: { const double x = ph * (1 + 7 * a); return x - std::floor(x); }
+        case WBend: return std::pow(ph, 1 + 3 * a);
+        case WSqueeze: { const double k = 1 + 4 * a; return ph < .5 ? .5 * std::pow(2 * ph, k) : 1 - .5 * std::pow(2 * (1 - ph), k); }
+        case WMirror: { const double m = ph < .5 ? ph : 1 - ph; return (1 - a) * ph + a * 2 * m; }
+        case WPd: { const double d = .5 - .49 * a; return ph < d ? ph / d * .5 : .5 + (ph - d) / (1 - d) * .5; }
+        case WQuant: { const double q = 64 - 60 * a; return std::floor(ph * q) / q; }
+        case WFm: { const double x = ph + a * 1.5 * o1; return x - std::floor(x); }
+        default: return ph;
+    }
+}
+static inline double warpHeadroom(int w, float a) { return w == WSync ? 1 + 7 * a : (w == WOff || w == WQuant || w == WRm) ? 1 : 2; }
 const std::vector<std::string>& wavetableNames() {
     static const std::vector<std::string> n = { "Basic Shapes", "PWM", "Harmonic Sweep", "Vowels", "Digital Grit",
         "Sync Sweep", "Phase Distortion", "Wavefolder", "FM Growl", "FM Metal", "Organ", "Formant Sweep", "Odd to Even", "Spectral Comb", "Bitcrush", "Harmonics", "Resonant Saw" };
@@ -242,6 +283,24 @@ static std::unique_ptr<Wavetable> makeCustom(const std::vector<float>& frames, c
     return w;
 }
 
+// YIN on part of the sound (the middle, or from `at`): its period in samples, 0 when there is no clear pitch
+static double findPeriod(const float* x, size_t n, double sr, size_t at = (size_t) -1) {
+    if (n < 64) return 0;
+    const size_t W = std::min<size_t>(n / 2, 8192), mid = at == (size_t) -1 ? n / 2 - W / 2 : std::min(at, n - W); const int minP = std::max(2, (int) (sr / 2000)), maxP = std::min((int) W - 1, (int) (sr / 25));
+    std::vector<double> d((size_t) maxP + 2, 0.0); double run = 0;
+    for (int tau = 1; tau <= maxP; ++tau) { double s2 = 0; for (size_t i = 0; i + (size_t) tau < W; ++i) { const double e = x[mid + i] - x[mid + i + (size_t) tau]; s2 += e * e; } run += s2; d[(size_t) tau] = run > 0 ? s2 * tau / run : 1; }
+    for (int tau = minP; tau < maxP; ++tau) if (d[(size_t) tau] < .15 && d[(size_t) tau] <= d[(size_t) tau + 1]) {
+        const double a = d[(size_t) tau - 1], b = d[(size_t) tau], c = d[(size_t) tau + 1], den = a - 2 * b + c; return tau + (std::fabs(den) > 1e-12 ? .5 * (a - c) / den : 0); }
+    return 0;
+}
+double detectKey(const float* x, size_t n, double sr) {
+    if (n < 64) return -1;
+    size_t at = 0; float pk = 0; for (size_t i = 0; i < n; ++i) if (std::fabs(x[i]) > pk) { pk = std::fabs(x[i]); at = i; }   // just after the loudest moment: past the attack, still loud
+    const size_t W = std::min<size_t>(n / 2, 8192); const size_t from = std::min(n > W ? n - W : 0, at + (size_t) (sr * .05));
+    double p = findPeriod(x, n, sr, from); if (p <= 0) p = findPeriod(x, n, sr);
+    return p > 0 ? 69 + 12 * std::log2(sr / p / 440.0) : -1;
+}
+
 std::vector<float> framesFromAudio(const float* x, size_t n, double sr, int frameSize, std::string* how, int maxFrames) {
     std::vector<float> out; maxFrames = std::max(1, std::min(256, maxFrames));
     auto resampleCycle = [&](double start, double len, float* dst) {   // one stretch of the sound -> kTab samples
@@ -260,11 +319,7 @@ std::vector<float> framesFromAudio(const float* x, size_t n, double sr, int fram
     if (n % kTab == 0 && n / kTab >= 2 && n / kTab <= 256) { slice(kTab, "a wavetable file (2048-sample frames)"); return out; }
     if (n <= (size_t) kTab) { slice((int) n, "one short cycle"); return out; }
     /* any other sound: find its pitch (YIN), then take single cycles from across the file */
-    const size_t W = std::min<size_t>(n / 2, 8192), mid = n / 2 - W / 2; const int minP = std::max(2, (int) (sr / 2000)), maxP = std::min((int) W - 1, (int) (sr / 25));
-    std::vector<double> d((size_t) maxP + 2, 0.0); double run = 0; double period = 0;
-    for (int tau = 1; tau <= maxP; ++tau) { double s2 = 0; for (size_t i = 0; i + (size_t) tau < W; ++i) { const double e = x[mid + i] - x[mid + i + (size_t) tau]; s2 += e * e; } run += s2; d[(size_t) tau] = run > 0 ? s2 * tau / run : 1; }
-    for (int tau = minP; tau < maxP; ++tau) if (d[(size_t) tau] < .15 && d[(size_t) tau] <= d[(size_t) tau + 1]) {
-        const double a = d[(size_t) tau - 1], b = d[(size_t) tau], c = d[(size_t) tau + 1], den = a - 2 * b + c; period = tau + (std::fabs(den) > 1e-12 ? .5 * (a - c) / den : 0); break; }
+    const double period = findPeriod(x, n, sr);
     if (period <= 0) { slice(kTab, "no clear pitch: slices of the sound"); return out; }
     const int F = std::min(maxFrames, std::max(1, (int) ((double) n / period) - 1)); out.assign((size_t) F * kTab, 0.f);
     for (int f = 0; f < F; ++f) {
@@ -349,7 +404,10 @@ static void drawnTable(const std::vector<float>& xyc, float* out) {   // drawn p
 static const double kSyncBeats[] = { 0, .125, 1.0 / 6, .25, 1.0 / 3, .5, 2.0 / 3, 1, 2, 4, 8, 16, 32 };
 
 /* ---------- voices ---------- */
-struct OscState { double ph[Synth::kMaxUnison] = {}, phm[Synth::kMaxUnison] = {}; };
+struct OscState { double ph[Synth::kMaxUnison] = {}, phm[Synth::kMaxUnison] = {}; bool fresh = true; float part[Synth::kMaxUnison][64] = {}; };   // part: Spectrum's partials
+struct SampleData { std::string name; double rate = 48000; std::vector<float> L, R; };
+static float sinTab[4097];
+static inline float sinLook(float ph) { const float x = ph * 4096; const int i = (int) x; return sinTab[i] + (sinTab[i + 1] - sinTab[i]) * (x - (float) i); }
 struct LayerVoice { OscState o[3]; double subPh = 0; Env aenv, fenv; Svf hp[2], lp1[2], lp2[2]; };
 struct Voice {
     bool active = false, gate = false, held = false; int key = 60; float vel = 1; uint64_t age = 0;
@@ -361,7 +419,8 @@ struct Voice {
 };
 
 /* per-layer parameter indices, found once */
-struct OscIdx { int on, mode, shape, pw, table, wtsrc, pos, ratio, fm, oct, semi, fine, level, pan, voices, detune, spread, blend, phase; };
+struct OscIdx { int on, mode, shape, pw, table, wtsrc, pos, ratio, fm, oct, semi, fine, level, pan, voices, detune, spread, blend, phase,
+    warp, warpAmt, parts, tilt, odd, stretch, form, fAmt, sStart, sLoop, sLs, sLe, sRoot; };
 struct LayerIdx { int level, pan, vel, sub, subOct, noise, hpCut, hpRes, lpType, lpCut, lpRes, lpDrive, lpEnv, lpKey, fa, fd, fs, fr, aa, ad, as, ar; OscIdx o[3]; };
 
 struct Synth::Impl {
@@ -378,8 +437,10 @@ struct Synth::Impl {
     /* imported wavetables: the audio thread reads the pointer; replaced ones are freed a few seconds later */
     std::atomic<const Wavetable*> custom[2][3] = {};
     std::unique_ptr<Wavetable> customOwn[2][3];
-    std::vector<std::pair<std::unique_ptr<Wavetable>, std::chrono::steady_clock::time_point>> retired;
-    void retire(std::unique_ptr<Wavetable> w) {
+    std::atomic<const SampleData*> smp[2][3] = {};   // Sample mode's sounds, the same way
+    std::shared_ptr<SampleData> smpOwn[2][3];
+    std::vector<std::pair<std::shared_ptr<void>, std::chrono::steady_clock::time_point>> retired;
+    void retire(std::shared_ptr<void> w) {
         const auto now = std::chrono::steady_clock::now();
         retired.erase(std::remove_if(retired.begin(), retired.end(), [&](auto& r) { return now - r.second > std::chrono::seconds(3); }), retired.end());
         if (w) retired.emplace_back(std::move(w), now);
@@ -388,7 +449,7 @@ struct Synth::Impl {
 
     Impl() : vals(params().size()) {
         const auto& d = params(); p.resize(d.size()); sm.resize(d.size()); isOpt.resize(d.size());
-        for (size_t i = 0; i < d.size(); ++i) { vals[i].store(d[i].def); p[i] = sm[i] = d[i].def; isOpt[i] = !d[i].opts.empty() || d[i].id.find("voices") != std::string::npos || d[i].id.find(".oct") != std::string::npos; }
+        for (size_t i = 0; i < d.size(); ++i) { vals[i].store(d[i].def); p[i] = sm[i] = d[i].def; isOpt[i] = !d[i].opts.empty() || d[i].id.find("voices") != std::string::npos || d[i].id.find(".oct") != std::string::npos || d[i].id.find(".parts") != std::string::npos || d[i].id.find(".root") != std::string::npos; }
         auto I = [](const std::string& s) { const int i = paramIndex(s); if (i < 0) std::fprintf(stderr, "HyperSynth: no parameter %s\n", s.c_str()); return i; };
         iMaster = I("master"); iPlay = I("play"); iXfade = I("xfade"); iVoices = I("voices"); iMode = I("mode"); iGlide = I("glide"); iBend = I("bend"); iVib = I("vib"); iVibRate = I("vibRate");
         for (int L = 0; L < 2; ++L) {
@@ -399,15 +460,18 @@ struct Synth::Impl {
             for (int k = 0; k < 3; ++k) { const std::string o = l + "o" + std::to_string(k + 1) + "."; OscIdx& q = x.o[k];
                 q.on = I(o + "on"); q.mode = I(o + "mode"); q.shape = I(o + "shape"); q.pw = I(o + "pw"); q.table = I(o + "table"); q.wtsrc = I(o + "wtsrc"); q.pos = I(o + "pos"); q.ratio = I(o + "ratio"); q.fm = I(o + "fm");
                 q.oct = I(o + "oct"); q.semi = I(o + "semi"); q.fine = I(o + "fine"); q.level = I(o + "level"); q.pan = I(o + "pan"); q.voices = I(o + "voices"); q.detune = I(o + "detune");
-                q.spread = I(o + "spread"); q.blend = I(o + "blend"); q.phase = I(o + "phase"); }
+                q.spread = I(o + "spread"); q.blend = I(o + "blend"); q.phase = I(o + "phase");
+                q.warp = I(o + "warp"); q.warpAmt = I(o + "warpAmt"); q.parts = I(o + "sp.parts"); q.tilt = I(o + "sp.tilt"); q.odd = I(o + "sp.odd"); q.stretch = I(o + "sp.stretch");
+                q.form = I(o + "sp.form"); q.fAmt = I(o + "sp.fAmt"); q.sStart = I(o + "smp.start"); q.sLoop = I(o + "smp.loop"); q.sLs = I(o + "smp.ls"); q.sLe = I(o + "smp.le"); q.sRoot = I(o + "smp.root"); }
         }
         for (int m = 0; m < kMacros; ++m) { iMacro[m] = I("macro" + std::to_string(m + 1)); macroNames[m] = "Macro " + std::to_string(m + 1); }
         for (int l = 0; l < kLfos; ++l) { int k = 0; for (const char* s : { "rate", "sync", "mode", "shape", "phase", "fade" }) iLfo[l][k++] = I("lfo" + std::to_string(l + 1) + "." + s);
             lfoPts[l] = { 0, 0, 0, .5f, 1, 0, 1, 0, 0 }; drawnTable(lfoPts[l], lfoTab[l][0]); drawnTable(lfoPts[l], lfoTab[l][1]); lfoCur[l] = 0; }
         for (int e = 0; e < 2; ++e) { int k = 0; for (const char* s : { "a", "d", "s", "r", "ac", "dc", "rc" }) iEnv[e][k++] = I("env" + std::to_string(e + 1) + "." + s); }
         for (auto& s : shown) s = 0;
-        cur = p.data();
-        tables();   // build the wavetables now, not on the first note
+        cur = p.data(); scratchV.assign(d.size(), 0.f); scratch = scratchV.data();
+        for (int i = 0; i <= 4096; ++i) sinTab[i] = (float) std::sin(2 * kPi * i / 4096.0);
+        tables(); analogTables();   // build the wavetables now, not on the first note
     }
     /* one LFO's value 0..1 at phase x */
     float lfoShapeAt(int l, int shape, double x, const float* rnd2) const {
@@ -465,7 +529,7 @@ struct Synth::Impl {
     mutable std::mutex msgLock;
     double bpm = 120, lfoFree[kLfos] = {}; float lfoFreeRnd[kLfos][2] = {}; float aftertouch = 0;
     std::atomic<float> shown[kSources];
-    float scratch[512]; const float* cur = nullptr;   // the values the voice being played uses (p, or p + its modulation)
+    std::vector<float> scratchV; float* scratch = nullptr; const float* cur = nullptr;   // the values the voice being played uses (p, or p + its modulation)
     int iMacro[kMacros], iLfo[kLfos][6], iEnv[2][7];
     float P(int i) const { return cur[(size_t) i]; }
     float V(int i) const { return vals[(size_t) i].load(std::memory_order_relaxed); }   // the live setting (notes can arrive before the next block)
@@ -473,7 +537,7 @@ struct Synth::Impl {
     void startLayer(Voice& vo, int L, bool retrig) {
         LayerVoice& lv = vo.L[L];
         if (retrig) for (int k = 0; k < 3; ++k) { const bool reset = V(li[L].o[k].phase) > .5f;
-            for (int u = 0; u < kMaxUnison; ++u) { lv.o[k].ph[u] = reset ? 0 : rand01(); lv.o[k].phm[u] = 0; } }
+            for (int u = 0; u < kMaxUnison; ++u) { lv.o[k].ph[u] = reset ? 0 : rand01(); lv.o[k].phm[u] = 0; } lv.o[k].fresh = true; }
         if (retrig) { lv.aenv.on(); lv.fenv.on(); }
     }
     static float level(const Voice& vo) { return std::max(vo.L[0].aenv.v, vo.L[1].aenv.v); }
@@ -570,12 +634,11 @@ struct Synth::Impl {
     bool layer(Voice& vo, int L, float gain, double pitch, float* outL, float* outR, int n, float f0 = 1, float f1 = 1) {
         const LayerIdx& x = li[L]; LayerVoice& lv = vo.L[L];
         if (!lv.aenv.stage) return false;
-        float bufL[32], bufR[32]; std::fill(bufL, bufL + n, 0.f); std::fill(bufR, bufR + n, 0.f);
+        float bufL[32], bufR[32], o1[32]; std::fill(bufL, bufL + n, 0.f); std::fill(bufR, bufR + n, 0.f); std::fill(o1, o1 + n, 0.f);
         const auto& tabs = tables();
         for (int k = 0; k < 3; ++k) {
             const OscIdx& q = x.o[k]; if (P(q.on) < .5f) continue;
             const int mode = (int) std::lround(P(q.mode)); const float lvl = P(q.level); if (lvl <= 0) continue;
-            if (mode == MSpectrum || mode == MSample) continue;   // coming with step 3 of the roadmap
             const double st = pitch + std::lround(P(q.oct)) * 12 + P(q.semi) + P(q.fine) / 100;
             const int U = mode == MNoise ? 1 : std::max(1, std::min(kMaxUnison, (int) std::lround(P(q.voices))));
             const float det = P(q.detune), spr = P(q.spread), bl = P(q.blend), opan = P(q.pan);
@@ -589,8 +652,10 @@ struct Synth::Impl {
             }
             const float norm = lvl / std::sqrt(wsum); for (int u = 0; u < U; ++u) { gl[u] *= w[u] * norm; gr[u] *= w[u] * norm; }
             OscState& os = lv.o[k];
-            if (mode == MNoise) { for (int i = 0; i < n; ++i) { const float s = rand01() * 2 - 1; bufL[i] += s * gl[0]; bufR[i] += s * gr[0]; } continue; }
-            if (mode == MAnalog) {
+            const int warp = (int) std::lround(P(q.warp)); const float wa = P(q.warpAmt);
+            float tL[32], tR[32]; std::fill(tL, tL + n, 0.f); std::fill(tR, tR + n, 0.f);   // this oscillator alone
+            if (mode == MNoise) { for (int i = 0; i < n; ++i) { const float s = rand01() * 2 - 1; tL[i] = s * gl[0]; tR[i] = s * gr[0]; } }
+            else if (mode == MAnalog && (warp == WOff || warp == WRm)) {
                 const int sh = (int) std::lround(P(q.shape)); const double pw = P(q.pw);
                 for (int u = 0; u < U; ++u) { double ph = os.ph[u]; const double d = dt[u]; const float a = gl[u], b = gr[u];
                     for (int i = 0; i < n; ++i) {
@@ -600,25 +665,74 @@ struct Synth::Impl {
                         else if (sh == 2) s = 1 - 4 * std::fabs(ph - .5);
                         else s = std::sin(2 * kPi * ph);
                         ph += d; if (ph >= 1) ph -= 1;
-                        bufL[i] += (float) s * a; bufR[i] += (float) s * b;
+                        tL[i] += (float) s * a; tR[i] += (float) s * b;
                     }
                     os.ph[u] = ph; }
-            } else if (mode == MWave) {
-                const Wavetable* own = P(q.wtsrc) > .5f ? custom[L][k].load(std::memory_order_acquire) : nullptr;
-                const Wavetable& tb = own ? *own : tabs[(size_t) std::min((int) tabs.size() - 1, std::max(0, (int) std::lround(P(q.table))))];
-                const double fp = P(q.pos) * (tb.frames - 1); const int f0 = std::min(tb.frames - 2, (int) fp); const float ff = (float) (fp - f0);
+            } else if (mode == MWave || mode == MAnalog) {   // a table, read straight or warped (a warped Analog reads its shape as a table)
+                const Wavetable* tbp;
+                if (mode == MAnalog) tbp = &analogTables()[(size_t) std::min(3, std::max(0, (int) std::lround(P(q.shape))))];
+                else { const Wavetable* own = P(q.wtsrc) > .5f ? custom[L][k].load(std::memory_order_acquire) : nullptr;
+                       tbp = own ? own : &tabs[(size_t) std::min((int) tabs.size() - 1, std::max(0, (int) std::lround(P(q.table))))]; }
+                const Wavetable& tb = *tbp;
+                const double fp = mode == MAnalog ? 0 : P(q.pos) * (tb.frames - 1); const int f0 = std::min(tb.frames - 2, (int) fp); const float ff = (float) (fp - f0);
                 double maxDt = 0; for (int u = 0; u < U; ++u) maxDt = std::max(maxDt, dt[u]);
-                const int m = mipFor(maxDt * 1.06);   // a little headroom for vibrato and bends
+                const int m = mipFor(maxDt * 1.06 * warpHeadroom(warp, wa));   // a little headroom for vibrato and bends (more for warps, which add harmonics)
                 const float* A = tb.data.data() + (size_t) f0 * kFrame + mipOff(m); const float* B = A + kFrame; const int len = mipLen(m);
+                const bool warped = warp != WOff && warp != WRm;
                 for (int u = 0; u < U; ++u) { double ph = os.ph[u]; const double d = dt[u]; const float a = gl[u], b = gr[u];
-                    for (int i = 0; i < n; ++i) { const float s = tabRead(A, ph, len) * (1 - ff) + tabRead(B, ph, len) * ff; ph += d; if (ph >= 1) ph -= 1; bufL[i] += s * a; bufR[i] += s * b; }
+                    for (int i = 0; i < n; ++i) { const double rp = warped ? warpPhase(warp, ph, wa, o1[i]) : ph;
+                        const float s = tabRead(A, rp, len) * (1 - ff) + tabRead(B, rp, len) * ff; ph += d; if (ph >= 1) ph -= 1; tL[i] += s * a; tR[i] += s * b; }
                     os.ph[u] = ph; }
             } else if (mode == MFm) {
-                const double ratio = P(q.ratio), idx = P(q.fm) * 8;
+                const double ratio = P(q.ratio), idx = P(q.fm) * 8, xfm = warp == WFm ? wa * 1.5 * 2 * kPi : 0;
                 for (int u = 0; u < U; ++u) { double ph = os.ph[u], pm = os.phm[u]; const double d = dt[u], dm = dt[u] * ratio; const float a = gl[u], b = gr[u];
-                    for (int i = 0; i < n; ++i) { const float s = (float) std::sin(2 * kPi * ph + idx * std::sin(2 * kPi * pm)); ph += d; if (ph >= 1) ph -= 1; pm += dm; pm -= std::floor(pm); bufL[i] += s * a; bufR[i] += s * b; }
+                    for (int i = 0; i < n; ++i) { const float s = (float) std::sin(2 * kPi * ph + idx * std::sin(2 * kPi * pm) + xfm * o1[i]); ph += d; if (ph >= 1) ph -= 1; pm += dm; pm -= std::floor(pm); tL[i] += s * a; tR[i] += s * b; }
                     os.ph[u] = ph; os.phm[u] = pm; }
+            } else if (mode == MSpectrum) {   // additive: partials shaped by tilt, odd / even, stretch (inharmonic) and a formant
+                const int parts = std::max(1, std::min(64, (int) std::lround(P(q.parts)))), Pm = std::max(1, std::min(parts, 512 / U));
+                const float tilt = P(q.tilt), odd = P(q.odd), str = P(q.stretch), fAmt = P(q.fAmt); const double fc = P(q.form);
+                const float ex = tilt >= 0 ? 1 - tilt : 1 - 2 * tilt; const double f0n = 440.0 * std::pow(2.0, (st - 69) / 12.0) / sr;
+                float amp[64], mul[64]; double e2 = 0;
+                for (int h = 1; h <= Pm; ++h) {
+                    const float mu = std::pow((float) h, 1 + .15f * str); float a = std::pow((float) h, -ex);
+                    if (h % 2 == 0) a *= odd < 0 ? 1 + odd : 1; else if (h > 1) a *= odd > 0 ? 1 - odd : 1;
+                    if (fAmt > 0) { const double oc = std::log2(f0n * mu * sr / fc); a *= 1 + fAmt * 6 * (float) std::exp(-oc * oc / (2 * .09)); }
+                    if (f0n * mu * 1.06 >= .45) a = 0;   // above half the sample rate: left out (no aliasing)
+                    amp[h - 1] = a; mul[h - 1] = mu; e2 += (double) a * a;
+                }
+                const float g = e2 > 0 ? (float) (.5 / std::sqrt(e2 / 2)) : 0;
+                if (os.fresh) for (int u = 0; u < U; ++u) for (int h = 0; h < 64; ++h) { const double x = os.ph[u] * (h + 1); os.part[u][h] = (float) (x - std::floor(x)); }
+                for (int u = 0; u < U; ++u) { float* pp = os.part[u]; const float d = (float) dt[u], a = gl[u] * g, b = gr[u] * g;
+                    for (int i = 0; i < n; ++i) { float sum = 0;
+                        for (int h = 0; h < Pm; ++h) { if (amp[h] == 0) continue; float x = pp[h] + d * mul[h]; if (x >= 1) x -= 1; pp[h] = x; sum += amp[h] * sinLook(x); }
+                        tL[i] += sum * a; tR[i] += sum * b; } }
+            } else if (mode == MSample) {   // one sound, played at the note's pitch
+                const SampleData* sd = smp[L][k].load(std::memory_order_acquire);
+                if (sd && sd->L.size() > 4) {
+                    const size_t N = sd->L.size(); const bool st2 = !sd->R.empty();
+                    const double base = sd->rate / (440.0 * std::pow(2.0, (P(q.sRoot) - 69) / 12.0)); const int loop = (int) std::lround(P(q.sLoop));
+                    double ls = P(q.sLs) * (double) (N - 2), le = P(q.sLe) * (double) (N - 2); if (le < ls + 16) le = std::min((double) N - 2, ls + 16);
+                    if (os.fresh) for (int u = 0; u < U; ++u) { os.ph[u] = P(q.sStart) * (double) (N - 2); os.phm[u] = 1; }
+                    auto rd = [&](const std::vector<float>& v, double pos) {   // cubic (Hermite) between samples
+                        const size_t i = (size_t) pos; const float f = (float) (pos - (double) i);
+                        const float y0 = v[i > 0 ? i - 1 : 0], y1 = v[i], y2 = v[std::min(N - 1, i + 1)], y3 = v[std::min(N - 1, i + 2)];
+                        const float c1 = .5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2 * y2 - .5f * y3, c3 = .5f * (y3 - y0) + 1.5f * (y1 - y2);
+                        return ((c3 * f + c2) * f + c1) * f + y1; };
+                    for (int u = 0; u < U; ++u) { double pos = os.ph[u], dir = os.phm[u] == 0 ? 1 : os.phm[u]; const double inc = dt[u] * base; const float a = gl[u], b = gr[u];
+                        for (int i = 0; i < n; ++i) {
+                            if (pos < 0 || pos >= (double) N - 1) break;   // played to the end (no loop)
+                            const float sl = rd(sd->L, pos), sr2 = st2 ? rd(sd->R, pos) : sl; tL[i] += sl * a; tR[i] += sr2 * b;
+                            pos += inc * dir;
+                            if (loop == 1 && pos >= le) pos = ls + std::fmod(pos - ls, le - ls);
+                            else if (loop == 2) { if (pos >= le) { pos = le - (pos - le); dir = -1; } else if (dir < 0 && pos <= ls) { pos = ls + (ls - pos); dir = 1; } }
+                        }
+                        os.ph[u] = pos; os.phm[u] = dir; }
+                }
             }
+            os.fresh = false;
+            if (k == 0) { const float inv = lvl > 1e-4f ? .5f / lvl : 0; for (int i = 0; i < n; ++i) o1[i] = (tL[i] + tR[i]) * inv; }   // OSC 1, for the others' FM / RM
+            if (warp == WRm && k > 0) for (int i = 0; i < n; ++i) { const float g = 1 - wa + wa * o1[i]; tL[i] *= g; tR[i] *= g; }
+            for (int i = 0; i < n; ++i) { bufL[i] += tL[i]; bufR[i] += tR[i]; }
         }
         /* sub and noise */
         const float sub = P(x.sub), nz = P(x.noise);
@@ -687,17 +801,38 @@ bool Synth::setCustomTable(int layer, int osc, const std::vector<float>& frames,
     if (layer < 0 || layer > 1 || osc < 0 || osc > 2) return false;
     auto w = makeCustom(frames, name); if (!w) return false;
     d_->custom[layer][osc].store(w.get(), std::memory_order_release);
-    d_->retire(std::move(d_->customOwn[layer][osc])); d_->customOwn[layer][osc] = std::move(w);
+    d_->retire(std::shared_ptr<Wavetable>(std::move(d_->customOwn[layer][osc]))); d_->customOwn[layer][osc] = std::move(w);
     return true;
 }
 void Synth::clearCustomTable(int layer, int osc) {
     if (layer < 0 || layer > 1 || osc < 0 || osc > 2 || !d_->customOwn[layer][osc]) return;
-    d_->custom[layer][osc].store(nullptr, std::memory_order_release); d_->retire(std::move(d_->customOwn[layer][osc]));
+    d_->custom[layer][osc].store(nullptr, std::memory_order_release); d_->retire(std::shared_ptr<Wavetable>(std::move(d_->customOwn[layer][osc])));
 }
 bool Synth::customTable(int layer, int osc, std::vector<float>* frames, std::string* name) const {
     if (layer < 0 || layer > 1 || osc < 0 || osc > 2 || !d_->customOwn[layer][osc]) return false;
     if (frames) *frames = d_->customOwn[layer][osc]->src;
     if (name) *name = d_->customOwn[layer][osc]->name;
+    return true;
+}
+
+/* ---------- Sample mode's sounds ---------- */
+bool Synth::setSample(int layer, int osc, const std::vector<float>& left, const std::vector<float>& right, double rate, const std::string& name) {
+    if (layer < 0 || layer > 1 || osc < 0 || osc > 2 || left.size() < 16 || rate < 1000) return false;
+    const size_t n = std::min(left.size(), (size_t) (rate * 30));   // up to 30 s
+    auto sd = std::make_shared<SampleData>(); sd->name = name; sd->rate = rate; sd->L.assign(left.begin(), left.begin() + (ptrdiff_t) n);
+    if (right.size() >= n) sd->R.assign(right.begin(), right.begin() + (ptrdiff_t) n);
+    d_->smp[layer][osc].store(sd.get(), std::memory_order_release);
+    d_->retire(d_->smpOwn[layer][osc]); d_->smpOwn[layer][osc] = sd;
+    return true;
+}
+void Synth::clearSample(int layer, int osc) {
+    if (layer < 0 || layer > 1 || osc < 0 || osc > 2 || !d_->smpOwn[layer][osc]) return;
+    d_->smp[layer][osc].store(nullptr, std::memory_order_release); d_->retire(d_->smpOwn[layer][osc]); d_->smpOwn[layer][osc].reset();
+}
+bool Synth::sample(int layer, int osc, std::vector<float>* l, std::vector<float>* r, double* rate, std::string* name) const {
+    if (layer < 0 || layer > 1 || osc < 0 || osc > 2 || !d_->smpOwn[layer][osc]) return false;
+    const auto& sd = *d_->smpOwn[layer][osc];
+    if (l) *l = sd.L; if (r) *r = sd.R; if (rate) *rate = sd.rate; if (name) *name = sd.name;
     return true;
 }
 
@@ -763,6 +898,18 @@ std::string Synth::presetJson(const std::string& name, const std::string& catego
         tabs += (tabs.empty() ? "" : ",") + jsonStr(key) + ":{\"name\":" + jsonStr(nm) + ",\"frames\":" + std::to_string(fr.size() / kTab) + ",\"scale\":" + sc + ",\"pcm16\":\"" + b64(raw) + "\"}";
     }
     if (!tabs.empty()) s += ",\"tables\":{" + tabs + "}";
+    /* Sample mode's sounds: 16-bit, base64, the channels one after the other */
+    std::string sms;
+    for (int L = 0; L < 2; ++L) for (int k = 0; k < 3; ++k) {
+        std::vector<float> l, r; double rate = 0; std::string nm; if (!sample(L, k, &l, &r, &rate, &nm)) continue;
+        float pk = 0; for (float v : l) pk = std::max(pk, std::fabs(v)); for (float v : r) pk = std::max(pk, std::fabs(v)); const float g = pk > 1e-9f ? 32767.f / pk : 1;
+        std::vector<uint8_t> raw((l.size() + r.size()) * 2); size_t o = 0;
+        for (const auto* ch : { &l, &r }) for (float v : *ch) { const int16_t q = (int16_t) std::lround(clampf(v * g, -32767, 32767)); raw[o++] = (uint8_t) (q & 255); raw[o++] = (uint8_t) ((uint16_t) q >> 8); }
+        char key[16]; std::snprintf(key, sizeof key, "l%d.o%d", L + 1, k + 1); char nb[96];
+        std::snprintf(nb, sizeof nb, ",\"rate\":%.10g,\"frames\":%zu,\"ch\":%d,\"scale\":%.9g", rate, l.size(), r.empty() ? 1 : 2, (double) (pk > 1e-9f ? pk : 1.f));
+        sms += (sms.empty() ? "" : ",") + jsonStr(key) + ":{\"name\":" + jsonStr(nm) + nb + ",\"pcm16\":\"" + b64(raw) + "\"}";
+    }
+    if (!sms.empty()) s += ",\"samples\":{" + sms + "}";
     /* modulation: routes, drawn LFO shapes, macro names */
     char b[48]; std::string m;
     for (const auto& r : mods()) { std::snprintf(b, sizeof b, "%.5g", (double) r.amt); m += (m.empty() ? "" : ",") + std::string("{\"src\":") + jsonStr(r.src) + ",\"dst\":" + jsonStr(r.dst) + ",\"amt\":" + b + "}"; }
@@ -790,6 +937,18 @@ bool Synth::loadPreset(const std::string& json, std::string* error, std::string*
         for (size_t i = 0; i < fr.size(); ++i) fr[i] = (float) (int16_t) ((uint16_t) raw[i * 2] | (uint16_t) raw[i * 2 + 1] << 8) / 32767.f * scale;
         fr.resize(fr.size() / kTab * kTab);
         if (fr.empty() || !setCustomTable(L, k, fr, t["name"].str())) clearCustomTable(L, k);
+    }
+    const Json& sj = j["samples"];   // Sample mode's sounds (a preset without them has none)
+    for (int L = 0; L < 2; ++L) for (int k = 0; k < 3; ++k) {
+        char key[16]; std::snprintf(key, sizeof key, "l%d.o%d", L + 1, k + 1); const Json& t = sj[key];
+        if (t.type != Json::Obj) { clearSample(L, k); continue; }
+        const auto raw = unb64(t["pcm16"].str()); const size_t fr = (size_t) t["frames"].num(0); const int ch = t["ch"].num(1) > 1.5 ? 2 : 1;
+        const float scale = (float) t["scale"].num(1);
+        if (fr == 0 || raw.size() < fr * (size_t) ch * 2) { clearSample(L, k); continue; }
+        std::vector<float> l(fr), r(ch == 2 ? fr : 0);
+        auto at = [&](size_t i) { return (float) (int16_t) ((uint16_t) raw[i * 2] | (uint16_t) raw[i * 2 + 1] << 8) / 32767.f * scale; };
+        for (size_t i = 0; i < fr; ++i) l[i] = at(i); for (size_t i = 0; i < r.size(); ++i) r[i] = at(fr + i);
+        if (!setSample(L, k, l, r, t["rate"].num(48000), t["name"].str())) clearSample(L, k);
     }
     /* modulation (a preset from before it has none: nothing moves, as it was) */
     std::vector<ModRoute> routes;

@@ -63,14 +63,18 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
   background:radial-gradient(ellipse at 50% 35%,#0e2230,#061018 70%,#04090d);box-shadow:inset 0 0 18px #000000e6}
 #screen .glass::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(155deg,#ffffff12,#ffffff05 30%,#0000 45%),repeating-linear-gradient(0deg,#ffffff05 0 1px,#0000 1px 3px)}
 .tabs{display:flex;gap:12px;font-size:11px}.tabs a{color:#3f6f86;cursor:pointer}.tabs a.on{color:var(--lcd);text-shadow:0 0 5px #4fc3f7a6}
-#scr{width:100%;height:190px}
+#scr{width:100%;flex:1;min-height:0}
+#smpbar{position:absolute;right:14px;top:34px;display:none;gap:6px;align-items:center;z-index:2;font-size:11px}
+#smpbar.show{display:flex}
+#smpbar button{font:inherit;font-size:11px;letter-spacing:1px;color:var(--lcd);background:#08141a;border:1px solid #4fc3f7;border-radius:3px;padding:3px 7px;cursor:pointer}
+#smpName{color:var(--lcd);max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #wtbar{position:absolute;right:14px;top:34px;display:none;gap:6px;align-items:center;z-index:2;font-size:11px}
 #wtbar.show{display:flex}
 #wtbar button{font:inherit;font-size:11px;letter-spacing:1px;color:#3f6f86;background:#08141a;border:1px solid #1f4b60;border-radius:3px;padding:3px 7px;cursor:pointer}
 #wtbar button.on{color:var(--lcd);border-color:#4fc3f7;text-shadow:0 0 5px #4fc3f7a6}
 #wtbar button:disabled{opacity:.4;cursor:default}
 #wtName{color:var(--lcd);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fields{display:flex;justify-content:space-between;font-size:10.5px;color:var(--lcdq)}
+.fields{display:grid;grid-template-columns:repeat(7,1fr);row-gap:2px;font-size:10.5px;color:var(--lcdq)}
 .fld{display:flex;flex-direction:column;align-items:center;cursor:ns-resize}.fld b{color:var(--lcd);font-weight:500;font-size:12px}
 /* keyboard */
 .keys{flex:1;display:flex;gap:10px;padding-top:10px}
@@ -176,6 +180,7 @@ svg.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;point
 #matrix{position:absolute;left:12px;right:12px;top:30px;bottom:12px;overflow-y:auto;display:none;z-index:2;padding-right:4px;scrollbar-width:thin;scrollbar-color:#1f4b60 #061018}
 #matrix.show{display:block}
 #matrix .mrow .amt{width:64px}#matrix .mrow b{width:62px}#matrix .mrow em{width:36px}
+#init.arm{color:#ffb38a;box-shadow:0 0 0 2px #e2552f,0 3px 4px #000000b3}
 .soon{flex:1;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;letter-spacing:3px;color:#7f7868;box-shadow:inset 0 2px 6px #000000b3,0 1px 0 #ffffff14;text-align:center;line-height:1.6}
 </style>
 </head>
@@ -196,6 +201,7 @@ svg.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;point
     <button class="btn tab" data-tab="fx" role="tab" style="width:62px;height:38px;font-size:14px;letter-spacing:2px;display:flex;align-items:center;justify-content:center;gap:6px"><span class="led"></span>FX</button>
   </div>
   <div style="flex:1"></div>
+  <button class="btn" id="init" title="Start from scratch: the Init sound (no samples, modulation or effects)" style="width:58px;height:44px;font-size:12px;letter-spacing:2px">INIT</button>
   <button class="btn" id="prev" aria-label="Previous preset" style="width:40px;height:44px">&#9664;</button>
   <div class="lcd" id="lcd" title="Presets" style="width:270px;height:48px;box-sizing:border-box;padding:5px 12px;display:flex;flex-direction:column;justify-content:center;cursor:pointer;position:relative">
     <span id="lcdTop" style="font-size:10px;color:var(--lcdq);letter-spacing:1px">BASICS · EDITING LAYER I</span>
@@ -223,6 +229,7 @@ svg.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;point
   </section>
   <section id="screen" aria-label="Screen"><div class="glass">
     <div class="tabs" id="stabs"><a data-s="o0">OSC 1</a><a data-s="o1">OSC 2</a><a data-s="o2">OSC 3</a><a data-s="filter">FILTER</a><a data-s="env">ENV</a><a data-s="mod">LFO/ENV</a><a data-s="matrix">MATRIX</a></div>
+    <div id="smpbar"><span id="smpName"></span><button id="smpImp" title="A sound to play in Sample mode (wav, aif, flac, ogg, mp3; up to 30 s). Its key is found for you.">IMPORT…</button></div>
     <div id="modSel"><button data-ms="lfo1">LFO 1</button><button data-ms="lfo2">LFO 2</button><button data-ms="lfo3">LFO 3</button><button data-ms="lfo4">LFO 4</button><button data-ms="env1">ENV 1</button><button data-ms="env2">ENV 2</button></div>
     <div id="matrix"></div>
     <div id="wtbar"><span id="wtName"></span><button id="wtFac" title="The factory table chosen with the TABLE knob">FACTORY</button><button id="wtCus" title="The table imported into this oscillator">CUSTOM</button><button id="wtImp" title="Import a wavetable (.wav from Serum or Vital) or any sound: its single cycles become the frames">IMPORT…</button></div>
@@ -325,7 +332,7 @@ function call(name,...params){
 function on(ev,fn){const b=B();if(b)b.addEventListener(ev,fn);else(window.__hsEvents=window.__hsEvents||{})[ev]=fn;}
 
 /* ---------- state ---------- */
-const H={view:'synth',tabs:[],custom:{},defs:[],idx:{},vals:[],layer:'l1',osc:0,screen:'o0',name:'Init',category:'Basics',presets:[],keys:new Set(),uiKeys:new Set(),flashT:0};
+const H={view:'synth',tabs:[],custom:{},samples:{},defs:[],idx:{},vals:[],layer:'l1',osc:0,screen:'o0',name:'Init',category:'Basics',presets:[],keys:new Set(),uiKeys:new Set(),flashT:0};
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const pid=p=>p.replace('?',H.layer);
 const def=id=>H.defs[H.idx[id]];
@@ -336,6 +343,7 @@ function toNorm(d,v){const x=(v-d.min)/(d.max-d.min);return Math.max(0,Math.min(
 function fromNorm(d,n){n=Math.max(0,Math.min(1,n));let v=d.min+(d.max-d.min)*Math.pow(n,1/skew(d));if(d.opts.length||d.whole)v=Math.round(v);return v;}
 function fmt(d,v){
   if(d.opts.length)return d.opts[Math.round(v)]||'';
+  if(/\.root$/.test(d.id)){const k=Math.round(v);return['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][k%12]+(Math.floor(k/12)-1);}
   if(d.whole)return String(Math.round(v));
   if(d.unit==='Hz')return v>=1000?(v/1000).toFixed(2)+' kHz':v.toFixed(v<100?1:0)+' Hz';
   if(d.unit==='ms')return v>=1000?(v/1000).toFixed(2)+' s':v.toFixed(v<10?1:0)+' ms';
@@ -347,8 +355,8 @@ function fmt(d,v){
 function setVal(id,v,send){const i=H.idx[id];if(i==null)return;H.vals[i]=v;if(send)call('setParam',id,v);paint();}
 
 /* ---------- building the panel ---------- */
-const OSC_A={3:['shape','SHAPE','pw','PW'],0:['table','TABLE','pos','POSITION'],4:['ratio','RATIO','fm','FM AMT'],5:['pan','PAN','spread','SPREAD'],1:['pan','PAN','spread','SPREAD'],2:['pan','PAN','spread','SPREAD']};
-const MODES_READY=[0,3,4,5];   // Spectrum and Sample come in step 3
+const OSC_A={3:['shape','SHAPE','pw','PW'],0:['table','TABLE','pos','POSITION'],4:['ratio','RATIO','fm','FM AMT'],5:['pan','PAN','spread','SPREAD'],1:['sp.tilt','TILT','sp.odd','ODD/EVEN'],2:['smp.start','START','smp.root','ROOT']};
+const MODES_READY=[0,1,2,3,4,5];
 function buildOscs(){
   $('#oscs').innerHTML=[0,1,2].map(k=>`<div class="osc" data-k="${k}">
     <div class="id"><div class="top"><button class="btn pw" data-on="${k}" aria-label="Oscillator ${k+1} on or off"><span class="led"></span></button><b>OSC ${k+1}</b></div>
@@ -391,7 +399,7 @@ function paint(){
   $('#subOct').textContent=def(H.layer+'.subOct').opts[Math.round(val(H.layer+'.subOct'))].toUpperCase();
   $('#layerTitle').textContent=H.layer==='l1'?'LAYER I':'LAYER II';
   $$('#stabs a').forEach(a=>a.classList.toggle('on',a.dataset.s===H.screen));
-  paintFields();paintWtBar();lcdIdle();drawScreen();
+  paintFields();paintWtBar();paintSmpBar();lcdIdle();drawScreen();
   $('#modSel').classList.toggle('show',H.screen==='mod');$$('#modSel button').forEach(b=>b.classList.toggle('on',b.dataset.ms===MOD.sel));
   $('#matrix').classList.toggle('show',H.screen==='matrix');if(H.screen==='matrix')paintMatrix();
   paintRings();
@@ -405,7 +413,9 @@ function lcdShow(id){const d=def(id);if(!d)return;$('#lcdTop').textContent=d.nam
 /* the screen: the selected oscillator's fine settings, or the filters, or the envelopes */
 function paintFields(){
   const el=$('#fields');let f=[];
-  if(H.screen[0]==='o'){const p=`${H.layer}.o${+H.screen[1]+1}.`;f=[['oct','OCT'],['semi','SEMI'],['fine','FINE'],['pan','PAN'],['spread','SPREAD'],['blend','BLEND'],['phase','PHASE']].map(([k,l])=>[p+k,l]);}
+  if(H.screen[0]==='o'){const p=`${H.layer}.o${+H.screen[1]+1}.`,m=Math.round(val(p+'mode'));
+    const extra=m===1?[['sp.parts','PARTS'],['sp.stretch','STRETCH'],['sp.form','FORMANT'],['sp.fAmt','F.AMT']]:m===2?[['smp.loop','LOOP'],['smp.ls','L.START'],['smp.le','L.END']]:[];
+    f=[['oct','OCT'],['semi','SEMI'],['fine','FINE'],['pan','PAN'],['spread','SPREAD'],['blend','BLEND'],['phase','PHASE'],...extra,['warp','WARP'],['warpAmt','AMOUNT']].map(([k,l])=>[p+k,l]);}
   else if(H.screen==='mod'){const s=MOD.sel;f=s.indexOf('lfo')===0?[[s+'.rate','RATE'],[s+'.sync','SYNC'],[s+'.mode','MODE'],[s+'.shape','SHAPE'],[s+'.phase','PHASE'],[s+'.fade','FADE']]:[[s+'.a','A'],[s+'.d','D'],[s+'.s','S'],[s+'.r','R']];}
   else if(H.screen==='matrix')f=[];
   else if(H.screen==='filter')f=[[H.layer+'.hp.cut','HP'],[H.layer+'.lp.cut','LP'],[H.layer+'.lp.res','RES'],[H.layer+'.lp.env','ENV'],[H.layer+'.lp.key','KEY']];
@@ -422,14 +432,20 @@ const TAB_SPECTRA=[
 function tableFrames(p){const c=H.custom[p.slice(0,5)];if(val(p+'wtsrc')>.5&&c&&c.frames&&c.frames.length)return c.frames;const t=H.tabs[Math.round(val(p+'table'))];return t&&t.frames;}
 function frameAt(fr,pos,x){const fi=Math.max(0,Math.min(1,pos))*(fr.length-1),a=Math.floor(fi),b=Math.min(fr.length-1,a+1),t=fi-a;
   const at=(f,x)=>{const n=f.length,q=x*n,i=Math.floor(q)%n,k=q-Math.floor(q);return f[i]*(1-k)+f[(i+1)%n]*k;};return at(fr[a],x)*(1-t)+at(fr[b],x)*t;}
-async function refreshCustom(){for(let L=0;L<2;L++)for(let k=0;k<3;k++){const r=await call('tablePreview',L,k);H.custom[`l${L+1}.o${k+1}`]=r&&r.frames?r:null;}paint();}
+async function refreshCustom(){for(let L=0;L<2;L++)for(let k=0;k<3;k++){const key=`l${L+1}.o${k+1}`,r=await call('tablePreview',L,k);H.custom[key]=r&&r.frames?r:null;
+  const sp=await call('samplePreview',L,k);H.samples[key]=sp&&sp.peaks?sp:null;}paint();}
 function paintWtBar(){
   const bar=$('#wtbar');if(!bar)return;const osc=H.screen[0]==='o',p=osc?`${H.layer}.o${+H.screen[1]+1}.`:'';const wt=osc&&Math.round(val(p+'mode'))===0;bar.classList.toggle('show',wt);if(!wt)return;
   const c=H.custom[p.slice(0,5)],cus=val(p+'wtsrc')>.5&&!!c;$('#wtFac').classList.toggle('on',!cus);$('#wtCus').classList.toggle('on',cus);$('#wtCus').disabled=!c;
   $('#wtName').textContent=cus?c.name+' · '+c.count+' frames':((H.tabs[Math.round(val(p+'table'))]||{}).name||'');
 }
+function paintSmpBar(){const osc=H.screen[0]==='o',p=osc?`${H.layer}.o${+H.screen[1]+1}.`:'',on=osc&&Math.round(val(p+'mode'))===2;$('#smpbar').classList.toggle('show',on);if(!on)return;
+  const sp=H.samples[p.slice(0,5)];$('#smpName').textContent=sp?sp.name:'';}
+function warpPh(w,ph,a){   // = the engine's warpPhase (FM / RM from OSC 1 are not drawn)
+  switch(w){case 1:{const x=ph*(1+7*a);return x-Math.floor(x);}case 2:return Math.pow(ph,1+3*a);case 3:{const k=1+4*a;return ph<.5?.5*Math.pow(2*ph,k):1-.5*Math.pow(2*(1-ph),k);}
+    case 4:{const m=ph<.5?ph:1-ph;return(1-a)*ph+a*2*m;}case 5:{const d=.5-.49*a;return ph<d?ph/d*.5:.5+(ph-d)/(1-d)*.5;}case 6:{const q=64-60*a;return Math.floor(ph*q)/q;}default:return ph;}}
 function wave(p,x){   // one cycle of an oscillator, x 0..1 (for the screen)
-  const m=Math.round(val(p+'mode'));
+  const m=Math.round(val(p+'mode')),w=Math.round(val(p+'warp'));if((m===0||m===3)&&w>0&&w<7)x=warpPh(w,x,val(p+'warpAmt'));
   if(m===3){const s=Math.round(val(p+'shape')),pw=val(p+'pw');return s===0?2*x-1:s===1?(x<pw?1:-1):s===2?1-4*Math.abs(x-.5):Math.sin(2*Math.PI*x);}
   if(m===4)return Math.sin(2*Math.PI*x+val(p+'fm')*8*Math.sin(2*Math.PI*val(p+'ratio')*x));
   if(m===5)return Math.sin(x*997.3)*Math.cos(x*3111.7);
@@ -437,13 +453,26 @@ function wave(p,x){   // one cycle of an oscillator, x 0..1 (for the screen)
     const f=TAB_SPECTRA[Math.round(val(p+'table'))]||TAB_SPECTRA[0];let y=0;for(let h=1;h<=40;h++)y+=f(pos,h)*Math.sin(2*Math.PI*h*x);return y;}
   return 0;
 }
+function partials(p){   // Spectrum mode's partials: [frequency multiple, level], as the engine makes them
+  const n=Math.round(val(p+'sp.parts')),t=val(p+'sp.tilt'),o=val(p+'sp.odd'),st=val(p+'sp.stretch'),fa=val(p+'sp.fAmt'),fc=val(p+'sp.form'),ex=t>=0?1-t:1-2*t,f0=261.6*Math.pow(2,val(p+'oct')+val(p+'semi')/12),out=[];
+  for(let h=1;h<=n;h++){const mu=Math.pow(h,1+.15*st);let a=Math.pow(h,-ex);if(h%2===0)a*=o<0?1+o:1;else if(h>1)a*=o>0?1-o:1;
+    if(fa>0){const oc=Math.log2(f0*mu/fc);a*=1+fa*6*Math.exp(-oc*oc/(2*.09));}out.push([mu,a]);}return out;}
 function drawScreen(){
   const c=$('#scr'),g=c.getContext('2d'),W=c.width,Hh=c.height;g.clearRect(0,0,W,Hh);
   g.strokeStyle='#12303f';g.lineWidth=2;g.beginPath();g.moveTo(0,Hh/2);g.lineTo(W,Hh/2);for(let i=1;i<4;i++){g.moveTo(W*i/4,10);g.lineTo(W*i/4,Hh-10);}g.stroke();
   const line=(pts,col,w,glow)=>{g.strokeStyle=col;g.lineWidth=w;g.shadowColor=glow?'#4fc3f7':'transparent';g.shadowBlur=glow?8:0;g.beginPath();pts.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.stroke();g.shadowBlur=0;};
   if(H.screen[0]==='o'){
     const k=+H.screen[1],p=`${H.layer}.o${k+1}.`,m=Math.round(val(p+'mode'));
-    if(m===1||m===2){g.fillStyle='#4f93b4';g.font='26px JB, monospace';g.textAlign='center';g.fillText((m===1?'SPECTRUM':'SAMPLE')+' MODE',W/2,Hh/2-10);g.font='20px JB, monospace';g.fillText('arrives in step 3',W/2,Hh/2+24);return;}
+    if(m===1){const ps=partials(p),mxm=Math.max(...ps.map(q=>q[0]),1),mxa=Math.max(...ps.map(q=>q[1]),1e-9);g.shadowColor='#4fc3f7';g.shadowBlur=6;
+      ps.forEach(([mu,a])=>{const x=20+(mu-1)/Math.max(1,mxm-1)*(W-60)+10,hgt=Math.pow(a/mxa,.5)*(Hh-70);g.fillStyle='#8ee0ff';g.fillRect(x-2,Hh-24-hgt,Math.max(2,(W-60)/ps.length*.45),hgt);});g.shadowBlur=0;
+      g.fillStyle='#4f93b4';g.font='18px JB, monospace';g.textAlign='right';g.fillText(ps.length+' PARTIALS'+(Math.abs(val(p+'sp.stretch'))>.01?' · STRETCHED':''),W-12,22);return;}
+    if(m===2){const sp=H.samples[p.slice(0,5)];g.textAlign='center';
+      if(!sp){g.fillStyle='#4f93b4';g.font='24px JB, monospace';g.fillText('IMPORT… a sound to play',W/2,Hh/2+8);return;}
+      const pk=sp.peaks,N=pk.length/2,X=i=>20+i/N*(W-40),Y=v=>Hh/2+12-v*(Hh*.36),loop=Math.round(val(p+'smp.loop'));
+      if(loop){g.fillStyle='#4fc3f71f';g.fillRect(X(val(p+'smp.ls')*N),26,(val(p+'smp.le')-val(p+'smp.ls'))*(W-40),Hh-40);}
+      g.strokeStyle='#8ee0ff';g.lineWidth=2;g.beginPath();for(let i=0;i<N;i++){g.moveTo(X(i),Y(pk[i*2]));g.lineTo(X(i),Y(pk[i*2+1]));}g.stroke();
+      g.strokeStyle='#7be3b4';g.lineWidth=3;g.beginPath();g.moveTo(X(val(p+'smp.start')*N),26);g.lineTo(X(val(p+'smp.start')*N),Hh-14);g.stroke();
+      g.fillStyle='#4f93b4';g.font='18px JB, monospace';g.textAlign='left';g.fillText(sp.seconds.toFixed(2)+' s · '+(sp.ch>1?'STEREO':'MONO')+(loop?' · '+def(p+'smp.loop').opts[loop].toUpperCase()+' LOOP':''),20,Hh-2);return;}
     const N=300,pts=[];let mx=1e-9;const ys=[];for(let i=0;i<=N;i++){const y=wave(p,i/N);ys.push(y);mx=Math.max(mx,Math.abs(y));}
     if(m===0){const pos=val(p+'pos');[-.24,-.16,-.08].forEach((o,j)=>{const q=Math.max(0,Math.min(1,pos+o));const ys2=[];let m2=1e-9;for(let i=0;i<=N;i++){const save=val(p+'pos');H.vals[H.idx[p+'pos']]=q;const y=wave(p,i/N);H.vals[H.idx[p+'pos']]=save;ys2.push(y);m2=Math.max(m2,Math.abs(y));}
       line(ys2.map((y,i)=>[20+(i/N)*(W-40)+(3-j)*8,Hh/2-(y/m2)*(Hh*.36)-(3-j)*8]),['#163c4d','#1f5a74','#2f80a4'][j],2);});}
@@ -821,6 +850,11 @@ function wire(){
       if(r.values)H.vals=r.values.slice();H.custom[p.slice(0,5)]=r.preview||null;paint();
       $('#lcdTop').textContent='IMPORTED · '+((r.preview&&r.preview.count)||1)+' FRAMES';$('#lcd').title=r.how||'';$('#lcdMain').textContent=r.name;H.flashT=Date.now()+3000;}
     finally{$('#wtImp').disabled=false;}};
+  $('#smpImp').onclick=async()=>{const p=wtP(),L=H.layer==='l1'?0:1,k=+H.screen[1];$('#smpImp').disabled=true;
+    try{const r=await call('importSample',L,k);if(!r||r.cancelled)return;
+      if(r.error){lcdMsg('IMPORT',r.error,true);return;}
+      if(r.values)H.vals=r.values.slice();H.samples[p.slice(0,5)]=r.preview||null;paint();lcdMsg('SAMPLE · '+(r.how||'').toUpperCase(),r.name,true);}
+    finally{$('#smpImp').disabled=false;}};
   $('#stabs').onclick=e=>{const a=e.target.closest('a');if(a){H.screen=a.dataset.s;paint();}};
   /* keyboard: click and slide; computer keys A..K (Z / X: octave) */
   const kb=$('#keys');let held=null;
@@ -846,6 +880,9 @@ function wire(){
     const up=()=>{rb.removeEventListener('pointermove',mv);rb.removeEventListener('pointerup',up);rt.style.opacity=0;call('bend',0);};rb.addEventListener('pointermove',mv);rb.addEventListener('pointerup',up);});
   /* presets */
   $('#lcd').onclick=()=>openBrowser();$('#pClose').onclick=()=>$('#browser').classList.remove('open');
+  $('#init').onclick=()=>{const b=$('#init');   // twice: the sound you have is not lost by one stray click
+    if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='SURE?';clearTimeout(b.t);b.t=setTimeout(()=>{b.classList.remove('arm');b.textContent='INIT';},2500);return;}
+    clearTimeout(b.t);b.classList.remove('arm');b.textContent='INIT';loadPreset('f:Basics/Init');};
   $('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);$('#pFolder').onclick=()=>call('openPresetFolder');
   $('#pSave').onclick=async()=>{const n=$('#pName').value.trim()||H.name,c=$('#pCat').value.trim()||'User';const r=await call('savePreset',n,c);
     if(r&&r.error){$('#pMsg').textContent=r.error;return;}H.name=n;H.category=c;$('#pMsg').textContent='Saved as '+c+' / '+n+'.hsyn';await listPresets();renderBrowser();lcdIdle();};

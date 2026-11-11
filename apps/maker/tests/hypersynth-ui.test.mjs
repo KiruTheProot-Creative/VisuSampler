@@ -26,6 +26,9 @@ await p.addInitScript(([defs,factory,tables])=>{
     if(name==='listPresets')return factory.map(f=>({id:'f:'+f.category+'/'+f.name,name:f.name,category:f.category,factory:true}));
     if(name==='loadPreset'){const f=factory.find(f=>'f:'+f.category+'/'+f.name===a[0]);defs.forEach((d,i)=>{vals[i]=f.params[d.id]!=null?f.params[d.id]:d.def;});return{name:f.name,category:f.category,values:vals.slice()};}
     if(name==='tablePreviews')return tables;
+    if(name==='samplePreview')return window.__smp&&a[0]===0&&a[1]===2?window.__smp:null;
+    if(name==='importSample'){window.__smp={name:'Choir Ah',seconds:2.5,ch:2,peaks:Array.from({length:600},(_,i)=>(i%2?-1:1)*Math.abs(Math.sin(i/40))*.8)};
+      vals[idx('l1.o3.mode')]=2;vals[idx('l1.o3.smp.root')]=57;return{name:'Choir Ah',how:'root A3 found',preview:window.__smp,values:vals.slice()};}
     if(name==='getFx')return window.__fx||null;
     if(name==='getMods')return window.__mods||{routes:[],shapes:[[0,0,0,.5,1,0,1,0,0],[0,0,0,.5,1,0,1,0,0],[0,0,0,.5,1,0,1,0,0],[0,0,0,.5,1,0,1,0,0]],names:['Macro 1','Macro 2','Macro 3','Macro 4']};
     if(name==='setMods'){window.__routes=JSON.parse(JSON.stringify(a[0]));return true;}
@@ -129,6 +132,27 @@ await p.click('#stabs a[data-s="matrix"]');const mx=await p.evaluate(()=>documen
 ok(mx===2,'the MATRIX screen lists every route ('+mx+')');await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-matrix.png')});
 await p.click('#stabs a[data-s="o0"]');
 ok(errs.length===0,'no script errors with modulation'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
+/* Spectrum and Sample modes, warps, INIT */
+await p.click('#stabs a[data-s="o2"]');
+for(let i=0;i<6&&(await p.textContent('[data-mode="2"]'))!=='SPECTRUM';i++)await p.click('[data-mode="2"]');
+const sp=await p.evaluate(()=>({mode:document.querySelector('[data-mode="2"]').textContent,flds:[...document.querySelectorAll('#fields .fld span')].map(x=>x.textContent).join(','),
+  knobs:[...document.querySelectorAll('.osc[data-k="2"] .kn span')].map(x=>x.textContent).slice(0,2).join(',')}));
+ok(sp.mode==='SPECTRUM'&&/PARTS,STRETCH,FORMANT,F\.AMT,WARP,AMOUNT/.test(sp.flds)&&sp.knobs==='TILT,ODD/EVEN','OSC 3 plays Spectrum: TILT and ODD/EVEN on the panel, partials, stretch and formant on the screen ('+JSON.stringify(sp)+')');
+await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-spectrum.png')});
+await p.click('[data-mode="2"]');
+const s0=await p.evaluate(()=>({mode:document.querySelector('[data-mode="2"]').textContent,bar:document.querySelector('#smpbar').classList.contains('show')}));
+await p.click('#smpImp');await p.waitForTimeout(120);
+const s1=await p.evaluate(()=>({name:document.querySelector('#smpName').textContent,root:window.__vals[window.__hs.idx['l1.o3.smp.root']],lcd:document.querySelector('#lcdTop').textContent,
+  flds:[...document.querySelectorAll('#fields .fld span')].map(x=>x.textContent).join(',')}));
+ok(s0.mode==='SAMPLE'&&s0.bar&&s1.name==='Choir Ah'&&s1.root===57&&/ROOT A3/.test(s1.lcd)&&/LOOP,L\.START,L\.END/.test(s1.flds),'Sample mode: IMPORT… loads a sound, its root key is set, loop settings on the screen ('+JSON.stringify(s1)+')');
+await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-sample.png')});
+await p.click('#stabs a[data-s="o0"]');
+const wf=await p.evaluate(()=>[...document.querySelectorAll('#fields .fld')].map(f=>f.dataset.id).filter(x=>/warp/.test(x)).join(','));
+ok(wf==='l1.o1.warp,l1.o1.warpAmt','every oscillator has WARP and AMOUNT ('+wf+')');
+await p.click('#init');const armed=await p.textContent('#init');await p.click('#init');await p.waitForTimeout(80);
+const ini=await p.evaluate(()=>({name:document.querySelector('#lcdMain').textContent,btn:document.querySelector('#init').textContent}));
+ok(armed==='SURE?'&&ini.name==='Init'&&ini.btn==='INIT','INIT asks once (SURE?), then starts from the Init sound ('+JSON.stringify(ini)+')');
+ok(errs.length===0,'no script errors with the new modes'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
 /* the FX tab: modules from NodeFX's catalogue, patched like NodeFX */
 await p.click('.tab[data-tab="fx"]');await p.waitForTimeout(100);
 const fx0=await p.evaluate(()=>({shown:!document.querySelector('#fxView').hidden,synth:getComputedStyle(document.querySelector('#synthView')).display,lib:document.querySelectorAll('.fxadd').length,mods:[...document.querySelectorAll('.fxm b')].map(b=>b.textContent),cables:document.querySelectorAll('#fxCables path.hit').length}));
