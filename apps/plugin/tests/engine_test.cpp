@@ -859,9 +859,17 @@ static void testSynth() {
         js += "}}";
         Synth s; s.prepare(sr); const bool ok = s.loadPreset(js);
         for (auto& kv : pr["params"].o) if (paramIndex(kv.first) < 0) { bad += " unknown:" + kv.first; }
+        /* its modulation and effects (one preset per line in the file: the fx text is cut from its line) */
+        std::vector<ModRoute> routes; for (const auto& r : pr["mods"].a) routes.push_back({ r["src"].str(), r["dst"].str(), (float) r["amt"].num(0) });
+        s.setMods(routes); if (s.mods().size() != routes.size()) bad += " " + pr["name"].str() + ": a route the engine refuses";
+        std::shared_ptr<visu::FxRack> rack;
+        if (pr["fx"].type == Json::Obj) { size_t ln = 0, at = 0; for (size_t q = 0; q < ft.size() && ln <= i + 1; ++q) if (ft[q] == '\n') { if (++ln == i + 1) at = q + 1; }
+          const size_t f0 = ft.find('{', ft.find("\"fx\"", at)); size_t f1 = f0; for (int dep = 0; f1 < ft.size(); ++f1) { if (ft[f1] == '{') ++dep; else if (ft[f1] == '}' && --dep == 0) break; }
+          std::string e2; rack = visu::FxRack::build(ft.substr(f0, f1 - f0 + 1), sr, e2); if (!rack || !rack->unsupported().empty()) bad += " " + pr["name"].str() + ": its effects don't build " + e2; }
         const std::vector<int> chord = s.param(paramIndex("mode")) > .5f ? std::vector<int> { 40 } : std::vector<int> { 48, 55, 60, 64 };
         for (int k : chord) s.noteOn(k, .9f);
         auto on = render(s, 4 * 48000); for (int k : chord) s.noteOff(k); auto off = render(s, 6 * 48000);
+        if (rack) { rack->noteOn(chord[0], 110); rack->process(on.first.data(), on.second.data(), (int) on.first.size()); rack->noteOff(); rack->process(off.first.data(), off.second.data(), (int) off.first.size()); }
         const double pk = std::max(peakOf(on.first), peakOf(on.second)), tail = peakOf(std::vector<float>(off.first.end() - 4800, off.first.end()));
         if (ok && pk > .02 && pk < 1.0 && tail < 1e-3) ++good; else { char m[160]; std::snprintf(m, sizeof m, " %s(peak %.3f tail %.4f)", pr["name"].str().c_str(), pk, tail); bad += m; }
         if (std::getenv("HS_LEVELS")) std::printf("         %s / %s: peak %.3f\n", pr["category"].str().c_str(), pr["name"].str().c_str(), pk);

@@ -281,6 +281,7 @@ juce::var HyperSynthProcessor::loadPreset(const juce::String& id)
             if ("f:" + p["category"].toString() + "/" + p["name"].toString() == id) {
                 auto* o = new juce::DynamicObject(); o->setProperty("format", "hsyn"); o->setProperty("v", 1);
                 o->setProperty("name", p["name"]); o->setProperty("category", p["category"]); o->setProperty("params", p["params"]);
+                for (auto* k : { "mods", "lfoShapes", "macroNames", "fx" }) if (p.hasProperty(k)) o->setProperty(k, p[k]);   // modulation and effects
                 json = juce::JSON::toString(juce::var(o), true);
             }
     } else if (id.startsWith("u:") && !id.contains("..")) {
