@@ -16,5 +16,5 @@ private:
     std::vector<float> shown_;           // what the panel shows: changes from the host are sent on
     std::array<bool, 128> keys_ {};
     int voices_ = -1;
-    std::array<float, 11> srcShown_ {};
+    std::array<float, 12> srcShown_ {};
 };

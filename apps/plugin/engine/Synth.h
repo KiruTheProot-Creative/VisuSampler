@@ -37,7 +37,7 @@ double detectKey(const float* mono, size_t n, double sampleRate);
 
 // modulation (Vital / Serum style): a source moves any continuous parameter of a voice. Sources by id:
 // lfo1..lfo4 (-1..1), env1, env2 (the mod envelopes, 0..1), macro1..macro4 (0..1), vel, wheel, at (aftertouch) 0..1,
-// key (-1..1 around middle C), rand (-1..1, new on every note). amt -1..1: how far, in the knob's own travel.
+// key (-1..1 around middle C), rand (-1..1, new on every note), ribbon (-1..1, when the ribbon is set to modulate). amt -1..1: how far, in the knob's own travel.
 // Destinations: the settings of the layers ("l1." / "l2."), the continuous ones.
 struct ModRoute { std::string src, dst; float amt = 0; };
 const std::vector<std::string>& modSources();

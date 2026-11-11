@@ -116,9 +116,9 @@ void HyperSynthEditor::timerCallback()
     for (int i = 0; i < proc_.numParams(); ++i) { const float v = proc_.value(i); if (v != shown_[(size_t) i]) { shown_[(size_t) i] = v; ii.add(i); vv.add(v); } }
     if (!ii.isEmpty()) { auto* o = new juce::DynamicObject(); o->setProperty("i", ii); o->setProperty("v", vv); o->setProperty("name", proc_.presetName()); browser_.emitEventIfBrowserIsVisible("values", juce::var(o)); }
     {   // what the modulators are doing right now (the panel's moving dots and rings)
-        static const char* src[] = { "lfo1", "lfo2", "lfo3", "lfo4", "env1", "env2", "vel", "key", "wheel", "at", "rand" };
+        static const char* src[] = { "lfo1", "lfo2", "lfo3", "lfo4", "env1", "env2", "vel", "key", "wheel", "at", "rand", "ribbon" };
         juce::Array<juce::var> sv; bool moved = false;
-        for (int i = 0; i < 11; ++i) { const float x = proc_.sourceValue(src[i]); if (std::abs(x - srcShown_[(size_t) i]) > 1e-3f) moved = true; srcShown_[(size_t) i] = x; sv.add(x); }
+        for (int i = 0; i < 12; ++i) { const float x = proc_.sourceValue(src[i]); if (std::abs(x - srcShown_[(size_t) i]) > 1e-3f) moved = true; srcShown_[(size_t) i] = x; sv.add(x); }
         if (moved) { auto* o = new juce::DynamicObject(); o->setProperty("v", sv); browser_.emitEventIfBrowserIsVisible("mod", juce::var(o)); }
     }
     bool keysChanged = false; juce::Array<juce::var> down;

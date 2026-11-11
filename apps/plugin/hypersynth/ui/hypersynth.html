@@ -91,6 +91,12 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
 .bk{position:absolute;top:0;width:1.75%;height:62%;border-radius:0 0 4px 4px;background:linear-gradient(180deg,#0c0c0d,#1f2023 60%,#2c2d31 86%,#101112 88%,#070708);box-shadow:0 4px 5px #000000b3,inset 1px 0 0 #ffffff14}
 .bk.on{background:linear-gradient(180deg,#0c0c0d,#2a2b2f 60%,#3a3b3f 90%,#101112);box-shadow:0 2px 3px #000000b3,inset 0 0 0 2px var(--accent)}
 .ribbon{flex:1;height:22px;border-radius:3px;position:relative;cursor:ew-resize;background:repeating-linear-gradient(90deg,#00000026 0 1px,#0000 1px 64px),linear-gradient(180deg,#f1f2f4,#c3c6cc 45%,#9ea2a9 55%,#d9dbdf);box-shadow:inset 0 1px 2px #00000080,0 1px 0 #ffffff26,0 0 0 1px #000000b3}
+.ribbon .rval{position:absolute;top:7px;bottom:7px;border-radius:2px;background:var(--accent);opacity:.55;pointer-events:none}
+.ribbon .rmid{position:absolute;left:50%;top:3px;bottom:3px;width:1px;background:#00000059;pointer-events:none}
+.rctl{display:flex;gap:6px;align-items:center}
+.rctl .btn{height:22px;min-width:58px;padding:0 6px;font-size:11px;letter-spacing:1.5px}
+.rctl .rr{flex-direction:row;gap:5px;font-size:10.5px;color:var(--quiet);letter-spacing:1px;padding:0 6px;height:22px;border-radius:3px;background:#070c11;box-shadow:inset 0 1px 3px #000}
+.rctl .rr b{color:var(--lcd);font-family:'JB',monospace;font-size:11.5px;min-width:42px;text-align:right}
 .ribbon .touch{position:absolute;top:2px;bottom:2px;width:10px;margin-left:-5px;border-radius:2px;background:var(--accent);opacity:0;box-shadow:0 0 8px var(--accent)}
 /* presets */
 #browser{position:absolute;left:540px;top:78px;width:520px;max-height:540px;z-index:5;display:none;flex-direction:column;gap:8px;padding:12px;border-radius:6px;
@@ -150,11 +156,11 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
 #macros{display:flex;gap:4px}
 .mac{display:flex;flex-direction:column;align-items:center;gap:3px;width:68px}
 .mac .kn span{display:none}
-.src{height:24px;padding:0 7px;border-radius:4px;font-size:12px;letter-spacing:1px;display:flex;align-items:center;gap:5px;white-space:nowrap;cursor:grab}
+.src{height:24px;padding:0 5px;border-radius:4px;font-size:11.5px;letter-spacing:.6px;display:flex;align-items:center;gap:5px;white-space:nowrap;cursor:grab}
 .src .dot{width:8px;height:8px;border-radius:50%;flex:none;box-shadow:0 0 5px currentColor}
 .mname{width:68px;justify-content:center;padding:0 4px;font-size:11px;letter-spacing:.3px;box-shadow:0 3px 4px #000000b3,inset 0 1px 0 #ffffff2e,inset 0 -2px 0 #00000080,inset 3px 0 0 #f4d35e}.mname .nm{overflow:hidden;text-overflow:ellipsis}
 .mren{width:64px;font:inherit;font-size:11px;color:var(--lcd);background:#070c11;border:none;border-radius:3px;padding:3px 4px;outline:none}
-#srcs{display:grid;grid-template-columns:repeat(6,64px);gap:6px}
+#srcs{display:grid;grid-template-columns:repeat(6,58px);gap:6px 5px}
 .ghost{position:fixed;z-index:99;pointer-events:none;display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:4px;font:700 12px var(--font);color:#fff;background:#000c;box-shadow:0 4px 10px #000}
 .ghost .dot{width:8px;height:8px;border-radius:50%}
 .droptgt .dial,.droptgt .track,.fld.droptgt{outline:2px dashed #fff;outline-offset:3px;border-radius:50%}
@@ -262,7 +268,7 @@ svg.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;point
     <div class="sh"><b>PLAYING</b><i></i></div>
     <div style="display:flex;gap:2px;align-items:flex-start">
       <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:84px;padding-top:6px"><button class="btn" id="mode" style="width:76px;height:30px;font-size:13px;letter-spacing:2px">POLY</button><span style="font-size:11px;letter-spacing:2px;font-weight:600">MODE</span></div>
-      <div class="kn" data-p="voices" data-l="VOICES"></div><div class="kn" data-p="glide" data-l="GLIDE"></div><div class="kn" data-p="bend" data-l="BEND"></div>
+      <div class="kn" data-p="voices" data-l="VOICES"></div><div class="kn" data-p="glide" data-l="GLIDE"></div><div class="kn" data-p="bend" data-l="BEND ▲"></div><div class="kn" data-p="bendDn" data-l="BEND ▼"></div>
     </div>
   </section>
   <section class="sec" aria-label="Vibrato">
@@ -295,7 +301,13 @@ svg.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;point
 
 <div style="height:28px;display:flex;align-items:center;gap:14px;padding:0 10px">
   <span style="font-size:13px;font-weight:700;letter-spacing:4px;width:72px">RIBBON</span>
-  <div class="ribbon" id="ribbon" title="Slide to bend, from where you touch it"><div class="touch" id="rtouch"></div></div>
+  <div class="ribbon" id="ribbon" title="Slide on it: bends the pitch and/or modulates (drag RIBBON onto a knob)"><div class="rval" id="rval"></div><div class="rmid"></div><div class="touch" id="rtouch"></div></div>
+  <div class="rctl">
+    <button class="btn" id="rMode" title="What the ribbon does: bend the pitch, modulate (drag RIBBON onto knobs), or both">PITCH</button>
+    <button class="btn" id="rTouch" title="Relative: bends from where you touch it (CS-80). Absolute: the middle is zero, the ends are the full range">REL</button>
+    <button class="btn" id="rHold" title="When you let go: springs back to the middle, or holds where it is">SPRING</button>
+    <div class="fld rr" data-id="ribbon.range" title="How far the ribbon bends (semitones each way)"><b></b><span>RANGE</span></div>
+  </div>
 </div>
 </div>
 
@@ -402,7 +414,7 @@ function paint(){
   $('#subOct').textContent=def(H.layer+'.subOct').opts[Math.round(val(H.layer+'.subOct'))].toUpperCase();
   $('#layerTitle').textContent=H.layer==='l1'?'LAYER I':'LAYER II';
   $$('#stabs a').forEach(a=>a.classList.toggle('on',a.dataset.s===H.screen));
-  paintFields();paintWtBar();paintSmpBar();lcdIdle();drawScreen();
+  paintFields();paintWtBar();paintSmpBar();lcdIdle();drawScreen();paintRibbon();
   $('#modSel').classList.toggle('show',H.screen==='mod');$$('#modSel button').forEach(b=>b.classList.toggle('on',b.dataset.ms===MOD.sel));
   $('#matrix').classList.toggle('show',H.screen==='matrix');if(H.screen==='matrix')paintMatrix();
   paintRings();
@@ -667,7 +679,7 @@ function fxSet(n,q,v,k){if(v===n.p[q.k])return;n.p[q.k]=v;
 const MOD={routes:[],shapes:[[],[],[],[]],names:['Macro 1','Macro 2','Macro 3','Macro 4'],live:{},sel:'lfo1',pop:null};
 const SRC=[['lfo1','LFO 1','#4fc3f7',1],['lfo2','LFO 2','#7be3b4',1],['lfo3','LFO 3','#f0a33a',1],['lfo4','LFO 4','#ff7eb6',1],['env1','ENV 1','#ff6a3d',0],['env2','ENV 2','#c38bff',0],
   ['macro1','M1','#f4d35e',0],['macro2','M2','#f4d35e',0],['macro3','M3','#f4d35e',0],['macro4','M4','#f4d35e',0],
-  ['vel','VEL','#9ad1ff',0],['key','KEY','#c0e57b',1],['wheel','WHEEL','#ffd27f',0],['at','AT','#ff9f80',0],['rand','RAND','#d6d6d6',1]];
+  ['vel','VEL','#9ad1ff',0],['key','KEY','#c0e57b',1],['wheel','WHEEL','#ffd27f',0],['at','AT','#ff9f80',0],['rand','RAND','#d6d6d6',1],['ribbon','RIBBON','#e8e3d6',1]];
 const SRCI=Object.fromEntries(SRC.map((s,i)=>[s[0],i]));
 const srcName=s=>s.indexOf('macro')===0?MOD.names[+s.slice(5)-1]:(SRC[SRCI[s]]||[0,s])[1];
 const srcCol=s=>(SRC[SRCI[s]]||[0,0,'#fff'])[2];
@@ -746,7 +758,7 @@ function modWire(){
   document.addEventListener('pointerdown',e=>{if(MOD.pop&&!e.target.closest('#modPop'))closePop();});
   $('#modSel').addEventListener('click',e=>{const b=e.target.closest('[data-ms]');if(b){MOD.sel=b.dataset.ms;paint();}});
   wireEditor();
-  on('mod',e=>{const ids=['lfo1','lfo2','lfo3','lfo4','env1','env2','vel','key','wheel','at','rand'];(e.v||[]).forEach((v,i)=>{MOD.live[ids[i]]=v;});
+  on('mod',e=>{const ids=['lfo1','lfo2','lfo3','lfo4','env1','env2','vel','key','wheel','at','rand','ribbon'];(e.v||[]).forEach((v,i)=>{MOD.live[ids[i]]=v;});
     for(let m=1;m<=4;m++)MOD.live['macro'+m]=val('macro'+m);paintRings();$$('.src[data-src]').forEach(b=>{const v=MOD.live[b.dataset.src];if(v!=null)b.querySelector('.dot').style.opacity=.35+.65*Math.abs(v);});
     if(H.screen==='mod'||H.screen==='env')drawScreen();});
 }
@@ -876,11 +888,16 @@ function wire(){
     const mv=ev=>{const y=Math.max(0,Math.min(1,(ev.clientY-r.top)/r.height));send(y);mk.style.top=(y*123)+'px';};mv(e);
     const up=()=>{el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);if(spring){send(.5);mk.style.top='61px';}};el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up);});};
   wheel($('#whBend'),$('#mkBend'),true,y=>call('bend',(.5-y)*2));wheel($('#whMod'),$('#mkMod'),false,y=>call('mod',1-y));
-  /* ribbon: bends from where you touch it, like the CS-80's */
+  /* the ribbon: its own controller (a parameter, so the DAW records it). Relative bends from where you touch it, like
+     the CS-80's (half the ribbon = the full range); Absolute: the middle is zero, the ends the full range. */
   const rb=$('#ribbon'),rt=$('#rtouch');
-  rb.addEventListener('pointerdown',e=>{rb.setPointerCapture(e.pointerId);const r=rb.getBoundingClientRect(),x0=e.clientX;rt.style.opacity=1;
-    const mv=ev=>{rt.style.left=((ev.clientX-r.left)/r.width*100)+'%';call('bend',Math.max(-1,Math.min(1,(ev.clientX-x0)/(r.width/6))));};mv(e);
-    const up=()=>{rb.removeEventListener('pointermove',mv);rb.removeEventListener('pointerup',up);rt.style.opacity=0;call('bend',0);};rb.addEventListener('pointermove',mv);rb.addEventListener('pointerup',up);});
+  rb.addEventListener('pointerdown',e=>{if(e.button!==0)return;rb.setPointerCapture(e.pointerId);const r=rb.getBoundingClientRect(),x0=e.clientX,abs=Math.round(val('ribbon.touch'))===1,base=Math.round(val('ribbon.hold'))===1?val('ribbon'):0;rt.style.opacity=1;
+    call('gesture','ribbon',true);
+    const mv=ev=>{rt.style.left=((ev.clientX-r.left)/r.width*100)+'%';const v=abs?(ev.clientX-r.left)/r.width*2-1:base+(ev.clientX-x0)/(r.width/2);setVal('ribbon',Math.max(-1,Math.min(1,v)),true);paintRibbon();};mv(e);
+    const up=()=>{rb.removeEventListener('pointermove',mv);rb.removeEventListener('pointerup',up);rt.style.opacity=0;if(Math.round(val('ribbon.hold'))!==1)setVal('ribbon',0,true);call('gesture','ribbon',false);paintRibbon();};
+    rb.addEventListener('pointermove',mv);rb.addEventListener('pointerup',up);});
+  const rcyc=(id,n)=>()=>{setVal(id,(Math.round(val(id))+1)%n,true);paint();lcdShow(id);};
+  $('#rMode').onclick=rcyc('ribbon.mode',3);$('#rTouch').onclick=rcyc('ribbon.touch',2);$('#rHold').onclick=()=>{rcyc('ribbon.hold',2)();if(Math.round(val('ribbon.hold'))===0){setVal('ribbon',0,true);paintRibbon();}};
   /* presets */
   $('#lcd').onclick=()=>openBrowser();$('#pClose').onclick=()=>$('#browser').classList.remove('open');
   /* INIT: one click starts from scratch; for 6 s the button is UNDO, in case it was a stray click */
@@ -893,6 +910,9 @@ function wire(){
   $('#pSave').onclick=async()=>{const n=$('#pName').value.trim()||H.name,c=$('#pCat').value.trim()||'User';const r=await call('savePreset',n,c);
     if(r&&r.error){$('#pMsg').textContent=r.error;return;}H.name=n;H.category=c;$('#pMsg').textContent='Saved as '+c+' / '+n+'.hsyn';await listPresets();renderBrowser();lcdIdle();};
 }
+function paintRibbon(){const v=val('ribbon'),e=$('#rval');if(!e)return;e.style.left=(50+Math.min(0,v)*50)+'%';e.style.width=Math.abs(v)*50+'%';
+  $('#rMode').textContent=['PITCH','MOD','BOTH'][Math.round(val('ribbon.mode'))]||'PITCH';$('#rTouch').textContent=Math.round(val('ribbon.touch'))?'ABS':'REL';
+  $('#rHold').textContent=Math.round(val('ribbon.hold'))?'HOLD':'SPRING';$('.rctl .rr b').textContent='±'+(Math.round(val('ribbon.range')*10)/10)+' st';}
 function paintKeys(){const all=new Set([...H.keys,...H.uiKeys]);$$('#keys [data-key]').forEach(k=>k.classList.toggle('on',all.has(+k.dataset.key)));}
 async function listPresets(){H.presets=(await call('listPresets'))||[];}
 async function loadPreset(id){const r=await call('loadPreset',id);if(!r||r.error){const m=(r&&r.error)||'could not load';$('#pMsg').textContent=m;lcdMsg('PRESET',m,true);return;}

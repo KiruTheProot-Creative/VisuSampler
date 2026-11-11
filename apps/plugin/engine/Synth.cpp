@@ -31,7 +31,7 @@ static std::vector<ParamDef> buildParams() {
     num("voices", "Voices", 1, 32, 32);
     opt("mode", "Mode", { "Poly", "Mono", "Legato" }, 0);
     num("glide", "Glide", 0, 2000, 0, "ms");
-    num("bend", "Bend range", 0, 24, 2, "st");
+    num("bend", "Bend up", 0, 48, 2, "st");
     num("vib", "Vibrato (mod wheel)", 0, 2, .5f, "st");
     num("vibRate", "Vibrato rate", .1f, 12, 5.5f, "Hz", true);
     const std::vector<std::string> tables = wavetableNames();
@@ -119,6 +119,13 @@ static std::vector<ParamDef> buildParams() {
         num(o + "smp.le", on + "loop end", 0, 1, 1);
         num(o + "smp.root", on + "root key", 0, 127, 60);
     }
+    /* added with the ribbon and a separate bend-down range (11 Nov 2026) */
+    num("bendDn", "Bend down", 0, 48, 2, "st");   // a preset without it bends down as far as up (see loadPreset)
+    num("ribbon", "Ribbon", -1, 1, 0);            // where the ribbon is: a parameter, so the DAW records and automates it
+    opt("ribbon.mode", "Ribbon does", { "Pitch", "Modulation", "Pitch + Mod" }, 0);
+    num("ribbon.range", "Ribbon range", 0, 48, 12, "st");
+    opt("ribbon.touch", "Ribbon touch", { "Relative", "Absolute" }, 0);
+    opt("ribbon.hold", "Ribbon let go", { "Springs back", "Holds" }, 0);
     return v;
 }
 const std::vector<ParamDef>& params() { static const std::vector<ParamDef> p = buildParams(); return p; }
@@ -372,10 +379,10 @@ struct Env {   // ADSR: linear attack, exponential decay and release
 
 /* ---------- modulation ---------- */
 const std::vector<std::string>& modSources() {
-    static const std::vector<std::string> s = { "lfo1", "lfo2", "lfo3", "lfo4", "env1", "env2", "macro1", "macro2", "macro3", "macro4", "vel", "key", "wheel", "at", "rand" };
+    static const std::vector<std::string> s = { "lfo1", "lfo2", "lfo3", "lfo4", "env1", "env2", "macro1", "macro2", "macro3", "macro4", "vel", "key", "wheel", "at", "rand", "ribbon" };
     return s;
 }
-enum { SLfo = 0, SEnv = 4, SMacro = 6, SVel = 10, SKey, SWheel, SAt, SRand, kSources };
+enum { SLfo = 0, SEnv = 4, SMacro = 6, SVel = 10, SKey, SWheel, SAt, SRand, SRibbon, kSources };
 float curveShape(float x, float c) {
     x = clampf(x, 0, 1); if (std::fabs(c) < 1e-3f) return x;
     const float k = c * 6; return (1 - std::exp(-k * x)) / (1 - std::exp(-k));
@@ -432,7 +439,7 @@ struct Synth::Impl {
     Voice v[kMaxVoices + kGhosts];
     uint64_t clock = 0; float bend = 0, wheel = 0; bool sustain = false; double vibPh = 0, lastPitch = -1;
     std::vector<int> stack;                 // mono: the keys held, newest last
-    LayerIdx li[2]; int iMaster, iPlay, iXfade, iVoices, iMode, iGlide, iBend, iVib, iVibRate;
+    LayerIdx li[2]; int iMaster, iPlay, iXfade, iVoices, iMode, iGlide, iBend, iVib, iVibRate, iBendDn, iRib, iRibMode, iRibRange; float ribS = 0;
     uint32_t rnd = 0x1234567u;
     /* imported wavetables: the audio thread reads the pointer; replaced ones are freed a few seconds later */
     std::atomic<const Wavetable*> custom[2][3] = {};
@@ -452,6 +459,7 @@ struct Synth::Impl {
         for (size_t i = 0; i < d.size(); ++i) { vals[i].store(d[i].def); p[i] = sm[i] = d[i].def; isOpt[i] = !d[i].opts.empty() || d[i].id.find("voices") != std::string::npos || d[i].id.find(".oct") != std::string::npos || d[i].id.find(".parts") != std::string::npos || d[i].id.find(".root") != std::string::npos; }
         auto I = [](const std::string& s) { const int i = paramIndex(s); if (i < 0) std::fprintf(stderr, "HyperSynth: no parameter %s\n", s.c_str()); return i; };
         iMaster = I("master"); iPlay = I("play"); iXfade = I("xfade"); iVoices = I("voices"); iMode = I("mode"); iGlide = I("glide"); iBend = I("bend"); iVib = I("vib"); iVibRate = I("vibRate");
+        iBendDn = I("bendDn"); iRib = I("ribbon"); iRibMode = I("ribbon.mode"); iRibRange = I("ribbon.range");
         for (int L = 0; L < 2; ++L) {
             const std::string l = "l" + std::to_string(L + 1) + "."; LayerIdx& x = li[L];
             x.level = I(l + "level"); x.pan = I(l + "pan"); x.vel = I(l + "vel"); x.sub = I(l + "sub"); x.subOct = I(l + "subOct"); x.noise = I(l + "noise");
@@ -487,6 +495,7 @@ struct Synth::Impl {
             default: { const float* t = lfoTab[l][lfoCur[l].load(std::memory_order_acquire)]; const double q = x * kLfoTab; const int i = std::min(kLfoTab - 1, (int) q); const float f = (float) (q - i); return t[i] + (t[i + 1] - t[i]) * f; }
         }
     }
+    int ribMode() const { return (int) std::lround(P(iRibMode)); }
     double lfoHz(int l) const {
         const int sy = (int) std::lround(P(iLfo[l][1]));
         return sy > 0 ? bpm / 60.0 / kSyncBeats[std::min(12, sy)] : (double) P(iLfo[l][0]);
@@ -508,7 +517,7 @@ struct Synth::Impl {
         for (int e = 0; e < 2; ++e) { const int* q = iEnv[e];
             sv[SEnv + e] = vo.menv[e].step(dt, P(q[0]) / 1000, P(q[1]) / 1000, P(q[2]), P(q[3]) / 1000, P(q[4]), P(q[5]), P(q[6])); }
         for (int m = 0; m < kMacros; ++m) sv[SMacro + m] = P(iMacro[m]);
-        sv[SVel] = vo.vel; sv[SKey] = clampf((float) (vo.key - 60) / 48.f, -1, 1); sv[SWheel] = wheel; sv[SAt] = aftertouch; sv[SRand] = vo.rnd;
+        sv[SVel] = vo.vel; sv[SKey] = clampf((float) (vo.key - 60) / 48.f, -1, 1); sv[SWheel] = wheel; sv[SAt] = aftertouch; sv[SRand] = vo.rnd; sv[SRibbon] = ribMode() != 0 ? ribS : 0.f;
         vo.since += dt;
     }
     void freeLfos(int n) {   // the Free LFOs run on their own, shared by every note
@@ -600,7 +609,9 @@ struct Synth::Impl {
         const float master = std::pow(10.f, P(iMaster) / 20) * .3f;
         const double vibSt = wheel * P(iVib) * std::sin(2 * kPi * vibPh); vibPh += P(iVibRate) * n / sr; vibPh -= std::floor(vibPh);
         const double glideMs = P(iGlide), gk = glideMs > 0 ? 1 - std::exp(-(double) n / (sr * glideMs / 1000 / 3)) : 1;
-        const double bendSt = bend * P(iBend);
+        ribS += (P(iRib) - ribS) * (float) std::min(1.0, n / (sr * .006));   // the ribbon, smoothed (a few ms: no zipper)
+        const int ribMode = (int) std::lround(P(iRibMode));
+        const double bendSt = bend * (bend >= 0 ? P(iBend) : P(iBendDn)) + (ribMode != 1 ? ribS * P(iRibRange) : 0.0);
         const int rc = rCur.load(std::memory_order_acquire); Route rt[kMaxRoutes]; const int nr = nRoutes[rc]; std::copy(routes[rc], routes[rc] + nr, rt);
         freeLfos(n);
         const Voice* newest = nullptr; float sv[kSources], showV[kSources] = {};
@@ -928,6 +939,7 @@ bool Synth::loadPreset(const std::string& json, std::string* error, std::string*
         const Json& v = ps[d[i].id.c_str()];
         setParam((int) i, v.type == Json::Num ? (float) v.n : d[i].old);   // missing: the value it had before this parameter existed
     }
+    if (ps["bendDn"].type != Json::Num) setParam(paramIndex("bendDn"), param(paramIndex("bend")));   // before bend down had its own range, it bent as far as up
     const Json& tj = j["tables"];   // imported wavetables (a preset without them has none)
     for (int L = 0; L < 2; ++L) for (int k = 0; k < 3; ++k) {
         char key[16]; std::snprintf(key, sizeof key, "l%d.o%d", L + 1, k + 1); const Json& t = tj[key];

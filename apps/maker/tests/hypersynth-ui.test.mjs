@@ -134,6 +134,20 @@ await p.click('#stabs a[data-s="matrix"]');const mx=await p.evaluate(()=>documen
 ok(mx===2,'the MATRIX screen lists every route ('+mx+')');await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-matrix.png')});
 await p.click('#stabs a[data-s="o0"]');
 ok(errs.length===0,'no script errors with modulation'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
+/* bend up / down, the ribbon */
+const bk=await p.evaluate(()=>[...document.querySelectorAll('.kn[data-id="bend"] span,.kn[data-id="bendDn"] span')].map(x=>x.textContent).join(','));
+ok(/BEND ▲/.test(bk)&&/BEND ▼/.test(bk),'bend has an up and a down range ('+bk+')');
+const rbx=await p.locator('#ribbon').boundingBox(),RV=()=>p.evaluate(()=>window.__vals[window.__hs.idx['ribbon']]);
+await p.mouse.move(rbx.x+rbx.width*.3,rbx.y+rbx.height/2);await p.mouse.down();await p.mouse.move(rbx.x+rbx.width*.55,rbx.y+rbx.height/2,{steps:5});
+const rel=await RV();await p.mouse.up();const relUp=await RV();
+await p.click('#rTouch');await p.click('#rHold');
+await p.mouse.move(rbx.x+rbx.width*.75,rbx.y+rbx.height/2);await p.mouse.down();await p.mouse.up();const abs=await RV();
+const fill=await p.evaluate(()=>parseFloat(document.querySelector('#rval').style.width));
+await p.click('#rMode');await p.click('#rMode');
+const rlab=await p.evaluate(()=>[...document.querySelectorAll('.rctl .btn')].map(b=>b.textContent).join(',')+' '+document.querySelector('.rctl .rr b').textContent);
+ok(Math.abs(rel-.5)<.03&&relUp===0&&Math.abs(abs-.5)<.03&&Math.abs(fill-25)<2&&rlab==='BOTH,ABS,HOLD ±12 st',
+  'the ribbon is its own control: relative bend springs back, absolute + hold stays, modes switch ('+JSON.stringify({rel,relUp,abs,fill,rlab})+')');
+await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-ribbon.png')});
 /* Spectrum and Sample modes, warps, INIT */
 await p.click('#stabs a[data-s="o2"]');
 for(let i=0;i<6&&(await p.textContent('[data-mode="2"]'))!=='SPECTRUM';i++)await p.click('[data-mode="2"]');

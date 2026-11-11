@@ -952,6 +952,19 @@ static void testSynth() {
       CHECK(rt.size() == 2 && rt[0].src == "lfo2" && rt[1].dst == "l1.lp.cut" && std::fabs(rt[1].amt + .5f) < 1e-4f && sh.size() == 9 && std::fabs(sh[4] - .9f) < 1e-3f
             && ld.macroName(1) == "Brightness" && old.mods().empty() && old.macroName(1) == "Macro 2",
             "hypersynth mod: routes, drawn shapes and macro names are saved in the .hsyn (unknown ones dropped); an older preset has none"); }
+    /* pitch bend up / down ranges, the ribbon */
+    { auto pitchOf = [&](Synth& z) { auto o = render(z, 24000); int zc = 0; for (size_t i = 4801; i < 24000; ++i) if (o.first[i - 1] < 0 && o.first[i] >= 0) ++zc; return zc / (19200.0 / sr); };
+      auto sine = [&](Synth& z) { z.prepare(sr); set(z, "l1.o1.shape", 3); set(z, "l1.lp.cut", 20000); set(z, "l1.lp.key", 0); };
+      Synth up, dn; sine(up); sine(dn); set(up, "bend", 7); set(dn, "bendDn", 12); up.setBend(1); dn.setBend(-1); up.noteOn(57, .9f); dn.noteOn(57, .9f);
+      const double fu = pitchOf(up), fd = pitchOf(dn);
+      Synth old; old.loadPreset("{\"format\":\"hsyn\",\"v\":1,\"params\":{\"bend\":5}}");
+      CHECK(std::fabs(fu - 220 * std::pow(2.0, 7 / 12.0)) < 3 && std::fabs(fd - 110) < 2 && std::fabs(old.param(paramIndex("bendDn")) - 5) < 1e-6f,
+            "hypersynth: bend up +7 (%.0f Hz) and down -12 (%.0f Hz) have their own ranges; an older preset bends down as far as up", fu, fd);
+      Synth rb, rm; sine(rb); sine(rm); set(rb, "ribbon", .5f); set(rb, "ribbon.range", 24); set(rm, "ribbon", .5f); set(rm, "ribbon.mode", 1); rm.setMods({ { "ribbon", "l1.level", -1 } });
+      rb.noteOn(57, .9f); rm.noteOn(57, .9f); const double fr = pitchOf(rb); auto mo = render(rm, 24000);
+      Synth ref; sine(ref); ref.noteOn(57, .9f); auto ro = render(ref, 24000); render(rm, 4800);
+      CHECK(std::fabs(fr - 440) < 4 && rms(mo.first, 12000, 24000) < rms(ro.first, 12000, 24000) * .3 && std::fabs(rm.sourceValue("ribbon") - .5f) < .01f,
+            "hypersynth ribbon: halfway with a 24-semitone range bends an octave (%.0f Hz); in Modulation mode it bends nothing and moves what it is patched to", fr); }
     /* Spectrum and Sample modes, warps */
     { auto mag = [&](const std::vector<float>& v, size_t a0, size_t a1, double hz) {   // the level of one frequency (Goertzel, Hann window)
         double c = 2 * std::cos(2 * kPiT * hz / sr), q1 = 0, q2 = 0; const size_t N = a1 - a0;
