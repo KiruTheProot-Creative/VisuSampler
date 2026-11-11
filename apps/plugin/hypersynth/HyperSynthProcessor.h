@@ -74,6 +74,9 @@ private:
     bool applyJson(const juce::String& json, juce::String* error);   // a .hsyn text into the parameters
     void setNames(const juce::String& n, const juce::String& c) { const juce::ScopedLock l(nameLock_); name_ = n; category_ = c; }
     void handle(const juce::MidiMessage&);
+    // the FX tab's envelopes: start on each new note, release when the last held key is let go (audio thread)
+    void fxNote(int key, float velocity, bool on);
+    std::array<bool, 128> fxDown_ {}; int fxHeld_ = 0;
 
     void timerCallback() override;          // frees retired effect chains, tells the DAW the latency
     void rebuildFx();

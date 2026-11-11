@@ -113,15 +113,23 @@ void HyperSynthProcessor::prepareToPlay(double sr, int)
     for (auto& k : keysDown) k = false;
 }
 
+void HyperSynthProcessor::fxNote(int key, float velocity, bool on)
+{
+    auto& d = fxDown_[(size_t) (key & 127)];
+    if (on) { if (!d) { d = true; ++fxHeld_; } if (fxCurrent_) fxCurrent_->noteOn(key, velocity); }
+    else if (d) { d = false; if (--fxHeld_ <= 0) { fxHeld_ = 0; if (fxCurrent_) fxCurrent_->noteOff(); } }
+}
+
 void HyperSynthProcessor::handle(const juce::MidiMessage& m)
 {
-    if (m.isNoteOn()) { synth_.noteOn(m.getNoteNumber(), m.getFloatVelocity()); keysDown[(size_t) m.getNoteNumber()] = true; if (fxCurrent_) fxCurrent_->noteOn(m.getNoteNumber(), m.getFloatVelocity()); }
-    else if (m.isNoteOff()) { synth_.noteOff(m.getNoteNumber()); keysDown[(size_t) m.getNoteNumber()] = false; if (fxCurrent_) fxCurrent_->noteOff(); }
+    if (m.isNoteOn()) { synth_.noteOn(m.getNoteNumber(), m.getFloatVelocity()); keysDown[(size_t) m.getNoteNumber()] = true; fxNote(m.getNoteNumber(), m.getFloatVelocity(), true); }
+    else if (m.isNoteOff()) { synth_.noteOff(m.getNoteNumber()); keysDown[(size_t) m.getNoteNumber()] = false; fxNote(m.getNoteNumber(), 0, false); }
     else if (m.isPitchWheel()) { const float b = (float) (m.getPitchWheelValue() - 8192) / 8192.0f; synth_.setBend(b); bendNow = b; }
     else if (m.isControllerOfType(1)) { const float v = (float) m.getControllerValue() / 127.0f; synth_.setModWheel(v); modNow = v; }
     else if (m.isSustainPedalOn()) synth_.setSustain(true);
     else if (m.isSustainPedalOff()) synth_.setSustain(false);
-    else if (m.isAllNotesOff() || m.isAllSoundOff()) { synth_.allNotesOff(m.isAllSoundOff()); for (auto& k : keysDown) k = false; }
+    else if (m.isAllNotesOff() || m.isAllSoundOff()) { synth_.allNotesOff(m.isAllSoundOff()); for (auto& k : keysDown) k = false;
+        fxDown_.fill(false); fxHeld_ = 0; if (fxCurrent_) fxCurrent_->noteOff(); }
 }
 
 void HyperSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -149,8 +157,8 @@ void HyperSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     {   // the panel's keyboard, wheels and ribbon
         const auto r = fifo_.read(fifo_.getNumReady());
         auto run = [&](int start, int size) { for (int k = 0; k < size; ++k) { const auto& e = events_[(size_t) (start + k)];
-            if (e.type == 0) { synth_.noteOn(e.key, e.value); keysDown[(size_t) (e.key & 127)] = true; if (fxCurrent_) fxCurrent_->noteOn(e.key, e.value); }
-            else if (e.type == 1) { synth_.noteOff(e.key); keysDown[(size_t) (e.key & 127)] = false; if (fxCurrent_) fxCurrent_->noteOff(); }
+            if (e.type == 0) { synth_.noteOn(e.key, e.value); keysDown[(size_t) (e.key & 127)] = true; fxNote(e.key, e.value, true); }
+            else if (e.type == 1) { synth_.noteOff(e.key); keysDown[(size_t) (e.key & 127)] = false; fxNote(e.key, 0, false); }
             else if (e.type == 2) { synth_.setBend(e.value); bendNow = e.value; }
             else { synth_.setModWheel(e.value); modNow = e.value; } } };
         run(r.startIndex1, r.blockSize1); run(r.startIndex2, r.blockSize2);
