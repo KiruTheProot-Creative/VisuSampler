@@ -21,7 +21,7 @@ juce_add_plugin(HyperSynth
   PRODUCT_NAME "HyperSynth")
 
 # the panel: one page, its fonts
-juce_add_binary_data(HyperSynthUI SOURCES ui/hypersynth.html ../../../assets/fonts/Unbounded.ttf ../../../assets/fonts/JetBrainsMono.ttf)
+juce_add_binary_data(HyperSynthUI SOURCES ui/hypersynth.html ui/fxcatalog.js ../../../assets/fonts/Unbounded.ttf ../../../assets/fonts/JetBrainsMono.ttf)
 juce_add_binary_data(HyperSynthPresets HEADER_NAME HyperSynthData.h NAMESPACE hypersynth SOURCES presets/factoryPresets.json)
 target_sources(HyperSynth PRIVATE HyperSynthProcessor.cpp HyperSynthEditor.cpp)
 target_compile_definitions(HyperSynth PUBLIC

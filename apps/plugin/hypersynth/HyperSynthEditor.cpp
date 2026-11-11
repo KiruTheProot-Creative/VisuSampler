@@ -75,6 +75,12 @@ juce::WebBrowserComponent::Options HyperSynthEditor::makeOptions()
                 for (int f = 0; f < 9; ++f) { juce::Array<juce::var> pts; for (int i = 0; i < 128; ++i) pts.add(v[(size_t) f * 128 + (size_t) i]); frames.add(pts); }
                 auto* o = new juce::DynamicObject(); o->setProperty("name", juce::String(names[(size_t) t])); o->setProperty("frames", frames); all.add(juce::var(o)); }
             reply(done, all); })
+        .withNativeFunction("getFx", [this, reply](const juce::Array<juce::var>&, auto done) { const auto j = proc_.fxJson(); reply(done, j.isEmpty() ? juce::var() : juce::var(j)); })
+        .withNativeFunction("setFx", [this, reply](const juce::Array<juce::var>& a, auto done) {
+            if (!a.isEmpty()) proc_.setFx(a[0].toString(), a.size() < 2 || (bool) a[1]);
+            reply(done, proc_.fxError().isEmpty() ? juce::var(true) : juce::var(proc_.fxError())); })
+        .withNativeFunction("fxParam", [this, reply](const juce::Array<juce::var>& a, auto done) {
+            if (a.size() >= 3) proc_.queueFxParam(a[0].toString(), a[1].toString(), (float) (double) a[2]); reply(done, juce::var(true)); })
         .withNativeFunction("listPresets", [this, reply](const juce::Array<juce::var>&, auto done) { reply(done, proc_.listPresets()); })
         .withNativeFunction("loadPreset", [this, reply](const juce::Array<juce::var>& a, auto done) {
             auto r = a.isEmpty() ? juce::var() : proc_.loadPreset(a[0].toString());

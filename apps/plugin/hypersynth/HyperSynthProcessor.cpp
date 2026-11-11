@@ -33,6 +33,43 @@ HyperSynthProcessor::HyperSynthProcessor()
         params_.push_back(p); addParameter(p);
     }
     sent_.assign(params_.size(), std::numeric_limits<float>::quiet_NaN());
+    startTimerHz(10);
+}
+
+/* ---------- the FX tab: a NodeFX chain after the synth ---------- */
+void HyperSynthProcessor::setFx(const juce::String& json, bool rebuild)
+{
+    { const juce::ScopedLock l(fxLock_); fxJson_ = json; }
+    if (rebuild) rebuildFx();
+}
+
+void HyperSynthProcessor::rebuildFx()
+{
+    juce::String json; { const juce::ScopedLock l(fxLock_); json = fxJson_; }
+    std::shared_ptr<visu::FxRack> r; std::string err;
+    if (json.isNotEmpty()) r = visu::FxRack::build(json.toStdString(), sampleRate_, err);
+    { const juce::ScopedLock l(fxLock_); fxError_ = juce::String(err); }
+    if (json.isNotEmpty() && !r) return;   // a broken chain: keep playing the last good one
+    if (r && r->empty()) r.reset();       // input straight to output: nothing to run
+    const juce::SpinLock::ScopedLockType l(swapLock_); fxPending_ = std::move(r); fxHasPending_ = true;
+}
+
+void HyperSynthProcessor::queueFxParam(const juce::String& node, const juce::String& key, float value)
+{
+    const juce::SpinLock::ScopedLockType l(fxPushLock_);
+    int s1, n1, s2, n2; fxFifo_.prepareToWrite(1, s1, n1, s2, n2);
+    if (n1 + n2 < 1) return;
+    auto& m = fxMsgs_[(size_t) (n1 ? s1 : s2)];
+    node.copyToUTF8(m.node, sizeof m.node); key.copyToUTF8(m.key, sizeof m.key); m.value = value;
+    fxFifo_.finishedWrite(1);
+}
+
+void HyperSynthProcessor::timerCallback()
+{
+    std::shared_ptr<visu::FxRack> old;
+    { const juce::SpinLock::ScopedLockType l(swapLock_); old = std::move(fxRetired_); }   // freed here, not on the audio thread
+    const int lat = fxLatency_.load();
+    if (lat != getLatencySamples()) setLatencySamples(lat);
 }
 
 float HyperSynthProcessor::value(int i) const
@@ -69,6 +106,8 @@ bool HyperSynthProcessor::isBusesLayoutSupported(const BusesLayout& l) const
 
 void HyperSynthProcessor::prepareToPlay(double sr, int)
 {
+    const bool changed = std::abs(sr - sampleRate_) > 1; sampleRate_ = sr;
+    if (changed) rebuildFx();
     synth_.prepare(sr);
     std::fill(sent_.begin(), sent_.end(), std::numeric_limits<float>::quiet_NaN());
     for (auto& k : keysDown) k = false;
@@ -76,8 +115,8 @@ void HyperSynthProcessor::prepareToPlay(double sr, int)
 
 void HyperSynthProcessor::handle(const juce::MidiMessage& m)
 {
-    if (m.isNoteOn()) { synth_.noteOn(m.getNoteNumber(), m.getFloatVelocity()); keysDown[(size_t) m.getNoteNumber()] = true; }
-    else if (m.isNoteOff()) { synth_.noteOff(m.getNoteNumber()); keysDown[(size_t) m.getNoteNumber()] = false; }
+    if (m.isNoteOn()) { synth_.noteOn(m.getNoteNumber(), m.getFloatVelocity()); keysDown[(size_t) m.getNoteNumber()] = true; if (fxCurrent_) fxCurrent_->noteOn(m.getNoteNumber(), m.getFloatVelocity()); }
+    else if (m.isNoteOff()) { synth_.noteOff(m.getNoteNumber()); keysDown[(size_t) m.getNoteNumber()] = false; if (fxCurrent_) fxCurrent_->noteOff(); }
     else if (m.isPitchWheel()) { const float b = (float) (m.getPitchWheelValue() - 8192) / 8192.0f; synth_.setBend(b); bendNow = b; }
     else if (m.isControllerOfType(1)) { const float v = (float) m.getControllerValue() / 127.0f; synth_.setModWheel(v); modNow = v; }
     else if (m.isSustainPedalOn()) synth_.setSustain(true);
@@ -88,6 +127,21 @@ void HyperSynthProcessor::handle(const juce::MidiMessage& m)
 void HyperSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+    if (fxHasPending_.load()) {   // a new effect chain from the FX tab or a preset
+        const juce::SpinLock::ScopedTryLockType l(swapLock_);
+        if (l.isLocked() && !fxRetired_) { fxRetired_ = std::move(fxCurrent_); fxCurrent_ = std::move(fxPending_); fxHasPending_ = false; }
+    }
+    if (auto* rack = fxCurrent_.get()) {   // knobs moved on the FX tab
+        int s1, n1, s2, n2; fxFifo_.prepareToRead(fxFifo_.getNumReady(), s1, n1, s2, n2);
+        for (int k = 0; k < n1 + n2; ++k) { const auto& m = fxMsgs_[(size_t) (k < n1 ? s1 + k : s2 + k - n1)]; rack->setParam(m.node, m.key, m.value, false); }
+        fxFifo_.finishedRead(n1 + n2);
+        if (auto* ph = getPlayHead()) if (auto pos = ph->getPosition()) {
+            double bpm = 120; int sn = 4, sd = 4;
+            if (auto b = pos->getBpm()) bpm = *b;
+            if (auto ts = pos->getTimeSignature()) { sn = ts->numerator; sd = ts->denominator; }
+            rack->setTempo(bpm, sn, sd);
+        }
+    } else { int s1, n1, s2, n2; fxFifo_.prepareToRead(fxFifo_.getNumReady(), s1, n1, s2, n2); fxFifo_.finishedRead(n1 + n2); }
     for (size_t i = 0; i < params_.size(); ++i) {   // the knobs, automation and presets reach the engine here
         const float v = value((int) i);
         if (!(v == sent_[i])) { synth_.setParam((int) i, v); sent_[i] = v; }
@@ -95,8 +149,8 @@ void HyperSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     {   // the panel's keyboard, wheels and ribbon
         const auto r = fifo_.read(fifo_.getNumReady());
         auto run = [&](int start, int size) { for (int k = 0; k < size; ++k) { const auto& e = events_[(size_t) (start + k)];
-            if (e.type == 0) { synth_.noteOn(e.key, e.value); keysDown[(size_t) (e.key & 127)] = true; }
-            else if (e.type == 1) { synth_.noteOff(e.key); keysDown[(size_t) (e.key & 127)] = false; }
+            if (e.type == 0) { synth_.noteOn(e.key, e.value); keysDown[(size_t) (e.key & 127)] = true; if (fxCurrent_) fxCurrent_->noteOn(e.key, e.value); }
+            else if (e.type == 1) { synth_.noteOff(e.key); keysDown[(size_t) (e.key & 127)] = false; if (fxCurrent_) fxCurrent_->noteOff(); }
             else if (e.type == 2) { synth_.setBend(e.value); bendNow = e.value; }
             else { synth_.setModWheel(e.value); modNow = e.value; } } };
         run(r.startIndex1, r.blockSize1); run(r.startIndex2, r.blockSize2);
@@ -112,6 +166,7 @@ void HyperSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         handle(meta.getMessage());
     }
     if (n > at) synth_.process(l + at, rr + at, n - at);
+    if (auto* rack = fxCurrent_.get()) { rack->process(l, rr, n); fxLatency_ = rack->latency(); } else fxLatency_ = 0;
     if (!r) for (int i = 0; i < n; ++i) l[i] = .5f * (l[i] + rr[i]);
     for (int c = 2; c < chans; ++c) buffer.clear(c, 0, n);
     activeVoices = synth_.activeVoices();
@@ -131,7 +186,10 @@ juce::String HyperSynthProcessor::stateJson(const juce::String& name, const juce
     visu::hs::Synth s;
     for (int i = 0; i < (int) params_.size(); ++i) s.setParam(i, value(i));
     copyTables(synth_, s);   // imported wavetables travel with the preset and the project
-    return juce::String::fromUTF8(s.presetJson(name.toStdString(), category.toStdString()).c_str());
+    auto j = juce::String::fromUTF8(s.presetJson(name.toStdString(), category.toStdString()).c_str()).trimEnd();
+    const auto fx = fxJson();   // the effects ride along as "fx" (the engine ignores keys it doesn't know)
+    if (fx.isNotEmpty() && j.endsWithChar('}')) j = j.dropLastCharacters(1).trimEnd() + ",\n  \"fx\": " + fx + "\n}";
+    return j;
 }
 
 bool HyperSynthProcessor::applyJson(const juce::String& json, juce::String* error)
@@ -140,6 +198,10 @@ bool HyperSynthProcessor::applyJson(const juce::String& json, juce::String* erro
     if (!s.loadPreset(json.toStdString(), &err, &name, &cat)) { if (error) *error = juce::String(err); return false; }
     for (int i = 0; i < (int) params_.size(); ++i) setFromUi(i, s.param(i));
     copyTables(s, synth_);
+    {   // a preset from before the FX tab (no "fx") plays with no effects, as it did
+        const auto v = juce::JSON::parse(json); const auto fx = v.getProperty("fx", juce::var());
+        setFx(fx.isObject() ? juce::JSON::toString(fx, true) : juce::String(), true);
+    }
     setNames(juce::String::fromUTF8(name.c_str()), juce::String::fromUTF8(cat.c_str()));
     return true;
 }

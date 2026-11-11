@@ -98,6 +98,47 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
 .pitem{font-family:var(--font);font-size:13px;font-weight:600;padding:5px 9px}
 .pitem.cur{box-shadow:0 0 0 2px var(--accent),0 3px 4px #000000b3}
 #browser input{font-family:'JB',monospace;font-size:13px;color:var(--lcd);background:#070c11;border:none;border-radius:4px;padding:7px 9px;box-shadow:inset 0 2px 5px #000000f2;outline:none}
+/* the FX tab: NodeFX's modules as hardware, patched with cables */
+#fxView{height:428px;display:flex;gap:14px}
+#fxView[hidden]{display:none}
+#fxLib{width:206px;display:flex;flex-direction:column;gap:6px;min-height:0}
+#fxLibList{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:7px;padding-right:4px;scrollbar-width:thin;scrollbar-color:#4a4d54 #0a0b0c}
+#fxLibList .g{display:flex;flex-direction:column;gap:4px}#fxLibList .g>span{font-size:10.5px;letter-spacing:3px;color:var(--quiet)}
+#fxLibList .g div{display:flex;flex-wrap:wrap;gap:4px}
+.fxadd{height:23px;padding:0 7px;border-radius:3px;font-size:12.5px;font-weight:600;white-space:nowrap;cursor:grab}
+.fxadd.mod{color:#e2b56b}
+#fxPatch{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.fxbar{display:flex;align-items:center;gap:10px;height:28px}.fxhint{font-size:12px;color:var(--quiet);letter-spacing:.5px}
+#fxBoard{flex:1;position:relative;border-radius:6px;overflow:auto;scrollbar-width:thin;scrollbar-color:#4a4d54 #0a0b0c;
+  background:radial-gradient(circle,#ffffff12 1px,#0000 1.5px) 0 0/22px 22px,linear-gradient(180deg,#121316,#0c0d0f);box-shadow:inset 0 3px 8px #000000f2,inset 0 0 0 1px #000,0 1px 0 #ffffff1a}
+#fxInner{position:relative;width:2200px;height:900px}
+#fxCables{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:3}
+#fxCables path{fill:none;stroke-linecap:round;pointer-events:stroke;cursor:pointer}
+#fxCables path.hit{stroke:transparent;stroke-width:14}
+#fxCables path.ctl{stroke-dasharray:7 5}
+#fxCables path.hot{filter:drop-shadow(0 0 4px #fff)}
+.fxm{position:absolute;box-sizing:border-box;border-radius:6px;padding:6px 9px 8px;display:flex;flex-direction:column;gap:5px;z-index:2;
+  background:repeating-linear-gradient(0deg,#ffffff05 0 1px,#0000 1px 3px),linear-gradient(180deg,#3a3d43,#2a2c31 55%,#222327);box-shadow:0 6px 10px #000000cc,inset 0 1px 0 #ffffff2e,inset 0 -2px 0 #00000080}
+.fxm.io{background:linear-gradient(180deg,#4a3a2c,#33281f 60%,#2a2019)}
+.fxm.modsrc{background:repeating-linear-gradient(0deg,#ffffff05 0 1px,#0000 1px 3px),linear-gradient(180deg,#3d3a32,#2c2a25 55%,#24221e)}
+.fxm.byp{opacity:.55}
+.fxm .hd{display:flex;align-items:center;gap:6px;height:16px;cursor:move}
+.fxm .hd b{flex:1;font-size:12.5px;font-weight:700;letter-spacing:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fxm .hd .led{cursor:pointer}
+.fxm .x{border:none;background:none;color:#a9a291;font-size:12px;cursor:pointer;padding:0 2px;line-height:1}.fxm .x:hover{color:#fff}
+.fxm .kb2{display:grid;gap:2px 4px;justify-items:center}
+.fxk{position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;width:52px;cursor:ns-resize}
+.fxk .dial{position:relative;width:34px;height:34px;border-radius:50%;background:conic-gradient(from 135deg,#2a2c31 0 90deg,#0000 90deg),repeating-conic-gradient(from -135deg,#8f8672 0 1.4deg,#0000 1.4deg 27deg)}
+.fxk .cap{position:absolute;inset:5px;border-radius:50%;background:radial-gradient(circle at 38% 30%,#6b6f77,#2b2d32 50%,#131417 80%);box-shadow:0 3px 4px #000000c7,inset 0 1px 1px #ffffff40}
+.fxk .cap i{position:absolute;left:calc(50% - 1px);top:2px;width:2px;height:8px;background:#f4ecd8}
+.fxk span{font-size:9.5px;letter-spacing:.5px;font-weight:600;white-space:nowrap;max-width:52px;overflow:hidden;text-overflow:ellipsis}
+.fxk em{font-style:normal;font-family:'JB',monospace;font-size:9px;color:var(--lcdq);white-space:nowrap}
+.fxk.modded .cap{box-shadow:0 0 0 2px #d9a04a,0 3px 4px #000000c7,inset 0 1px 1px #ffffff40}
+.jack{position:absolute;width:14px;height:14px;border-radius:50%;box-sizing:border-box;cursor:crosshair;z-index:4;
+  background:radial-gradient(circle,#050506 0 3px,#6f737a 3.5px,#c9ccd2 5px,#55595f 7px);box-shadow:0 1px 2px #000000b3}
+.jack.pj{width:11px;height:11px;background:radial-gradient(circle,#050506 0 2px,#8a6a33 2.5px,#e2b56b 4px,#6b4f22 5.5px)}
+.jack:hover,.jack.on{box-shadow:0 0 0 2px #ffffffb3,0 1px 2px #000}
+.jl{position:absolute;font-size:9.5px;letter-spacing:1px;font-weight:700;color:#cdbf9f;white-space:nowrap;pointer-events:none}
 .soon{flex:1;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;letter-spacing:3px;color:#7f7868;box-shadow:inset 0 2px 6px #000000b3,0 1px 0 #ffffff14;text-align:center;line-height:1.6}
 </style>
 </head>
@@ -115,7 +156,7 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
   <div role="tablist" aria-label="Edit" style="display:flex;gap:6px;padding:4px;border-radius:7px;background:#0a0b0c;box-shadow:inset 0 2px 4px #000000e6,0 1px 0 #ffffff1a">
     <button class="btn tab" data-tab="l1" role="tab" style="width:92px;height:38px;font-size:14px;letter-spacing:1px;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:6px"><span class="led"></span>LAYER I</button>
     <button class="btn tab" data-tab="l2" role="tab" style="width:92px;height:38px;font-size:14px;letter-spacing:1px;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:6px"><span class="led"></span>LAYER II</button>
-    <button class="btn tab" disabled title="Effects arrive in step 4" style="width:52px;height:38px;font-size:14px;letter-spacing:2px">FX</button>
+    <button class="btn tab" data-tab="fx" role="tab" style="width:62px;height:38px;font-size:14px;letter-spacing:2px;display:flex;align-items:center;justify-content:center;gap:6px"><span class="led"></span>FX</button>
   </div>
   <div style="flex:1"></div>
   <button class="btn" id="prev" aria-label="Previous preset" style="width:40px;height:44px">&#9664;</button>
@@ -137,6 +178,7 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
 
 <div class="rule"></div>
 
+<div id="synthView" style="display:flex;flex-direction:column;gap:10px">
 <div class="row" style="height:300px;gap:14px">
   <section class="sec" style="width:384px" aria-label="Oscillators">
     <div class="sh"><b>OSCILLATORS</b><i></i></div>
@@ -186,7 +228,20 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
     <div style="display:flex;gap:2px;align-items:flex-start"><div class="kn" data-p="?.level" data-l="LEVEL"></div><div class="kn" data-p="?.pan" data-l="PAN"></div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:76px;padding-top:6px"><button class="btn" id="subOct" style="width:66px;height:30px;font-size:13px">-1 OCT</button><span style="font-size:11px;letter-spacing:2px;font-weight:600">SUB</span></div></div>
   </section>
-  <div class="soon">LFOs · MACROS · TOUCH · EFFECTS<br>arrive in the next steps</div>
+  <div class="soon">LFOs · MACROS · TOUCH<br>arrive in the next steps</div>
+</div>
+</div>
+
+<div id="fxView" hidden>
+  <section id="fxLib" aria-label="Effect modules">
+    <div class="sh"><b>MODULES</b><i></i></div>
+    <div id="fxLibList"></div>
+  </section>
+  <section id="fxPatch" aria-label="Patch area">
+    <div class="fxbar"><span class="fxhint">Drag a module in · patch DRY, WET or MIX into IN · LFOs and envelopes patch onto a knob's amber jack · click a cable to pull it</span><span style="flex:1"></span>
+      <button class="btn" id="fxClear" style="height:26px;padding:0 10px;font-size:12px;letter-spacing:2px">CLEAR</button></div>
+    <div id="fxBoard"><div id="fxInner"><svg id="fxCables"><g id="fxCab"></g><path id="fxTmp" stroke="#ffffffcc" stroke-width="3" fill="none" style="pointer-events:none"></path></svg></div></div>
+  </section>
 </div>
 
 <div style="height:28px;display:flex;align-items:center;gap:14px;padding:0 10px">
@@ -215,6 +270,7 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
 </div>
 </div>
 
+<script src="fxcatalog.js"></script>
 <script>
 'use strict';
 /* ---------- the bridge to the plugin (window.__JUCE__), or a stand-in for tests ---------- */
@@ -227,7 +283,7 @@ function call(name,...params){
 function on(ev,fn){const b=B();if(b)b.addEventListener(ev,fn);else(window.__hsEvents=window.__hsEvents||{})[ev]=fn;}
 
 /* ---------- state ---------- */
-const H={tabs:[],custom:{},defs:[],idx:{},vals:[],layer:'l1',osc:0,screen:'o0',name:'Init',category:'Basics',presets:[],keys:new Set(),uiKeys:new Set(),flashT:0};
+const H={view:'synth',tabs:[],custom:{},defs:[],idx:{},vals:[],layer:'l1',osc:0,screen:'o0',name:'Init',category:'Basics',presets:[],keys:new Set(),uiKeys:new Set(),flashT:0};
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const pid=p=>p.replace('?',H.layer);
 const def=id=>H.defs[H.idx[id]];
@@ -285,7 +341,8 @@ function paint(){
   [0,1,2].forEach(k=>{const p=`${H.layer}.o${k+1}.`;const onB=$(`[data-on="${k}"] .led`);if(onB)onB.classList.toggle('on',val(p+'on')>.5);
     const md=$(`[data-mode="${k}"]`);if(md)md.textContent=(def(p+'mode').opts[Math.round(val(p+'mode'))]||'').toUpperCase();
     const row=$(`.osc[data-k="${k}"]`);if(row){row.classList.toggle('sel',H.screen==='o'+k);row.style.opacity=val(p+'on')>.5?1:.55;}});
-  $$('.tab').forEach(t=>{const sel=t.dataset.tab===H.layer;t.classList.toggle('down',sel);const l=t.querySelector('.led');if(l)l.classList.toggle('on',sel);});
+  const fxOn=H.view==='fx';$('#synthView').hidden=fxOn;$('#fxView').hidden=!fxOn;$('#synthView').style.display=fxOn?'none':'flex';
+  $$('.tab').forEach(t=>{const sel=fxOn?t.dataset.tab==='fx':t.dataset.tab===H.layer;t.classList.toggle('down',sel);const l=t.querySelector('.led');if(l)l.classList.toggle('on',sel);});
   const play=Math.round(val('play'));$$('.play').forEach(b=>b.querySelector('.led').classList.toggle('on',+b.dataset.v===play||(play===2&&+b.dataset.v<2)));
   $('#slope').textContent=def(H.layer+'.lp.type').opts[Math.round(val(H.layer+'.lp.type'))];
   $('#mode').textContent=def('mode').opts[Math.round(val('mode'))].toUpperCase();
@@ -294,7 +351,7 @@ function paint(){
   $$('#stabs a').forEach(a=>a.classList.toggle('on',a.dataset.s===H.screen));
   paintFields();paintWtBar();lcdIdle();drawScreen();
 }
-function lcdIdle(){if(Date.now()<H.flashT)return;$('#lcdTop').textContent=(H.category||'').toUpperCase()+' · EDITING '+(H.layer==='l1'?'LAYER I':'LAYER II');$('#lcdMain').textContent=H.name||'Init';}
+function lcdIdle(){if(Date.now()<H.flashT)return;$('#lcdTop').textContent=(H.category||'').toUpperCase()+' · EDITING '+(H.view==='fx'?'FX':H.layer==='l1'?'LAYER I':'LAYER II');$('#lcdMain').textContent=H.name||'Init';}
 function lcdShow(id){const d=def(id);if(!d)return;$('#lcdTop').textContent=d.name.toUpperCase();let txt=fmt(d,val(id));
   if(/\.table$/.test(id)){const p=id.slice(0,-5),c=H.custom[id.slice(0,5)];if(val(p+'wtsrc')>.5&&c)txt='CUSTOM: '+c.name;}
   $('#lcdMain').textContent=txt;H.flashT=Date.now()+1400;clearTimeout(lcdShow.t);lcdShow.t=setTimeout(lcdIdle,1450);}
@@ -357,6 +414,166 @@ function drawScreen(){
   }
 }
 
+/* ---------- the FX tab: NodeFX's modules after the synth (the catalogue is NodeFX's: fxcatalog.js) ----------
+   A chain is NodeFX's graph: nodes {id,type,x,y,bypass,name,p} and cables {from:{n,p},to:{n,p},amt}. Audio leaves a
+   module from DRY, WET or MIX; a modulator's OUT goes to a knob's amber jack ("p:<setting>"). The plugin plays it
+   (setFx); a knob move goes straight to the sound (fxParam) and the chain is stored a moment later. */
+const FX={g:null,sig:'',store:0,drag:null,hot:null,nextId:1};
+const CAT=()=>(window.FXCAT||{cats:[],types:{}});
+const FT=t=>CAT().types[t];
+const FX_HIDE={macro:1};   // needs HyperSynth's macros (a later step)
+const CABLE_COLS=['#d8452f','#e2b33a','#3f86c9','#4fae6a','#c9c3b4','#b56bd8'];
+function fxId(p){let id;do{id=p+(FX.nextId++).toString(36);}while(FX.g&&FX.g.nodes.some(n=>n.id===id));return id;}
+function fxNew(type,x,y){const d=FT(type),n={id:fxId('n'),type,x:Math.round(x),y:Math.round(y),bypass:false,name:d.label,p:{},tag:{}};d.params.forEach(q=>{n.p[q.k]=q.def;});return n;}
+function fxDefault(){const a=fxNew('input',24,150),b=fxNew('output',980,150);a.name='Synth';return{nodes:[a,b],cables:[{id:fxId('c'),from:{n:a.id,p:'out'},to:{n:b.id,p:'in'},amt:50}]};}
+const fxNode=id=>FX.g.nodes.find(n=>n.id===id);
+const fxIsMod=n=>FT(n.type).kind==='mod';
+function fxFill(n){const d=FT(n.type);if(!d)return;n.p=n.p||{};n.tag=n.tag||{};d.params.forEach(q=>{if(n.p[q.k]==null)n.p[q.k]=q.old!=null?q.old:q.def;});}
+/* what the plugin gets: the graph and the ranges of the modules in it */
+function fxState(){const r={};FX.g.nodes.forEach(n=>{const d=FT(n.type);if(!d||r[n.type])return;r[n.type]={};d.params.forEach(q=>{r[n.type][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0,q.unit==='Hz'?1:0];});});
+  return{v:1,graph:FX.g,fxRanges:r};}
+function fxSig(){return JSON.stringify({n:FX.g.nodes.map(n=>[n.id,n.type,n.bypass,n.p]),c:FX.g.cables.map(c=>[c.from,c.to,c.amt])});}
+function fxSync(rebuild){clearTimeout(FX.store);const j=JSON.stringify(fxState());if(rebuild){FX.sig=fxSig();call('setFx',j,true);}else FX.store=setTimeout(()=>call('setFx',j,false),300);}
+function fxChanged(){fxRender();fxSync(true);}
+async function fxLoad(){const j=await call('getFx');let g=null;try{const v=j?JSON.parse(j):null;g=v&&v.graph;}catch(_){}
+  FX.g=g&&g.nodes?g:fxDefault();FX.g.nodes=FX.g.nodes.filter(n=>FT(n.type));FX.g.nodes.forEach(fxFill);
+  const ids=new Set(FX.g.nodes.map(n=>n.id));FX.g.cables=(FX.g.cables||[]).filter(c=>ids.has(c.from.n)&&ids.has(c.to.n));FX.sig=fxSig();fxRender();}
+/* ---- settings ---- */
+const fxLog=q=>!!q.log&&q.min>0;
+const fxNorm=(q,v)=>fxLog(q)?Math.max(0,Math.min(1,Math.log(Math.max(q.min,v)/q.min)/Math.log(q.max/q.min))):Math.max(0,Math.min(1,(v-q.min)/(q.max-q.min)));
+function fxReal(q,nm){nm=Math.max(0,Math.min(1,nm));let v=fxLog(q)?q.min*Math.pow(q.max/q.min,nm):q.min+nm*(q.max-q.min);if(q.opts||q.step)v=Math.round(v/(q.step||1))*(q.step||1);return Math.max(q.min,Math.min(q.max,v));}
+function fxFmt(q,v){if(q.opts)return q.opts[Math.max(0,Math.min(q.opts.length-1,Math.round(v)))];
+  if(q.unit==='Hz'&&v>=1000)return(v/1000).toFixed(2)+' kHz';const d=Math.abs(q.max-q.min)<=30?(Math.abs(v)<10?2:1):0;
+  return(+v).toFixed(d)+(q.unit==='%'||q.unit===':1'||!q.unit?q.unit||'':' '+q.unit);}
+function fxLcd(top,main,hold){if(!hold&&Date.now()<FX.hold)return;if(hold)FX.hold=Date.now()+2500;$('#lcdTop').textContent=top;$('#lcdMain').textContent=main;H.flashT=Date.now()+(hold?2500:1400);clearTimeout(lcdShow.t);lcdShow.t=setTimeout(lcdIdle,hold?2550:1450);}
+/* ---- the library ---- */
+function fxBuildLib(){
+  const c=CAT();$('#fxLibList').innerHTML=c.cats.map(cat=>{const items=Object.keys(c.types).filter(t=>c.types[t].cat===cat&&!FX_HIDE[t]);if(!items.length)return'';
+    return`<div class="g"><span>${esc(cat.toUpperCase())}</span><div>${items.map(t=>`<button class="btn fxadd${c.types[t].kind==='mod'?' mod':''}" data-t="${t}" title="${esc(c.types[t].hint||'')}">${esc(c.types[t].label)}</button>`).join('')}</div></div>`;}).join('');
+}
+/* ---- drawing the board ---- */
+function fxGeom(n){const d=FT(n.type),np=d.params.length,cols=np?Math.min(4,np):0,rows=cols?Math.ceil(np/cols):0,ports=Math.max(d.ins.length,d.outs.length);
+  return{cols,w:Math.max(n.type==='input'||n.type==='output'?112:128,cols*56+18),kh:rows*58,ph:ports*18+4};}
+function fxH(n){const G=fxGeom(n);return 30+G.kh+G.ph;}
+/* a free place for a modulator, where it can be seen: below the chain, left to right */
+function fxFreeSpot(w,h){const b=$('#fxBoard'),vw=Math.max(600,b.clientWidth),vh=Math.max(300,b.clientHeight),sx=b.scrollLeft,sy=b.scrollTop;
+  const hit=(x,y)=>FX.g.nodes.some(n=>x<n.x+fxGeom(n).w+20&&x+w+20>n.x&&y<n.y+fxH(n)+16&&y+h+16>n.y);
+  for(let y=sy+vh-h-26;y>=sy+8;y-=20)for(let x=sx+30;x+w<sx+vw-10;x+=20)if(!hit(x,y))return[x,y];return[sx+30,sy+vh-h-12];}
+function fxRender(){
+  if(!FX.g)return;const inner=$('#fxInner');inner.querySelectorAll('.fxm').forEach(e=>e.remove());
+  const modded=new Set(FX.g.cables.filter(c=>c.to.p.indexOf('p:')===0).map(c=>c.to.n+'|'+c.to.p.slice(2)));
+  FX.g.nodes.forEach(n=>{const d=FT(n.type),G=fxGeom(n),io=d.kind==='io',el=document.createElement('div');
+    el.className='fxm'+(io?' io':'')+(d.kind==='mod'?' modsrc':'')+(n.bypass?' byp':'');el.dataset.n=n.id;el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.width=G.w+'px';
+    const label=n.type==='input'?'SYNTH':n.type==='output'?'OUTPUT':n.name.toUpperCase();
+    let h=`<div class="hd" title="${esc(d.hint||'')}">${io?'':`<span class="led${n.bypass?'':' on'}" data-byp title="On / bypassed"></span>`}<b>${esc(label)}</b>${io?'':'<button class="x" data-del title="Remove">&#10005;</button>'}</div>`;
+    if(G.cols)h+=`<div class="kb2" style="grid-template-columns:repeat(${G.cols},52px)">${d.params.map(q=>{const v=n.p[q.k];
+      return`<div class="fxk${modded.has(n.id+'|'+q.k)?' modded':''}" data-k="${q.k}" title="${esc(q.label)}"><span class="jack pj" data-n="${n.id}" data-p="p:${q.k}" data-dir="in" style="left:-1px;top:0"></span><div class="dial"><div class="cap" style="transform:rotate(${-135+270*fxNorm(q,v)}deg)"><i></i></div></div><span>${esc(q.label.toUpperCase())}</span><em>${esc(fxFmt(q,v))}</em></div>`;}).join('')}</div>`;
+    h+=`<div style="position:relative;height:${G.ph}px">`;
+    d.ins.forEach((p,i)=>{h+=`<span class="jack" data-n="${n.id}" data-p="${p}" data-dir="in" style="left:-16px;top:${i*18}px"></span><span class="jl" style="left:2px;top:${i*18+1}px">${esc(p.toUpperCase())}</span>`;});
+    d.outs.forEach((p,i)=>{h+=`<span class="jack" data-n="${n.id}" data-p="${p}" data-dir="out" style="right:-16px;top:${i*18}px"></span><span class="jl" style="right:2px;top:${i*18+1}px">${esc(p.toUpperCase())}</span>`;});
+    el.innerHTML=h+'</div>';inner.appendChild(el);});
+  fxCables();
+}
+function fxJackXY(n,p){const j=$(`#fxInner .jack[data-n="${n}"][data-p="${p}"]`);if(!j)return null;const r=j.getBoundingClientRect(),b=$('#fxInner').getBoundingClientRect(),s=window.__hsScale||1;
+  return[(r.left+r.width/2-b.left)/s,(r.top+r.height/2-b.top)/s];}
+function fxPath(a,b){const back=b[0]<a[0],dx=back?Math.min(70,30+Math.abs(b[0]-a[0])*.1):Math.max(36,Math.abs(b[0]-a[0])*.5),sag=back?50+Math.abs(b[0]-a[0])*.12:22+Math.abs(b[1]-a[1])*.1;return`M${a[0]} ${a[1]} C ${a[0]+dx} ${a[1]+sag}, ${b[0]-dx} ${b[1]+sag}, ${b[0]} ${b[1]}`;}
+function fxCables(){
+  const svg=$('#fxCab');let h='';
+  FX.g.cables.forEach((c,i)=>{const a=fxJackXY(c.from.n,c.from.p),b=fxJackXY(c.to.n,c.to.p);if(!a||!b)return;const ctl=c.to.p.indexOf('p:')===0,col=ctl?'#e2b56b':CABLE_COLS[i%CABLE_COLS.length],d=fxPath(a,b);
+    h+=`<path class="hit" data-c="${c.id}" d="${d}"></path><path class="${ctl?'ctl':''}" data-v="${c.id}" d="${d}" stroke="${col}" stroke-width="${ctl?2.5:4}" opacity=".92" style="pointer-events:none"></path>`;});
+  svg.innerHTML=h;fxTmp();
+}
+function fxTmp(){const t=$('#fxTmp'),d=FX.drag;if(!d||d.kind!=='cable'||!d.a){t.setAttribute('d','');return;}const b=d.b||d.a;t.setAttribute('d',fxPath(d.out?d.a:b,d.out?b:d.a));}
+/* ---- patching ---- */
+function fxCycle(from,to){   // would audio from `from` into `to` come back round to `from`?
+  const seen=new Set(),st=[to];while(st.length){const id=st.pop();if(id===from)return true;if(seen.has(id))continue;seen.add(id);
+    FX.g.cables.forEach(c=>{if(c.from.n===id&&c.to.p.indexOf('p:')<0)st.push(c.to.n);});}return false;}
+function fxConnect(an,ap,bn,bp){
+  const a=fxNode(an),b=fxNode(bn);if(!a||!b||a===b)return'A module cannot feed itself.';
+  const ctl=fxIsMod(a),toCtl=bp.indexOf('p:')===0;
+  if(ctl&&!toCtl)return'LFOs and envelopes go to a knob\'s amber jack.';
+  if(!ctl&&toCtl)return'Audio goes into IN. Use an LFO or envelope for knobs.';
+  if(!toCtl&&fxCycle(an,bn))return'That would feed the sound back into itself.';
+  if(FX.g.cables.some(c=>c.from.n===an&&c.from.p===ap&&c.to.n===bn&&c.to.p===bp))return'Already patched.';
+  if(toCtl)FX.g.cables=FX.g.cables.filter(c=>!(c.to.n===bn&&c.to.p===bp));
+  FX.g.cables.push({id:fxId('c'),from:{n:an,p:ap},to:{n:bn,p:bp},amt:50});return'';
+}
+/* a module from the library: clicked = added at the end of the chain (between the last module and OUTPUT); dropped = placed, to patch by hand */
+function fxAdd(type,x,y){
+  const d=FT(type);if(!d)return;const out=FX.g.nodes.find(n=>n.type==='output');
+  if(x==null){const nw=fxGeom(fxNew(type,0,0));
+    if(d.kind==='mod'){[x,y]=fxFreeSpot(nw.w,fxH(fxNew(type,0,0)));}
+    else{const fxs=FX.g.nodes.filter(n=>n.type!=='output'&&!fxIsMod(n));x=fxs.reduce((m,n)=>Math.max(m,n.x+fxGeom(n).w),0)+40;y=60;
+      if(out&&x+nw.w+40>out.x){out.x=x+nw.w+60;}}}
+  const n=fxNew(type,x,y);FX.g.nodes.push(n);
+  if(arguments.length<2&&out&&d.kind==='fx'&&d.ins.indexOf('in')>=0&&d.outs.indexOf('mix')>=0){
+    const into=FX.g.cables.filter(c=>c.to.n===out.id&&c.to.p==='in');FX.g.cables=FX.g.cables.filter(c=>!into.includes(c));
+    into.forEach(c=>FX.g.cables.push({id:fxId('c'),from:c.from,to:{n:n.id,p:'in'},amt:50}));
+    FX.g.cables.push({id:fxId('c'),from:{n:n.id,p:'mix'},to:{n:out.id,p:'in'},amt:50});}
+  fxChanged();fxLcd('ADDED',d.label);
+}
+/* jacks sit under the cable ends: find one by position, through the cables */
+const fxJackAt=(x,y)=>document.elementsFromPoint(x,y).find(el=>el.classList&&el.classList.contains('jack'))||null;
+function fxBoardXY(e){const b=$('#fxInner').getBoundingClientRect(),s=window.__hsScale||1;return[(e.clientX-b.left)/s,(e.clientY-b.top)/s];}
+function fxWire(){
+  fxBuildLib();
+  const lib=$('#fxLibList');
+  lib.addEventListener('pointerdown',e=>{const b=e.target.closest('.fxadd');if(!b)return;e.preventDefault();const t=b.dataset.t,x0=e.clientX,y0=e.clientY;let moved=false;
+    const mv=ev=>{if(Math.hypot(ev.clientX-x0,ev.clientY-y0)>6){moved=true;document.body.style.cursor='copy';}};
+    const up=ev=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);document.body.style.cursor='';
+      if(!moved){fxAdd(t);return;}const r=$('#fxBoard').getBoundingClientRect();
+      if(ev.clientX>=r.left&&ev.clientX<=r.right&&ev.clientY>=r.top&&ev.clientY<=r.bottom){const[x,y]=fxBoardXY(ev);fxAdd(t,Math.max(0,x-60),Math.max(0,y-10));}};
+    window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);});
+  const inner=$('#fxInner');
+  inner.addEventListener('pointerdown',e=>{
+    const m=e.target.closest('.fxm'),n=m&&fxNode(m.dataset.n);
+    /* a jack: start a cable (from an input that has one: pick that cable up) */
+    const j=e.target.closest('.jack')||fxJackAt(e.clientX,e.clientY);
+    if(j){e.preventDefault();e.stopPropagation();let from={n:j.dataset.n,p:j.dataset.p},out=j.dataset.dir==='out';
+      if(!out){const c=FX.g.cables.filter(c=>c.to.n===from.n&&c.to.p===from.p).pop();if(c){FX.g.cables=FX.g.cables.filter(x=>x!==c);from=c.from;out=true;fxRender();}}
+      FX.drag={kind:'cable',from,out,a:fxJackXY(from.n,from.p),b:fxBoardXY(e)};fxTmp();
+      const mv=ev=>{FX.drag.b=fxBoardXY(ev);fxTmp();};
+      const up=ev=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);const k=fxJackAt(ev.clientX,ev.clientY);
+        const d=FX.drag;FX.drag=null;let why='';
+        if(k&&(k.dataset.dir==='out')!==d.out)why=d.out?fxConnect(d.from.n,d.from.p,k.dataset.n,k.dataset.p):fxConnect(k.dataset.n,k.dataset.p,d.from.n,d.from.p);
+        else if(k)why='Patch an output into an input.';
+        if(why&&k)fxLcd('CAN\'T PATCH',why,true);fxChanged();};
+      window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);return;}
+    if(!n)return;
+    if(e.target.closest('[data-del]')){FX.g.nodes=FX.g.nodes.filter(x=>x!==n);FX.g.cables=FX.g.cables.filter(c=>c.from.n!==n.id&&c.to.n!==n.id);fxChanged();return;}
+    if(e.target.closest('[data-byp]')){n.bypass=!n.bypass;fxChanged();fxLcd(n.name.toUpperCase(),n.bypass?'Bypassed':'On');return;}
+    /* a knob */
+    const k=e.target.closest('.fxk');
+    if(k){e.preventDefault();const q=FT(n.type).params.find(q=>q.k===k.dataset.k),y0=e.clientY,n0=fxNorm(q,n.p[q.k]);k.setPointerCapture&&k.setPointerCapture(e.pointerId);
+      const mv=ev=>{const sc=ev.shiftKey?900:(q.opts?110:200);fxSet(n,q,fxReal(q,n0+(y0-ev.clientY)/sc/(window.__hsScale||1)),k);};
+      const up=()=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);};
+      window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);return;}
+    /* the header: move the module */
+    if(e.target.closest('.hd')){e.preventDefault();const[x0,y0]=fxBoardXY(e),nx=n.x,ny=n.y;
+      const mv=ev=>{const[x,y]=fxBoardXY(ev);n.x=Math.max(0,Math.min(2080,Math.round(nx+x-x0)));n.y=Math.max(0,Math.min(820,Math.round(ny+y-y0)));m.style.left=n.x+'px';m.style.top=n.y+'px';fxCables();};
+      const up=()=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);fxSync(false);};
+      window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);}
+  });
+  inner.addEventListener('dblclick',e=>{const k=e.target.closest('.fxk'),m=e.target.closest('.fxm'),n=m&&fxNode(m.dataset.n);if(!k||!n)return;const q=FT(n.type).params.find(q=>q.k===k.dataset.k);fxSet(n,q,q.def,k);});
+  inner.addEventListener('wheel',e=>{
+    const k=e.target.closest('.fxk'),m=e.target.closest('.fxm'),n=m&&fxNode(m.dataset.n);
+    if(k&&n){e.preventDefault();const q=FT(n.type).params.find(q=>q.k===k.dataset.k);const st=q.opts?Math.sign(-e.deltaY)/Math.max(1,q.max-q.min):-e.deltaY/2000;fxSet(n,q,fxReal(q,fxNorm(q,n.p[q.k])+st),k);return;}
+  },{passive:false});
+  inner.addEventListener('mouseover',e=>{const k=e.target.closest('.fxk'),m=e.target.closest('.fxm'),n=m&&fxNode(m.dataset.n);if(k&&n){const q=FT(n.type).params.find(q=>q.k===k.dataset.k);fxLcd(n.name.toUpperCase()+' · '+q.label.toUpperCase(),fxFmt(q,n.p[q.k]));}});
+  /* cables: hover glows; click pulls it out; the wheel sets how far a modulator reaches */
+  const svg=$('#fxCables');
+  const hot=(id,on)=>{const v=$(`#fxCab path[data-v="${id}"]`);if(v)v.classList.toggle('hot',on);};
+  svg.addEventListener('pointerover',e=>{const p=e.target.closest('path.hit');if(p)hot(p.dataset.c,true);});
+  svg.addEventListener('pointerout',e=>{const p=e.target.closest('path.hit');if(p)hot(p.dataset.c,false);});
+  svg.addEventListener('click',e=>{const p=e.target.closest('path.hit');if(!p||fxJackAt(e.clientX,e.clientY))return;FX.g.cables=FX.g.cables.filter(c=>c.id!==p.dataset.c);fxChanged();});
+  svg.addEventListener('wheel',e=>{const p=e.target.closest('path.hit');if(!p)return;const c=FX.g.cables.find(c=>c.id===p.dataset.c);if(!c||c.to.p.indexOf('p:')<0)return;e.preventDefault();
+    c.amt=Math.max(-100,Math.min(100,Math.round(c.amt-Math.sign(e.deltaY)*5)));fxSync(true);fxLcd('MODULATION AMOUNT',(c.amt>0?'+':'')+c.amt+'%');},{passive:false});
+  $('#fxClear').onclick=()=>{FX.g=fxDefault();fxChanged();fxLcd('EFFECTS','cleared');};
+}
+function fxSet(n,q,v,k){if(v===n.p[q.k])return;n.p[q.k]=v;
+  if(k){k.querySelector('.cap').style.transform=`rotate(${-135+270*fxNorm(q,v)}deg)`;k.querySelector('em').textContent=fxFmt(q,v);}
+  fxLcd(n.name.toUpperCase()+' · '+q.label.toUpperCase(),fxFmt(q,v));call('fxParam',n.id,q.k,v);fxSync(false);}
+
 /* ---------- controls ---------- */
 function drag(el,id,start){
   const d=def(id);if(!d)return;let n0=toNorm(d,val(id)),y0=start.clientY,last=val(id);
@@ -372,7 +589,11 @@ function wire(){
   document.addEventListener('wheel',e=>{const k=e.target.closest('.kn,.sl,.fld');if(!k||!k.dataset.id)return;e.preventDefault();const id=k.dataset.id,d=def(id);
     const step=d.opts.length||d.whole?Math.sign(-e.deltaY)/(d.max-d.min):-e.deltaY/2000;setVal(id,fromNorm(d,toNorm(d,val(id))+step),true);lcdShow(id);},{passive:false});
   document.addEventListener('mouseover',e=>{const k=e.target.closest('.kn,.sl,.fld');if(k&&k.dataset.id)lcdShow(k.dataset.id);});
-  $$('.tab').forEach(t=>t.onclick=()=>{if(t.dataset.tab){H.layer=t.dataset.tab;paint();}});
+  $$('.tab').forEach(t=>t.onclick=()=>{const v=t.dataset.tab;if(!v)return;if(v==='fx')H.view='fx';else{H.view='synth';H.layer=v;}paint();if(H.view==='fx')fxRender();});
+  /* the page never zooms (Ctrl + wheel, Ctrl + / -): the panel already fits the window */
+  window.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault();},{passive:false,capture:true});
+  window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&['+','-','=','0','_'].includes(e.key))e.preventDefault();},{capture:true});
+  fxWire();
   $$('.play').forEach(b=>b.onclick=()=>setVal('play',+b.dataset.v,true));
   const cyc=(id,ready)=>{const d=def(id),opts=ready||d.opts.map((_,i)=>i);const cur=Math.round(val(id)),i=opts.indexOf(cur);setVal(id,opts[(i+1)%opts.length],true);lcdShow(id);};
   $('#slope').onclick=()=>cyc(H.layer+'.lp.type');$('#mode').onclick=()=>cyc('mode');$('#subOct').onclick=()=>cyc(H.layer+'.subOct');
@@ -422,7 +643,7 @@ function wire(){
 function paintKeys(){const all=new Set([...H.keys,...H.uiKeys]);$$('#keys [data-key]').forEach(k=>k.classList.toggle('on',all.has(+k.dataset.key)));}
 async function listPresets(){H.presets=(await call('listPresets'))||[];}
 async function loadPreset(id){const r=await call('loadPreset',id);if(!r||r.error){$('#pMsg').textContent=(r&&r.error)||'could not load';return;}
-  H.name=r.name;H.category=r.category;H.cur=id;if(r.values)H.vals=r.values.slice();H.flashT=0;clearTimeout(lcdShow.t);paint();renderBrowser();refreshCustom();}
+  H.name=r.name;H.category=r.category;H.cur=id;if(r.values)H.vals=r.values.slice();H.flashT=0;clearTimeout(lcdShow.t);paint();renderBrowser();refreshCustom();fxLoad();}
 function step(dir){if(!H.presets.length)return;let i=H.presets.findIndex(p=>p.id===H.cur);i=(i+dir+H.presets.length)%H.presets.length;loadPreset(H.presets[i].id);}
 async function openBrowser(){await listPresets();renderBrowser();$('#pName').value=H.name;$('#pCat').value=H.category;$('#browser').classList.add('open');}
 function renderBrowser(){
@@ -437,9 +658,9 @@ async function start(){
   const st=await call('getState');if(!st){document.body.textContent='HyperSynth could not reach the plugin.';return;}
   H.defs=st.defs;H.defs.forEach((d,i)=>{H.idx[d.id]=i;d.opts=d.opts||[];});H.vals=st.values.slice();H.name=st.name||'Init';H.category=st.category||'Basics';
   H.tabs=(await call('tablePreviews'))||[];
-  buildOscs();buildSliders();buildKeys();wire();fit();paint();await listPresets();await refreshCustom();
+  buildOscs();buildSliders();buildKeys();wire();fit();paint();await listPresets();await refreshCustom();await fxLoad();
   const cur=H.presets.find(p=>p.name===H.name&&p.category===H.category);if(cur)H.cur=cur.id;
-  on('values',e=>{(e.i||[]).forEach((i,j)=>{H.vals[i]=e.v[j];});const fresh=e.name&&e.name!==H.name;if(e.name)H.name=e.name;paint();if(fresh)refreshCustom();});
+  on('values',e=>{(e.i||[]).forEach((i,j)=>{H.vals[i]=e.v[j];});const fresh=e.name&&e.name!==H.name;if(e.name)H.name=e.name;paint();if(fresh){refreshCustom();fxLoad();}});
   on('play',e=>{H.keys=new Set(e.keys||[]);paintKeys();});
   window.addEventListener('resize',fit);
 }

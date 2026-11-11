@@ -883,6 +883,14 @@ static void testSynth() {
             for (int fr = 0; fr < 9; ++fr) { std::fputs(fr ? ",[" : "[", f); for (int i = 0; i < 128; ++i) std::fprintf(f, "%s%.3f", i ? "," : "", v[(size_t) fr * 128 + i]); std::fputs("]", f); }
             std::fputs("]}", f); }
           std::fputs("]", f); std::fclose(f); } } }
+    /* the FX tab: the chain the panel's test made (Ring mod -> Reverb, an LFO on the ring's frequency) runs after the synth */
+    { std::string err; auto rack = visu::FxRack::build(readText(std::string(TEST_DATA_DIR) + "/hypersynth-fx.json"), sr, err);
+      Synth s; s.prepare(sr); s.noteOn(57, .9f); auto dry = render(s, 48000);
+      double in = 0, out = 0, diff = 0;
+      if (rack) { std::vector<float> l = dry.first, r = dry.second; rack->noteOn(57, .9f); rack->process(l.data(), r.data(), (int) l.size());
+        for (size_t i = 0; i < l.size(); ++i) { in += dry.first[i] * dry.first[i]; out += l[i] * l[i]; diff += (l[i] - dry.first[i]) * (l[i] - dry.first[i]); } }
+      CHECK(rack && !rack->empty() && rack->unsupported().empty() && out > in * .05 && diff > in * .1 && std::isfinite(out),
+            "hypersynth FX tab: the panel's chain builds and changes the sound (%s; out/in %.2f, change %.2f)", err.empty() ? "ok" : err.c_str(), in > 0 ? out / in : 0, in > 0 ? diff / in : 0); }
     /* CPU: a big sound, 8 notes x 2 layers x 3 oscillators x 16 Hyper voices */
     { Synth s; s.prepare(sr); set(s, "play", 2);
       for (int L = 1; L <= 2; ++L) for (int k = 1; k <= 3; ++k) { char id[32]; std::snprintf(id, sizeof id, "l%d.o%d.on", L, k); set(s, id, 1); std::snprintf(id, sizeof id, "l%d.o%d.voices", L, k); set(s, id, 16); }
