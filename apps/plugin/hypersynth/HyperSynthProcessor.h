@@ -52,6 +52,9 @@ public:
     juce::var loadPreset(const juce::String& id);         // {name, category} or {error}
     juce::var savePreset(const juce::String& name, const juce::String& category);
     bool deletePreset(const juce::String& id);
+    // INIT: everything back to the Init sound (no samples, tables, modulation or effects); undoInit() brings back what was there
+    juce::var initSound();
+    juce::var undoInit();
     // wavetable import: a file picker, then the sound -> frames -> oscillator `osc` (0..2) of `layer` (0/1)
     void importTable(int layer, int osc, std::function<void(juce::var)> done);
     juce::var tablePreview(int layer, int osc) const;   // {name, frames: [[...128 samples], ...]} or void
@@ -111,6 +114,7 @@ private:
     std::array<UiEvent, 256> events_ {};
     juce::CriticalSection nameLock_;
     juce::String name_ { "Init" }, category_ { "Basics" };
+    juce::String beforeInit_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HyperSynthProcessor)
 };

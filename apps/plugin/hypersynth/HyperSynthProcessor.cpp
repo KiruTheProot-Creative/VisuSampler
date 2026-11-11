@@ -277,6 +277,27 @@ juce::var HyperSynthProcessor::listPresets() const
     return out;
 }
 
+juce::var HyperSynthProcessor::initSound()
+{
+    beforeInit_ = stateJson(presetName(), presetCategory());
+    const juce::String init = "{\"format\":\"hsyn\",\"v\":1,\"name\":\"Init\",\"category\":\"Basics\",\"params\":{}}";
+    visu::hs::Synth s; s.resetParams();   // the defaults (a preset's missing values would be the older ones)
+    for (int i = 0; i < (int) params_.size(); ++i) setFromUi(i, s.param(i));
+    juce::String err; visu::hs::Synth empty; empty.loadPreset(init.toStdString()); copyTables(empty, synth_);
+    setFx({}, true); setNames("Init", "Basics");
+    auto* o = new juce::DynamicObject(); o->setProperty("name", presetName()); o->setProperty("category", presetCategory()); o->setProperty("values", values());
+    return juce::var(o);
+}
+
+juce::var HyperSynthProcessor::undoInit()
+{
+    auto* o = new juce::DynamicObject(); juce::String err;
+    if (beforeInit_.isEmpty() || !applyJson(beforeInit_, &err)) { o->setProperty("error", err.isEmpty() ? juce::String("nothing to undo") : err); return juce::var(o); }
+    beforeInit_.clear();
+    o->setProperty("name", presetName()); o->setProperty("category", presetCategory()); o->setProperty("values", values());
+    return juce::var(o);
+}
+
 juce::var HyperSynthProcessor::loadPreset(const juce::String& id)
 {
     juce::String json, err;

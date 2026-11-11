@@ -26,6 +26,8 @@ await p.addInitScript(([defs,factory,tables])=>{
     if(name==='listPresets')return factory.map(f=>({id:'f:'+f.category+'/'+f.name,name:f.name,category:f.category,factory:true}));
     if(name==='loadPreset'){const f=factory.find(f=>'f:'+f.category+'/'+f.name===a[0]);defs.forEach((d,i)=>{vals[i]=f.params[d.id]!=null?f.params[d.id]:d.def;});return{name:f.name,category:f.category,values:vals.slice()};}
     if(name==='tablePreviews')return tables;
+    if(name==='initSound'){window.__before=vals.slice();defs.forEach((d,i)=>{vals[i]=d.def;});return{name:'Init',category:'Basics',values:vals.slice()};}
+    if(name==='undoInit'){if(!window.__before)return{error:'nothing to undo'};window.__before.forEach((v,i)=>{vals[i]=v;});window.__before=null;return{name:'CS Brass',category:'Brass',values:vals.slice()};}
     if(name==='samplePreview')return window.__smp&&a[0]===0&&a[1]===2?window.__smp:null;
     if(name==='importSample'){window.__smp={name:'Choir Ah',seconds:2.5,ch:2,peaks:Array.from({length:600},(_,i)=>(i%2?-1:1)*Math.abs(Math.sin(i/40))*.8)};
       vals[idx('l1.o3.mode')]=2;vals[idx('l1.o3.smp.root')]=57;return{name:'Choir Ah',how:'root A3 found',preview:window.__smp,values:vals.slice()};}
@@ -149,9 +151,13 @@ await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-sample.png')});
 await p.click('#stabs a[data-s="o0"]');
 const wf=await p.evaluate(()=>[...document.querySelectorAll('#fields .fld')].map(f=>f.dataset.id).filter(x=>/warp/.test(x)).join(','));
 ok(wf==='l1.o1.warp,l1.o1.warpAmt','every oscillator has WARP and AMOUNT ('+wf+')');
-await p.click('#init');const armed=await p.textContent('#init');await p.click('#init');await p.waitForTimeout(80);
-const ini=await p.evaluate(()=>({name:document.querySelector('#lcdMain').textContent,btn:document.querySelector('#init').textContent}));
-ok(armed==='SURE?'&&ini.name==='Init'&&ini.btn==='INIT','INIT asks once (SURE?), then starts from the Init sound ('+JSON.stringify(ini)+')');
+const mode0=await p.evaluate(()=>window.__vals[window.__hs.idx['l1.o3.mode']]);const window_def=defs.find(d=>d.id==='l1.o3.mode').def;
+await p.click('#init');await p.waitForTimeout(80);
+const ini=await p.evaluate(()=>({btn:document.querySelector('#init').textContent,mode:window.__vals[window.__hs.idx['l1.o3.mode']],top:document.querySelector('#lcdTop').textContent}));
+await p.click('#init');await p.waitForTimeout(80);
+const und=await p.evaluate(()=>({btn:document.querySelector('#init').textContent,mode:window.__vals[window.__hs.idx['l1.o3.mode']],main:document.querySelector('#lcdMain').textContent}));
+ok(mode0===2&&ini.btn==='UNDO'&&ini.mode===window_def&&/INIT/.test(ini.top)&&und.btn==='INIT'&&und.mode===2&&/is back/.test(und.main),'INIT starts from scratch in one click, and UNDO brings the sound back ('+JSON.stringify({ini,und})+')');
+await p.click('#init');await p.waitForTimeout(80);
 ok(errs.length===0,'no script errors with the new modes'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
 /* the FX tab: modules from NodeFX's catalogue, patched like NodeFX */
 await p.click('.tab[data-tab="fx"]');await p.waitForTimeout(100);

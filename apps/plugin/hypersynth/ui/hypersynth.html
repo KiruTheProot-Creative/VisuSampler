@@ -322,6 +322,9 @@ svg.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;point
 <script src="fxcatalog.js"></script>
 <script>
 'use strict';
+/* a script error shows on the screen (a panel that just stops reacting tells nobody anything) */
+window.addEventListener('error',e=>{try{const t=document.getElementById('lcdTop'),m=document.getElementById('lcdMain');if(t&&m){t.textContent='PANEL ERROR · PLEASE REPORT';m.textContent=String(e.message||e).slice(0,80);}}catch(_){}});
+window.addEventListener('unhandledrejection',e=>{try{const t=document.getElementById('lcdTop'),m=document.getElementById('lcdMain');if(t&&m){t.textContent='PANEL ERROR · PLEASE REPORT';m.textContent=String((e.reason&&e.reason.message)||e.reason).slice(0,80);}}catch(_){}});
 /* ---------- the bridge to the plugin (window.__JUCE__), or a stand-in for tests ---------- */
 const B=()=>window.__JUCE__&&window.__JUCE__.backend;let nextId=1;const pending=new Map();
 function call(name,...params){
@@ -880,17 +883,22 @@ function wire(){
     const up=()=>{rb.removeEventListener('pointermove',mv);rb.removeEventListener('pointerup',up);rt.style.opacity=0;call('bend',0);};rb.addEventListener('pointermove',mv);rb.addEventListener('pointerup',up);});
   /* presets */
   $('#lcd').onclick=()=>openBrowser();$('#pClose').onclick=()=>$('#browser').classList.remove('open');
-  $('#init').onclick=()=>{const b=$('#init');   // twice: the sound you have is not lost by one stray click
-    if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='SURE?';clearTimeout(b.t);b.t=setTimeout(()=>{b.classList.remove('arm');b.textContent='INIT';},2500);return;}
-    clearTimeout(b.t);b.classList.remove('arm');b.textContent='INIT';loadPreset('f:Basics/Init');};
+  /* INIT: one click starts from scratch; for 6 s the button is UNDO, in case it was a stray click */
+  $('#init').onclick=async()=>{const b=$('#init'),undo=b.classList.contains('arm');clearTimeout(b.t);b.classList.remove('arm');b.textContent='INIT';
+    const r=await call(undo?'undoInit':'initSound');if(!r||r.error){lcdMsg(undo?'UNDO':'INIT',(r&&r.error)||'did not work',true);return;}
+    presetLoaded(r,undo?null:'f:Basics/Init');
+    if(!undo){b.classList.add('arm');b.textContent='UNDO';b.t=setTimeout(()=>{b.classList.remove('arm');b.textContent='INIT';},6000);lcdMsg('INIT','a fresh start · UNDO brings yours back',true);}
+    else lcdMsg('UNDO',r.name+' is back',true);};
   $('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);$('#pFolder').onclick=()=>call('openPresetFolder');
   $('#pSave').onclick=async()=>{const n=$('#pName').value.trim()||H.name,c=$('#pCat').value.trim()||'User';const r=await call('savePreset',n,c);
     if(r&&r.error){$('#pMsg').textContent=r.error;return;}H.name=n;H.category=c;$('#pMsg').textContent='Saved as '+c+' / '+n+'.hsyn';await listPresets();renderBrowser();lcdIdle();};
 }
 function paintKeys(){const all=new Set([...H.keys,...H.uiKeys]);$$('#keys [data-key]').forEach(k=>k.classList.toggle('on',all.has(+k.dataset.key)));}
 async function listPresets(){H.presets=(await call('listPresets'))||[];}
-async function loadPreset(id){const r=await call('loadPreset',id);if(!r||r.error){$('#pMsg').textContent=(r&&r.error)||'could not load';return;}
-  H.name=r.name;H.category=r.category;H.cur=id;if(r.values)H.vals=r.values.slice();H.flashT=0;clearTimeout(lcdShow.t);paint();renderBrowser();refreshCustom();fxLoad();modLoad();}
+async function loadPreset(id){const r=await call('loadPreset',id);if(!r||r.error){const m=(r&&r.error)||'could not load';$('#pMsg').textContent=m;lcdMsg('PRESET',m,true);return;}
+  presetLoaded(r,id);}
+function presetLoaded(r,id){
+  H.name=r.name;H.category=r.category;H.cur=id||(H.presets.find(p=>p.name===r.name&&p.category===r.category)||{}).id;if(r.values)H.vals=r.values.slice();H.flashT=0;clearTimeout(lcdShow.t);paint();renderBrowser();refreshCustom();fxLoad();modLoad();}
 function step(dir){if(!H.presets.length)return;let i=H.presets.findIndex(p=>p.id===H.cur);i=(i+dir+H.presets.length)%H.presets.length;loadPreset(H.presets[i].id);}
 async function openBrowser(){await listPresets();renderBrowser();$('#pName').value=H.name;$('#pCat').value=H.category;$('#browser').classList.add('open');}
 function renderBrowser(){

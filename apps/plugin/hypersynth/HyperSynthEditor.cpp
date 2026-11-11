@@ -90,6 +90,10 @@ juce::WebBrowserComponent::Options HyperSynthEditor::makeOptions()
             reply(done, proc_.fxError().isEmpty() ? juce::var(true) : juce::var(proc_.fxError())); })
         .withNativeFunction("fxParam", [this, reply](const juce::Array<juce::var>& a, auto done) {
             if (a.size() >= 3) proc_.queueFxParam(a[0].toString(), a[1].toString(), (float) (double) a[2]); reply(done, juce::var(true)); })
+        .withNativeFunction("initSound", [this, reply](const juce::Array<juce::var>&, auto done) {
+            auto r = proc_.initSound(); for (int i = 0; i < proc_.numParams(); ++i) shown_[(size_t) i] = proc_.value(i); reply(done, r); })
+        .withNativeFunction("undoInit", [this, reply](const juce::Array<juce::var>&, auto done) {
+            auto r = proc_.undoInit(); for (int i = 0; i < proc_.numParams(); ++i) shown_[(size_t) i] = proc_.value(i); reply(done, r); })
         .withNativeFunction("listPresets", [this, reply](const juce::Array<juce::var>&, auto done) { reply(done, proc_.listPresets()); })
         .withNativeFunction("loadPreset", [this, reply](const juce::Array<juce::var>& a, auto done) {
             auto r = a.isEmpty() ? juce::var() : proc_.loadPreset(a[0].toString());
