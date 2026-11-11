@@ -86,6 +86,8 @@ Source: "{#NodeFXExe}"; DestDir: "{app}\NodeFX"; DestName: "NodeFX.exe"; Compone
 #ifdef HyperSynthVst3Dir
 Source: "{#HyperSynthVst3Dir}\*"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; Components: hypersynth; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#HyperSynthExe}"; DestDir: "{app}\HyperSynth"; DestName: "HyperSynth.exe"; Components: hypersynth; Flags: ignoreversion
+; the factory presets as .hsyn files, to look at, copy and share (the plugin has them built in as well)
+Source: "{#Root}\apps\plugin\hypersynth\presets\hsyn\*"; DestDir: "{app}\HyperSynth\Factory Presets"; Components: hypersynth; Flags: ignoreversion recursesubdirs createallsubdirs
 #endif
 Source: "{#Root}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "{#Root}\NOTICE.md"; DestDir: "{app}"; DestName: "NOTICE.txt"; Flags: ignoreversion
@@ -103,6 +105,7 @@ Name: "{group}\NodeFX"; Filename: "{app}\NodeFX\NodeFX.exe"; Components: nodefx
 #endif
 #ifdef HyperSynthVst3Dir
 Name: "{group}\HyperSynth"; Filename: "{app}\HyperSynth\HyperSynth.exe"; Components: hypersynth
+Name: "{group}\HyperSynth factory presets"; Filename: "{app}\HyperSynth\Factory Presets"; Components: hypersynth
 #endif
 Name: "{group}\License"; Filename: "{app}\LICENSE.txt"
 Name: "{group}\Terms of use"; Filename: "{app}\TERMS.txt"

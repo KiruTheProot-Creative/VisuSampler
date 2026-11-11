@@ -1,3 +1,5 @@
+#include <cstring>
+#include <filesystem>
 // Checks the C++ engine against the JS core (golden vectors) and against the example library.
 #include <memory>
 #include <thread>
@@ -876,6 +878,27 @@ static void testSynth() {
         if (std::getenv("HS_LEVELS")) std::printf("         %s / %s: peak %.3f\n", pr["category"].str().c_str(), pr["name"].str().c_str(), pk);
       }
       CHECK(good == (int) fac.size() && bad.empty(), "hypersynth: all %d factory presets play cleanly (peak under 1) and end%s", (int) fac.size(), bad.c_str()); }
+    /* the factory presets as .hsyn files (the installer puts them in Kiru CAS\HyperSynth\Factory Presets): each is what
+       the plugin loads for that preset, saved like a user preset. The files in the repository must match (HS_FACTORY_OUT rewrites them). */
+    { const std::string ft = readText(std::string(TEST_DATA_DIR) + "/../../hypersynth/presets/factoryPresets.json");
+      const std::string dir = std::string(TEST_DATA_DIR) + "/../../hypersynth/presets/hsyn"; const bool write = std::getenv("HS_FACTORY_OUT") != nullptr;
+      std::istringstream lines(ft); std::string line; int n = 0, same = 0; std::string stale;
+      while (std::getline(lines, line)) {
+        while (!line.empty() && (line.back() == ',' || line.back() == '\r' || line.back() == ' ')) line.pop_back();
+        if (line.size() < 2 || line[0] != '{') continue;
+        const std::string js = "{\"format\":\"hsyn\",\"v\":1," + line.substr(1);
+        Synth s; std::string name, cat; if (!s.loadPreset(js, nullptr, &name, &cat)) { stale += " (unreadable)"; continue; }
+        std::string out = s.presetJson(name, cat);
+        const size_t fx = line.find("\"fx\":");
+        if (fx != std::string::npos) { size_t a0 = line.find('{', fx), b = a0; for (int dep = 0; b < line.size(); ++b) { if (line[b] == '{') ++dep; else if (line[b] == '}' && --dep == 0) break; }
+          out = out.substr(0, out.rfind('}')) + ",\"fx\":" + line.substr(a0, b - a0 + 1) + "}"; }
+        auto clean = [](std::string x) { for (char& c : x) if (std::strchr("<>:\"/\\|?*", c)) c = '_'; return x; };
+        const std::string path = dir + "/" + clean(cat) + "/" + clean(name) + ".hsyn"; ++n;
+        if (write) { std::filesystem::create_directories(dir + "/" + clean(cat)); std::ofstream(path, std::ios::binary) << out; }
+        if (readText(path) == out) ++same; else stale += " " + cat + "/" + name;
+        Synth back; std::string bn; const bool ok2 = back.loadPreset(out, nullptr, &bn); if (!ok2 || bn != name) stale += " (" + name + " doesn't load back)";
+      }
+      CHECK(n >= 20 && same == n && stale.empty(), "hypersynth: the %d factory presets are in presets/hsyn as .hsyn files, up to date%s", n, stale.empty() ? "" : (": stale" + stale + " (run with HS_FACTORY_OUT=1)").c_str()); }
     if (const char* out = std::getenv("HS_PARAMS_OUT")) {   // the parameter list, for the panel's test
         std::FILE* f = std::fopen(out, "wb"); if (f) { std::fputs("[", f);
             for (size_t i = 0; i < P.size(); ++i) { const auto& d = P[i]; std::fprintf(f, "%s{\"id\":\"%s\",\"name\":\"%s\",\"unit\":\"%s\",\"min\":%g,\"max\":%g,\"def\":%g,\"log\":%s,\"whole\":%s,\"opts\":[",
