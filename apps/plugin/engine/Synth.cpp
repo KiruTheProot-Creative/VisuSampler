@@ -7,6 +7,7 @@
 #include <complex>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 
 namespace visu {
 namespace hs {
@@ -79,6 +80,27 @@ static std::vector<ParamDef> buildParams() {
             num(p + "s", pn + "sustain", 0, 1, amp ? 1.f : .5f);
             num(p + "r", pn + "release", 1, 20000, amp ? 200.f : 300.f, "ms", true);
         }
+    }
+    /* added with modulation (11 Nov 2026). Nothing modulates until a route exists, so older presets sound the same */
+    for (int i = 1; i <= Synth::kMacros; ++i) num("macro" + std::to_string(i), "Macro " + std::to_string(i), 0, 1, 0);
+    for (int i = 1; i <= Synth::kLfos; ++i) {
+        const std::string l = "lfo" + std::to_string(i) + ".", ln = "LFO " + std::to_string(i) + " ";
+        num(l + "rate", ln + "rate", .01f, 40, 2, "Hz", true);
+        opt(l + "sync", ln + "sync", { "Off", "1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4T", "1/4", "1/2", "1 bar", "2 bars", "4 bars", "8 bars" }, 0);
+        opt(l + "mode", ln + "mode", { "Free", "Retrig", "Once" }, 1);
+        opt(l + "shape", ln + "shape", { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "S&H", "Smooth Random", "Drawn" }, 0);
+        num(l + "phase", ln + "phase", 0, 1, 0);
+        num(l + "fade", ln + "fade in", 0, 10000, 0, "ms");
+    }
+    for (int i = 1; i <= 2; ++i) {
+        const std::string e = "env" + std::to_string(i) + ".", en = "Mod env " + std::to_string(i) + " ";
+        num(e + "a", en + "attack", .5f, 20000, 10, "ms", true);
+        num(e + "d", en + "decay", 1, 20000, 500, "ms", true);
+        num(e + "s", en + "sustain", 0, 1, .4f);
+        num(e + "r", en + "release", 1, 20000, 400, "ms", true);
+        num(e + "ac", en + "attack curve", -1, 1, 0);
+        num(e + "dc", en + "decay curve", -1, 1, .6f);
+        num(e + "rc", en + "release curve", -1, 1, .6f);
     }
     return v;
 }
@@ -293,6 +315,39 @@ struct Env {   // ADSR: linear attack, exponential decay and release
     }
 };
 
+/* ---------- modulation ---------- */
+const std::vector<std::string>& modSources() {
+    static const std::vector<std::string> s = { "lfo1", "lfo2", "lfo3", "lfo4", "env1", "env2", "macro1", "macro2", "macro3", "macro4", "vel", "key", "wheel", "at", "rand" };
+    return s;
+}
+enum { SLfo = 0, SEnv = 4, SMacro = 6, SVel = 10, SKey, SWheel, SAt, SRand, kSources };
+float curveShape(float x, float c) {
+    x = clampf(x, 0, 1); if (std::fabs(c) < 1e-3f) return x;
+    const float k = c * 6; return (1 - std::exp(-k * x)) / (1 - std::exp(-k));
+}
+struct ModEnv {   // a mod envelope: times in seconds, curved stages
+    int stage = 0; double t = 0; float lvl = 0, from = 0;
+    void on() { stage = 1; t = 0; from = lvl; }
+    void off() { if (stage && stage != 3) { from = lvl; stage = 3; t = 0; } }
+    float step(double dt, float a, float d, float s, float r, float ca, float cd, float cr) {
+        if (stage == 1) { lvl = from + (1 - from) * curveShape((float) (t / std::max(1e-4f, a)), ca); t += dt; if (t >= a) { stage = 2; t = 0; } }
+        else if (stage == 2) { lvl = 1 + (s - 1) * curveShape((float) (t / std::max(1e-4f, d)), cd); t += dt; }
+        else if (stage == 3) { lvl = from * (1 - curveShape((float) (t / std::max(1e-4f, r)), cr)); t += dt; if (t >= r) { stage = 0; lvl = 0; } }
+        return lvl;
+    }
+};
+static constexpr int kLfoTab = 256;
+static void drawnTable(const std::vector<float>& xyc, float* out) {   // drawn points -> kLfoTab + 1 samples, 0..1
+    const size_t n = xyc.size() / 3;
+    if (n < 2) { for (int i = 0; i <= kLfoTab; ++i) out[i] = n ? clampf(xyc[1], 0, 1) : .5f; return; }
+    for (int i = 0; i <= kLfoTab; ++i) {
+        const float x = (float) i / kLfoTab; size_t s = 0; while (s + 2 < n && xyc[(s + 1) * 3] <= x) ++s;
+        const float x0 = xyc[s * 3], y0 = xyc[s * 3 + 1], x1 = xyc[(s + 1) * 3], y1 = xyc[(s + 1) * 3 + 1], c = xyc[s * 3 + 2];
+        const float t = x1 > x0 ? (x - x0) / (x1 - x0) : 1; out[i] = clampf(y0 + (y1 - y0) * curveShape(t, c), 0, 1);
+    }
+}
+static const double kSyncBeats[] = { 0, .125, 1.0 / 6, .25, 1.0 / 3, .5, 2.0 / 3, 1, 2, 4, 8, 16, 32 };
+
 /* ---------- voices ---------- */
 struct OscState { double ph[Synth::kMaxUnison] = {}, phm[Synth::kMaxUnison] = {}; };
 struct LayerVoice { OscState o[3]; double subPh = 0; Env aenv, fenv; Svf hp[2], lp1[2], lp2[2]; };
@@ -301,6 +356,8 @@ struct Voice {
     float fade = 1, fadeStep = 0;     // a voice taken for a new note fades out (fadeStep > 0) instead of stopping dead
     double pitch = 60, target = 60;   // glides from pitch to target
     LayerVoice L[2];
+    double lfoPh[Synth::kLfos] = {}; float lfoRnd[Synth::kLfos][2] = {}; double since = 0; float rnd = 0;   // modulation
+    ModEnv menv[2];
 };
 
 /* per-layer parameter indices, found once */
@@ -344,9 +401,73 @@ struct Synth::Impl {
                 q.oct = I(o + "oct"); q.semi = I(o + "semi"); q.fine = I(o + "fine"); q.level = I(o + "level"); q.pan = I(o + "pan"); q.voices = I(o + "voices"); q.detune = I(o + "detune");
                 q.spread = I(o + "spread"); q.blend = I(o + "blend"); q.phase = I(o + "phase"); }
         }
+        for (int m = 0; m < kMacros; ++m) { iMacro[m] = I("macro" + std::to_string(m + 1)); macroNames[m] = "Macro " + std::to_string(m + 1); }
+        for (int l = 0; l < kLfos; ++l) { int k = 0; for (const char* s : { "rate", "sync", "mode", "shape", "phase", "fade" }) iLfo[l][k++] = I("lfo" + std::to_string(l + 1) + "." + s);
+            lfoPts[l] = { 0, 0, 0, .5f, 1, 0, 1, 0, 0 }; drawnTable(lfoPts[l], lfoTab[l][0]); drawnTable(lfoPts[l], lfoTab[l][1]); lfoCur[l] = 0; }
+        for (int e = 0; e < 2; ++e) { int k = 0; for (const char* s : { "a", "d", "s", "r", "ac", "dc", "rc" }) iEnv[e][k++] = I("env" + std::to_string(e + 1) + "." + s); }
+        for (auto& s : shown) s = 0;
+        cur = p.data();
         tables();   // build the wavetables now, not on the first note
     }
-    float P(int i) const { return p[(size_t) i]; }
+    /* one LFO's value 0..1 at phase x */
+    float lfoShapeAt(int l, int shape, double x, const float* rnd2) const {
+        x -= std::floor(x);
+        switch (shape) {
+            case 0: return .5f + .5f * (float) std::sin(2 * kPi * x);
+            case 1: return (float) (x < .5 ? x * 2 : 2 - x * 2);
+            case 2: return (float) x;
+            case 3: return (float) (1 - x);
+            case 4: return x < .5 ? 1.f : 0.f;
+            case 5: return rnd2[0];
+            case 6: return rnd2[0] + (rnd2[1] - rnd2[0]) * (float) (.5 - .5 * std::cos(kPi * x));
+            default: { const float* t = lfoTab[l][lfoCur[l].load(std::memory_order_acquire)]; const double q = x * kLfoTab; const int i = std::min(kLfoTab - 1, (int) q); const float f = (float) (q - i); return t[i] + (t[i + 1] - t[i]) * f; }
+        }
+    }
+    double lfoHz(int l) const {
+        const int sy = (int) std::lround(P(iLfo[l][1]));
+        return sy > 0 ? bpm / 60.0 / kSyncBeats[std::min(12, sy)] : (double) P(iLfo[l][0]);
+    }
+    /* this block's source values for one voice, and its phases moved on */
+    void sources(Voice& vo, int n, float* sv) {
+        const double dt = (double) n / sr;
+        for (int l = 0; l < kLfos; ++l) {
+            const int mode = (int) std::lround(P(iLfo[l][2])), shape = (int) std::lround(P(iLfo[l][3])); const double hz = lfoHz(l), ph0 = P(iLfo[l][4]);
+            double x; const float* r2;
+            if (mode == 0) { x = lfoFree[l] + ph0; r2 = lfoFreeRnd[l]; }
+            else { x = mode == 2 ? std::min(vo.lfoPh[l], .99999) + ph0 : vo.lfoPh[l] + ph0; r2 = vo.lfoRnd[l];
+                const double nx = vo.lfoPh[l] + hz * dt;
+                if (mode == 1 && std::floor(nx) > std::floor(vo.lfoPh[l])) { vo.lfoRnd[l][0] = vo.lfoRnd[l][1]; vo.lfoRnd[l][1] = rand01(); }
+                vo.lfoPh[l] = mode == 2 ? std::min(nx, 1.0) : nx - std::floor(nx); }
+            const float fade = P(iLfo[l][5]); const float g = fade > 0 ? (float) std::min(1.0, vo.since * 1000 / fade) : 1.f;
+            sv[SLfo + l] = (lfoShapeAt(l, shape, x, r2) * 2 - 1) * g;
+        }
+        for (int e = 0; e < 2; ++e) { const int* q = iEnv[e];
+            sv[SEnv + e] = vo.menv[e].step(dt, P(q[0]) / 1000, P(q[1]) / 1000, P(q[2]), P(q[3]) / 1000, P(q[4]), P(q[5]), P(q[6])); }
+        for (int m = 0; m < kMacros; ++m) sv[SMacro + m] = P(iMacro[m]);
+        sv[SVel] = vo.vel; sv[SKey] = clampf((float) (vo.key - 60) / 48.f, -1, 1); sv[SWheel] = wheel; sv[SAt] = aftertouch; sv[SRand] = vo.rnd;
+        vo.since += dt;
+    }
+    void freeLfos(int n) {   // the Free LFOs run on their own, shared by every note
+        for (int l = 0; l < kLfos; ++l) { const double nx = lfoFree[l] + lfoHz(l) * n / sr;
+            if (std::floor(nx) > std::floor(lfoFree[l])) { lfoFreeRnd[l][0] = lfoFreeRnd[l][1]; lfoFreeRnd[l][1] = rand01(); }
+            lfoFree[l] = nx - std::floor(nx); }
+    }
+    void noteStartMod(Voice& vo, bool retrig) {
+        if (!retrig) return;
+        for (int l = 0; l < kLfos; ++l) { vo.lfoPh[l] = 0; vo.lfoRnd[l][0] = rand01(); vo.lfoRnd[l][1] = rand01(); }
+        vo.since = 0; vo.rnd = rand01() * 2 - 1; for (auto& e : vo.menv) e.on();
+    }
+    /* modulation: routes double-buffered (the message thread writes the idle copy, then flips) */
+    struct Route { int src, dst; float amt; };
+    Route routes[2][kMaxRoutes]; int nRoutes[2] = { 0, 0 }; std::atomic<int> rCur { 0 };
+    float lfoTab[kLfos][2][kLfoTab + 1]; std::atomic<int> lfoCur[kLfos];
+    std::vector<ModRoute> modList; std::vector<float> lfoPts[kLfos]; std::string macroNames[kMacros];   // message thread
+    mutable std::mutex msgLock;
+    double bpm = 120, lfoFree[kLfos] = {}; float lfoFreeRnd[kLfos][2] = {}; float aftertouch = 0;
+    std::atomic<float> shown[kSources];
+    float scratch[512]; const float* cur = nullptr;   // the values the voice being played uses (p, or p + its modulation)
+    int iMacro[kMacros], iLfo[kLfos][6], iEnv[2][7];
+    float P(int i) const { return cur[(size_t) i]; }
     float V(int i) const { return vals[(size_t) i].load(std::memory_order_relaxed); }   // the live setting (notes can arrive before the next block)
 
     void startLayer(Voice& vo, int L, bool retrig) {
@@ -379,6 +500,8 @@ struct Synth::Impl {
             vo->active = true; vo->gate = true; vo->held = false; vo->key = key; vo->vel = vel; vo->age = ++clock; vo->fade = 1; vo->fadeStep = 0;
             vo->target = key; vo->pitch = (V(iGlide) > 0 && glideFrom >= 0) ? glideFrom : key;
             for (int L = 0; L < 2; ++L) { if (!wasActive) { for (int c = 0; c < 2; ++c) { vo->L[L].hp[c] = Svf(); vo->L[L].lp1[c] = Svf(); vo->L[L].lp2[c] = Svf(); } vo->L[L].aenv.v = 0; vo->L[L].fenv.v = 0; } startLayer(*vo, L, true); }
+            if (!wasActive) for (auto& e : vo->menv) e.lvl = 0;
+            noteStartMod(*vo, true);
         } else {
             stack.erase(std::remove(stack.begin(), stack.end(), key), stack.end()); stack.push_back(key);
             Voice& vo = v[0]; const bool legato = mode == 2 && vo.active && vo.gate;
@@ -386,16 +509,17 @@ struct Synth::Impl {
             if (!vo.active) vo.pitch = (V(iGlide) > 0 && glideFrom >= 0) ? glideFrom : key;
             vo.active = true; vo.gate = true; vo.held = false;
             for (int L = 0; L < 2; ++L) startLayer(vo, L, !legato);
+            noteStartMod(vo, !legato);
         }
         lastPitch = key;
     }
-    void release(Voice& vo) { vo.gate = false; for (auto& l : vo.L) { l.aenv.off(); l.fenv.off(); } }
+    void release(Voice& vo) { vo.gate = false; for (auto& l : vo.L) { l.aenv.off(); l.fenv.off(); } for (auto& e : vo.menv) e.off(); }
     void noteOff(int key) {
         const int mode = (int) std::lround(V(iMode));
         if (mode == 0) { for (auto& vo : v) if (vo.active && vo.gate && vo.key == key) { if (sustain) vo.held = true; else release(vo); } return; }
         stack.erase(std::remove(stack.begin(), stack.end(), key), stack.end());
         Voice& vo = v[0]; if (!vo.active || vo.key != key) return;
-        if (!stack.empty()) { vo.key = stack.back(); vo.target = vo.key; lastPitch = vo.key; if (mode == 1) for (int L = 0; L < 2; ++L) startLayer(vo, L, true); }
+        if (!stack.empty()) { vo.key = stack.back(); vo.target = vo.key; lastPitch = vo.key; if (mode == 1) { for (int L = 0; L < 2; ++L) startLayer(vo, L, true); noteStartMod(vo, true); } }
         else if (sustain) vo.held = true; else release(vo);
     }
 
@@ -413,8 +537,22 @@ struct Synth::Impl {
         const double vibSt = wheel * P(iVib) * std::sin(2 * kPi * vibPh); vibPh += P(iVibRate) * n / sr; vibPh -= std::floor(vibPh);
         const double glideMs = P(iGlide), gk = glideMs > 0 ? 1 - std::exp(-(double) n / (sr * glideMs / 1000 / 3)) : 1;
         const double bendSt = bend * P(iBend);
+        const int rc = rCur.load(std::memory_order_acquire); Route rt[kMaxRoutes]; const int nr = nRoutes[rc]; std::copy(routes[rc], routes[rc] + nr, rt);
+        freeLfos(n);
+        const Voice* newest = nullptr; float sv[kSources], showV[kSources] = {};
         for (auto& vo : v) {
             if (!vo.active) continue;
+            sources(vo, n, sv);
+            if (vo.fadeStep == 0 && (!newest || vo.age > newest->age)) { newest = &vo; std::copy(sv, sv + kSources, showV); }
+            if (nr) {   // this voice's own values: the knobs plus what modulates them
+                std::copy(p.begin(), p.end(), scratch);
+                for (int r = 0; r < nr; ++r) {
+                    const ParamDef& pd = d[(size_t) rt[r].dst]; float& x = scratch[rt[r].dst]; const float a = rt[r].amt * sv[rt[r].src];
+                    if (pd.log && pd.min > 0) x = pd.min * std::pow(pd.max / pd.min, clampf(std::log(x / pd.min) / std::log(pd.max / pd.min) + a, 0, 1));
+                    else x = clampf(x + a * (pd.max - pd.min), pd.min, pd.max);
+                }
+                cur = scratch;
+            }
             vo.pitch += (vo.target - vo.pitch) * gk;
             const float f0 = vo.fade, f1 = std::max(0.f, vo.fade - vo.fadeStep * (float) n);
             bool alive = false;
@@ -422,9 +560,11 @@ struct Synth::Impl {
                 if (lg[L] <= 0) { if (vo.L[L].aenv.stage) { vo.L[L].aenv.stage = 0; vo.L[L].aenv.v = 0; } continue; }
                 alive |= layer(vo, L, lg[L] * master, vo.pitch + bendSt + vibSt, outL, outR, n, f0, f1);
             }
+            cur = p.data();
             vo.fade = f1;
             if (!alive || (vo.fadeStep > 0 && f1 <= 0)) { vo.active = false; vo.fadeStep = 0; vo.fade = 1; }
         }
+        if (newest) for (int s = 0; s < kSources; ++s) shown[s].store(showV[s], std::memory_order_relaxed);
     }
     // one layer of one voice; false when it has gone quiet
     bool layer(Voice& vo, int L, float gain, double pitch, float* outL, float* outR, int n, float f0 = 1, float f1 = 1) {
@@ -522,7 +662,7 @@ void Synth::prepare(double sampleRate) { d_->sr = sampleRate > 0 ? sampleRate : 
 void Synth::noteOn(int key, float velocity) { d_->noteOn(key, clampf(velocity, 0, 1)); }
 void Synth::noteOff(int key) { d_->noteOff(key); }
 void Synth::allNotesOff(bool hard) {
-    for (auto& vo : d_->v) { if (hard) { vo.active = false; vo.fade = 1; vo.fadeStep = 0; for (auto& l : vo.L) { l.aenv = Env(); l.fenv = Env(); } } else d_->release(vo); vo.held = false; }
+    for (auto& vo : d_->v) { if (hard) { vo.active = false; vo.fade = 1; vo.fadeStep = 0; for (auto& l : vo.L) { l.aenv = Env(); l.fenv = Env(); } for (auto& e : vo.menv) e = ModEnv(); } else d_->release(vo); vo.held = false; }
     d_->stack.clear();
 }
 void Synth::setBend(float v) { d_->bend = clampf(v, -1, 1); }
@@ -561,6 +701,35 @@ bool Synth::customTable(int layer, int osc, std::vector<float>* frames, std::str
     return true;
 }
 
+/* ---------- modulation ---------- */
+static int sourceIndex(const std::string& s) { const auto& v = modSources(); for (size_t i = 0; i < v.size(); ++i) if (v[i] == s) return (int) i; return -1; }
+void Synth::setMods(const std::vector<ModRoute>& in) {
+    std::lock_guard<std::mutex> g(d_->msgLock);
+    d_->modList.clear(); const int w = 1 - d_->rCur.load(); int n = 0; const auto& d = params();
+    for (const auto& r : in) {
+        const int s = sourceIndex(r.src), t = paramIndex(r.dst);
+        if (s < 0 || t < 0 || !d[(size_t) t].opts.empty() || d_->isOpt[(size_t) t] || (r.dst.rfind("l1.", 0) != 0 && r.dst.rfind("l2.", 0) != 0) || n >= kMaxRoutes) continue;   // what a voice plays
+        const float a = clampf(r.amt, -1, 1); d_->modList.push_back({ r.src, r.dst, a }); d_->routes[w][n++] = { s, t, a };
+    }
+    d_->nRoutes[w] = n; d_->rCur.store(w, std::memory_order_release);
+}
+std::vector<ModRoute> Synth::mods() const { std::lock_guard<std::mutex> g(d_->msgLock); return d_->modList; }
+void Synth::setLfoShape(int l, const std::vector<float>& xyc) {
+    if (l < 0 || l >= kLfos) return;
+    std::vector<float> p; float lastX = 0;   // x rising from 0 to 1, y 0..1, curve -1..1
+    for (size_t i = 0; i + 2 < xyc.size() && p.size() < 3 * 64; i += 3) { const float x = clampf(std::max(lastX, xyc[i]), 0, 1); p.insert(p.end(), { x, clampf(xyc[i + 1], 0, 1), clampf(xyc[i + 2], -1, 1) }); lastX = x; }
+    if (p.size() < 6) return;
+    p[0] = 0; p[p.size() - 3] = 1;
+    std::lock_guard<std::mutex> g(d_->msgLock);
+    d_->lfoPts[l] = p; const int w = 1 - d_->lfoCur[l].load(); drawnTable(p, d_->lfoTab[l][w]); d_->lfoCur[l].store(w, std::memory_order_release);
+}
+std::vector<float> Synth::lfoShape(int l) const { if (l < 0 || l >= kLfos) return {}; std::lock_guard<std::mutex> g(d_->msgLock); return d_->lfoPts[l]; }
+void Synth::setMacroName(int i, const std::string& n) { if (i < 0 || i >= kMacros) return; std::lock_guard<std::mutex> g(d_->msgLock); d_->macroNames[i] = n.empty() ? "Macro " + std::to_string(i + 1) : n.substr(0, 40); }
+std::string Synth::macroName(int i) const { if (i < 0 || i >= kMacros) return {}; std::lock_guard<std::mutex> g(d_->msgLock); return d_->macroNames[i]; }
+void Synth::setTempo(double bpm) { d_->bpm = bpm > 0 ? bpm : 120; }
+void Synth::setAftertouch(float v) { d_->aftertouch = clampf(v, 0, 1); }
+float Synth::sourceValue(const std::string& s) const { const int i = sourceIndex(s); return i < 0 ? 0.f : d_->shown[i].load(std::memory_order_relaxed); }
+
 /* imported tables go into the .hsyn as 16-bit samples, base64 */
 static const char* kB64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 static std::string b64(const std::vector<uint8_t>& in) {
@@ -594,7 +763,15 @@ std::string Synth::presetJson(const std::string& name, const std::string& catego
         tabs += (tabs.empty() ? "" : ",") + jsonStr(key) + ":{\"name\":" + jsonStr(nm) + ",\"frames\":" + std::to_string(fr.size() / kTab) + ",\"scale\":" + sc + ",\"pcm16\":\"" + b64(raw) + "\"}";
     }
     if (!tabs.empty()) s += ",\"tables\":{" + tabs + "}";
-    return s + "}";
+    /* modulation: routes, drawn LFO shapes, macro names */
+    char b[48]; std::string m;
+    for (const auto& r : mods()) { std::snprintf(b, sizeof b, "%.5g", (double) r.amt); m += (m.empty() ? "" : ",") + std::string("{\"src\":") + jsonStr(r.src) + ",\"dst\":" + jsonStr(r.dst) + ",\"amt\":" + b + "}"; }
+    s += ",\"mods\":[" + m + "],\"lfoShapes\":{";
+    for (int l = 0; l < kLfos; ++l) { s += (l ? "," : "") + std::string("\"lfo") + std::to_string(l + 1) + "\":[";
+        const auto pts = lfoShape(l); for (size_t i = 0; i < pts.size(); ++i) { std::snprintf(b, sizeof b, "%s%.4g", i ? "," : "", (double) pts[i]); s += b; } s += "]"; }
+    s += "},\"macroNames\":[";
+    for (int i = 0; i < kMacros; ++i) s += (i ? "," : "") + jsonStr(macroName(i));
+    return s + "]}";
 }
 bool Synth::loadPreset(const std::string& json, std::string* error, std::string* name, std::string* category) {
     const Json j = Json::parse(json.data(), json.size());
@@ -614,6 +791,14 @@ bool Synth::loadPreset(const std::string& json, std::string* error, std::string*
         fr.resize(fr.size() / kTab * kTab);
         if (fr.empty() || !setCustomTable(L, k, fr, t["name"].str())) clearCustomTable(L, k);
     }
+    /* modulation (a preset from before it has none: nothing moves, as it was) */
+    std::vector<ModRoute> routes;
+    if (j["mods"].type == Json::Arr) for (const auto& r : j["mods"].a) routes.push_back({ r["src"].str(), r["dst"].str(), (float) r["amt"].num(0) });
+    setMods(routes);
+    for (int l = 0; l < kLfos; ++l) { char key[8]; std::snprintf(key, sizeof key, "lfo%d", l + 1); const Json& sj = j["lfoShapes"][key];
+        std::vector<float> pts; if (sj.type == Json::Arr) for (const auto& x : sj.a) pts.push_back((float) x.num(0));
+        setLfoShape(l, pts.size() >= 6 ? pts : std::vector<float> { 0, 0, 0, .5f, 1, 0, 1, 0, 0 }); }
+    for (int i = 0; i < kMacros; ++i) setMacroName(i, j["macroNames"].type == Json::Arr && (size_t) i < j["macroNames"].a.size() ? j["macroNames"].a[(size_t) i].str() : std::string());
     if (name) *name = j["name"].str();
     if (category) *category = j["category"].str();
     return true;

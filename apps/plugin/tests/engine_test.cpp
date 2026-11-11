@@ -883,6 +883,43 @@ static void testSynth() {
             for (int fr = 0; fr < 9; ++fr) { std::fputs(fr ? ",[" : "[", f); for (int i = 0; i < 128; ++i) std::fprintf(f, "%s%.3f", i ? "," : "", v[(size_t) fr * 128 + i]); std::fputs("]", f); }
             std::fputs("]}", f); }
           std::fputs("]", f); std::fclose(f); } } }
+    /* modulation: LFOs, mod envelopes, macros, velocity, drawn shapes, saved in presets */
+    { auto win = [&](const std::vector<float>& v, size_t ms0, size_t ms1) { return rms(v, ms0 * 48, ms1 * 48); };
+      // an LFO (square, 4 Hz) on layer I's level: the sound pulses
+      Synth s; s.prepare(sr); set(s, "lfo1.shape", 4); set(s, "lfo1.rate", 4); s.setMods({ { "lfo1", "l1.level", -.5f } }); s.noteOn(60, .9f);
+      auto o = render(s, 48000); double hi = 0, lo = 1e9; for (int w = 4; w < 36; ++w) { const double r = win(o.first, (size_t) w * 25, (size_t) w * 25 + 20); hi = std::max(hi, r); lo = std::min(lo, r); }
+      CHECK(lo > 0 && hi / lo > 8, "hypersynth mod: an LFO on the level makes it pulse (loud / quiet %.1fx)", lo > 0 ? hi / lo : 0);
+      // synced to 1/4 at 90 BPM = 1.5 Hz: count the pulses in 2 s
+      Synth y; y.prepare(sr); y.setTempo(90); set(y, "lfo1.shape", 4); set(y, "lfo1.sync", 7); y.setMods({ { "lfo1", "l1.level", -.5f } }); y.noteOn(60, .9f);
+      auto yo = render(y, 96000); int pulses = 0; bool loud = false;
+      for (int w = 0; w < 400; ++w) { const bool l = win(yo.first, (size_t) w * 5, (size_t) w * 5 + 5) > .02; if (l && !loud) ++pulses; loud = l; }
+      CHECK(pulses == 3, "hypersynth mod: an LFO synced to 1/4 at 90 BPM pulses 3 times in 2 s (%d)", pulses);
+      // a mod envelope on the cutoff: bright at the start, dark later
+      Synth e; e.prepare(sr); set(e, "l1.lp.cut", 300); set(e, "env1.a", 1); set(e, "env1.d", 150); set(e, "env1.s", 0); e.setMods({ { "env1", "l1.lp.cut", .7f } }); e.noteOn(48, .9f);
+      auto bright = [&](const std::vector<float>& v, size_t a, size_t b) { double d = 0; for (size_t i = a + 1; i < b; ++i) d += (double) (v[i] - v[i - 1]) * (v[i] - v[i - 1]); return std::sqrt(d / (double) (b - a)) / std::max(1e-9, rms(v, a, b)); };
+      auto eo = render(e, 48000); const double early = bright(eo.first, 480, 4800), late = bright(eo.first, 38400, 42720);
+      CHECK(early > late * 2.5, "hypersynth mod: a mod envelope opens the filter, then it closes (bright / dark %.1fx)", late > 0 ? early / late : 0);
+      // a macro: at 0 nothing changes; turned up it does
+      Synth m0, m1; for (Synth* z : { &m0, &m1 }) { z->prepare(sr); z->setMods({ { "macro1", "l1.level", -1 } }); }
+      set(m1, "macro1", 1); m0.noteOn(60, .9f); m1.noteOn(60, .9f); Synth plain; plain.prepare(sr); plain.noteOn(60, .9f);
+      auto a0 = render(m0, 9600), a1 = render(m1, 9600), ap = render(plain, 9600); double same = 0; for (size_t i = 0; i < a0.first.size(); ++i) same = std::max(same, (double) std::fabs(a0.first[i] - ap.first[i]));
+      CHECK(same < 1e-6 && rms(a1.first, 4800, 9600) < rms(ap.first, 4800, 9600) * .1, "hypersynth mod: a macro at 0 changes nothing (%.1g), turned up it does", same);
+      // velocity on the cutoff: harder notes brighter
+      double vb[2]; for (int k = 0; k < 2; ++k) { Synth z; z.prepare(sr); set(z, "l1.lp.cut", 300); set(z, "l1.vel", 0); z.setMods({ { "vel", "l1.lp.cut", .6f } }); z.noteOn(48, k ? 1.f : .1f);
+        auto zo = render(z, 9600); vb[k] = bright(zo.first, 4800, 9600); }
+      CHECK(vb[1] > vb[0] * 1.5, "hypersynth mod: velocity on the cutoff makes hard notes brighter (%.1fx)", vb[1] / vb[0]);
+      // a drawn LFO: a ramp up and a hold, read back as drawn
+      Synth dr; dr.prepare(sr); set(dr, "lfo1.shape", 7); set(dr, "lfo1.rate", 1); dr.setLfoShape(0, { 0, 0, 0, .5f, 1, 0, 1, 1, 0 }); dr.setMods({ { "lfo1", "l1.pan", .1f } }); dr.noteOn(60, .9f);
+      render(dr, 12000); const float q1 = dr.sourceValue("lfo1"); render(dr, 24000); const float q3 = dr.sourceValue("lfo1");
+      CHECK(q1 > -.1f && q1 < .1f && q3 > .95f, "hypersynth mod: a drawn LFO follows its points (at 1/4: %.2f, at 3/4: %.2f)", q1, q3);
+      // saved and loaded; a preset from before modulation has none
+      Synth sv; sv.setMods({ { "lfo2", "l2.o1.pos", .25f }, { "env2", "l1.lp.cut", -.5f }, { "nope", "l1.lp.cut", 1 }, { "lfo1", "master", 1 } });
+      sv.setLfoShape(2, { 0, .2f, .5f, .3f, .9f, -.4f, 1, .2f, 0 }); sv.setMacroName(1, "Brightness"); const auto js = sv.presetJson("M", "Test");
+      Synth ld; ld.loadPreset(js); const auto rt = ld.mods(); const auto sh = ld.lfoShape(2);
+      Synth old; old.setMods({ { "lfo1", "l1.level", 1 } }); old.loadPreset("{\"format\":\"hsyn\",\"v\":1,\"name\":\"Old\",\"params\":{}}");
+      CHECK(rt.size() == 2 && rt[0].src == "lfo2" && rt[1].dst == "l1.lp.cut" && std::fabs(rt[1].amt + .5f) < 1e-4f && sh.size() == 9 && std::fabs(sh[4] - .9f) < 1e-3f
+            && ld.macroName(1) == "Brightness" && old.mods().empty() && old.macroName(1) == "Macro 2",
+            "hypersynth mod: routes, drawn shapes and macro names are saved in the .hsyn (unknown ones dropped); an older preset has none"); }
     /* the FX tab: the chain the panel's test made (Ring mod -> Reverb, an LFO on the ring's frequency) runs after the synth */
     { std::string err; auto rack = visu::FxRack::build(readText(std::string(TEST_DATA_DIR) + "/hypersynth-fx.json"), sr, err);
       Synth s; s.prepare(sr); s.noteOn(57, .9f); auto dry = render(s, 48000);
@@ -894,9 +931,13 @@ static void testSynth() {
     /* CPU: a big sound, 8 notes x 2 layers x 3 oscillators x 16 Hyper voices */
     { Synth s; s.prepare(sr); set(s, "play", 2);
       for (int L = 1; L <= 2; ++L) for (int k = 1; k <= 3; ++k) { char id[32]; std::snprintf(id, sizeof id, "l%d.o%d.on", L, k); set(s, id, 1); std::snprintf(id, sizeof id, "l%d.o%d.voices", L, k); set(s, id, 16); }
+      { std::vector<ModRoute> r; const char* src[] = { "lfo1", "lfo2", "lfo3", "lfo4", "env1", "env2", "vel", "rand" };
+        for (int L = 1; L <= 2; ++L) for (int k = 1; k <= 3; ++k) for (const char* d : { "pos", "detune", "level", "fine" }) { char id[32]; std::snprintf(id, sizeof id, "l%d.o%d.%s", L, k, d); r.push_back({ src[r.size() % 8], id, .2f }); }
+        for (const char* d : { "l1.lp.cut", "l2.lp.cut", "l1.lp.res", "l2.pan" }) r.push_back({ "lfo1", d, .3f });
+        s.setMods(r); }
       for (int k : { 48, 52, 55, 59, 60, 64, 67, 71 }) s.noteOn(k, .8f);
       const auto t0 = std::chrono::steady_clock::now(); auto o = render(s, 480000); const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-      CHECK(peakOf(o.first) >= 0 && secs < 10, "hypersynth: worst case (768 oscillators at once) runs at %.0f%% of one core", secs / 10 * 100); }
+      CHECK(peakOf(o.first) >= 0 && secs < 10, "hypersynth: worst case (768 oscillators at once, 28 modulations) runs at %.0f%% of one core", secs / 10 * 100); }
 }
 
 static void testCompat() {

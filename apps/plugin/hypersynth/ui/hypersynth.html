@@ -125,6 +125,7 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
 .fxm .hd{display:flex;align-items:center;gap:6px;height:16px;cursor:move}
 .fxm .hd b{flex:1;font-size:12.5px;font-weight:700;letter-spacing:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fxm .hd .led{cursor:pointer}
+.fxm .msel{border:none;border-radius:3px;background:#0a0b0c;color:#f4d35e;font:700 10.5px var(--font);padding:2px 5px;cursor:pointer;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fxm .x{border:none;background:none;color:#a9a291;font-size:12px;cursor:pointer;padding:0 2px;line-height:1}.fxm .x:hover{color:#fff}
 .fxm .kb2{display:grid;gap:2px 4px;justify-items:center}
 .fxk{position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;width:52px;cursor:ns-resize}
@@ -139,6 +140,42 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
 .jack.pj{width:11px;height:11px;background:radial-gradient(circle,#050506 0 2px,#8a6a33 2.5px,#e2b56b 4px,#6b4f22 5.5px)}
 .jack:hover,.jack.on{box-shadow:0 0 0 2px #ffffffb3,0 1px 2px #000}
 .jl{position:absolute;font-size:9.5px;letter-spacing:1px;font-weight:700;color:#cdbf9f;white-space:nowrap;pointer-events:none}
+/* modulation */
+#modSec{flex:1;min-width:0}
+.hq{font-size:10.5px;color:var(--quiet);letter-spacing:.5px;white-space:nowrap}
+#macros{display:flex;gap:4px}
+.mac{display:flex;flex-direction:column;align-items:center;gap:3px;width:68px}
+.mac .kn span{display:none}
+.src{height:24px;padding:0 7px;border-radius:4px;font-size:12px;letter-spacing:1px;display:flex;align-items:center;gap:5px;white-space:nowrap;cursor:grab}
+.src .dot{width:8px;height:8px;border-radius:50%;flex:none;box-shadow:0 0 5px currentColor}
+.mname{width:68px;justify-content:center;padding:0 4px;font-size:11px;letter-spacing:.3px;box-shadow:0 3px 4px #000000b3,inset 0 1px 0 #ffffff2e,inset 0 -2px 0 #00000080,inset 3px 0 0 #f4d35e}.mname .nm{overflow:hidden;text-overflow:ellipsis}
+.mren{width:64px;font:inherit;font-size:11px;color:var(--lcd);background:#070c11;border:none;border-radius:3px;padding:3px 4px;outline:none}
+#srcs{display:grid;grid-template-columns:repeat(6,64px);gap:6px}
+.ghost{position:fixed;z-index:99;pointer-events:none;display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:4px;font:700 12px var(--font);color:#fff;background:#000c;box-shadow:0 4px 10px #000}
+.ghost .dot{width:8px;height:8px;border-radius:50%}
+.droptgt .dial,.droptgt .track,.fld.droptgt{outline:2px dashed #fff;outline-offset:3px;border-radius:50%}
+.droptgt .track{border-radius:4px}
+svg.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:2}
+#modPop{position:absolute;z-index:60;width:290px;box-sizing:border-box;padding:8px 10px;border-radius:6px;font-family:'JB',monospace;color:var(--lcd);
+  background:radial-gradient(ellipse at 50% 35%,#0e2230,#061018 80%);box-shadow:0 8px 20px #000,inset 0 0 0 1px #1f4b60}
+#modPop .ph{font-size:10.5px;color:var(--lcdq);margin-bottom:6px;letter-spacing:1px}
+.pe{font-size:11px;color:var(--lcdq);line-height:1.5;padding:4px 0}
+.mrow{display:flex;align-items:center;gap:6px;height:26px;font-size:11px}
+.mrow i{width:8px;height:8px;border-radius:50%;flex:none}
+.mrow b{width:72px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow .dst{flex:1;min-width:0;color:var(--lcdq);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow .amt{position:relative;width:96px;height:10px;border-radius:5px;background:#08141a;box-shadow:inset 0 0 0 1px #1f4b60;cursor:ew-resize;flex:none}
+.mrow .amt .mid{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:#4f93b4}
+.mrow .amt .bar{position:absolute;top:2px;bottom:2px;border-radius:3px}
+.mrow em{font-style:normal;width:40px;text-align:right}
+.mrow .x{border:none;background:none;color:#3f6f86;cursor:pointer;font-size:12px}.mrow .x:hover{color:#fff}
+#modSel{position:absolute;left:12px;top:30px;display:none;gap:5px;z-index:2}
+#modSel.show{display:flex}
+#modSel button{font:inherit;font-size:10.5px;color:#3f6f86;background:#08141a;border:1px solid #1f4b60;border-radius:3px;padding:2px 6px;cursor:pointer}
+#modSel button.on{color:var(--lcd);border-color:#4fc3f7}
+#matrix{position:absolute;left:12px;right:12px;top:30px;bottom:12px;overflow-y:auto;display:none;z-index:2;padding-right:4px;scrollbar-width:thin;scrollbar-color:#1f4b60 #061018}
+#matrix.show{display:block}
+#matrix .mrow .amt{width:64px}#matrix .mrow b{width:62px}#matrix .mrow em{width:36px}
 .soon{flex:1;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;letter-spacing:3px;color:#7f7868;box-shadow:inset 0 2px 6px #000000b3,0 1px 0 #ffffff14;text-align:center;line-height:1.6}
 </style>
 </head>
@@ -185,7 +222,9 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
     <div id="oscs"></div>
   </section>
   <section id="screen" aria-label="Screen"><div class="glass">
-    <div class="tabs" id="stabs"><a data-s="o0">OSC 1</a><a data-s="o1">OSC 2</a><a data-s="o2">OSC 3</a><a data-s="filter">FILTER</a><a data-s="env">ENV</a></div>
+    <div class="tabs" id="stabs"><a data-s="o0">OSC 1</a><a data-s="o1">OSC 2</a><a data-s="o2">OSC 3</a><a data-s="filter">FILTER</a><a data-s="env">ENV</a><a data-s="mod">LFO/ENV</a><a data-s="matrix">MATRIX</a></div>
+    <div id="modSel"><button data-ms="lfo1">LFO 1</button><button data-ms="lfo2">LFO 2</button><button data-ms="lfo3">LFO 3</button><button data-ms="lfo4">LFO 4</button><button data-ms="env1">ENV 1</button><button data-ms="env2">ENV 2</button></div>
+    <div id="matrix"></div>
     <div id="wtbar"><span id="wtName"></span><button id="wtFac" title="The factory table chosen with the TABLE knob">FACTORY</button><button id="wtCus" title="The table imported into this oscillator">CUSTOM</button><button id="wtImp" title="Import a wavetable (.wav from Serum or Vital) or any sound: its single cycles become the frames">IMPORT…</button></div>
     <canvas id="scr" width="752" height="380"></canvas>
     <div class="fields" id="fields"></div>
@@ -228,7 +267,10 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
     <div style="display:flex;gap:2px;align-items:flex-start"><div class="kn" data-p="?.level" data-l="LEVEL"></div><div class="kn" data-p="?.pan" data-l="PAN"></div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:76px;padding-top:6px"><button class="btn" id="subOct" style="width:66px;height:30px;font-size:13px">-1 OCT</button><span style="font-size:11px;letter-spacing:2px;font-weight:600">SUB</span></div></div>
   </section>
-  <div class="soon">LFOs · MACROS · TOUCH<br>arrive in the next steps</div>
+  <section class="sec" id="modSec" aria-label="Modulation">
+    <div class="sh"><b>MODULATION</b><i></i><span class="hq">drag a source onto a knob · right-click a knob for amounts</span></div>
+    <div style="display:flex;gap:14px;align-items:flex-start"><div id="macros"></div><div id="srcs"></div></div>
+  </section>
 </div>
 </div>
 
@@ -350,9 +392,13 @@ function paint(){
   $('#layerTitle').textContent=H.layer==='l1'?'LAYER I':'LAYER II';
   $$('#stabs a').forEach(a=>a.classList.toggle('on',a.dataset.s===H.screen));
   paintFields();paintWtBar();lcdIdle();drawScreen();
+  $('#modSel').classList.toggle('show',H.screen==='mod');$$('#modSel button').forEach(b=>b.classList.toggle('on',b.dataset.ms===MOD.sel));
+  $('#matrix').classList.toggle('show',H.screen==='matrix');if(H.screen==='matrix')paintMatrix();
+  paintRings();
 }
 function lcdIdle(){if(Date.now()<H.flashT)return;$('#lcdTop').textContent=(H.category||'').toUpperCase()+' · EDITING '+(H.view==='fx'?'FX':H.layer==='l1'?'LAYER I':'LAYER II');$('#lcdMain').textContent=H.name||'Init';}
 function lcdShow(id){const d=def(id);if(!d)return;$('#lcdTop').textContent=d.name.toUpperCase();let txt=fmt(d,val(id));
+  if(/^macro\d$/.test(id)){$('#lcdTop').textContent=(MOD.names[+id[5]-1]||d.name).toUpperCase();txt=Math.round(val(id)*100)+'%';}
   if(/\.table$/.test(id)){const p=id.slice(0,-5),c=H.custom[id.slice(0,5)];if(val(p+'wtsrc')>.5&&c)txt='CUSTOM: '+c.name;}
   $('#lcdMain').textContent=txt;H.flashT=Date.now()+1400;clearTimeout(lcdShow.t);lcdShow.t=setTimeout(lcdIdle,1450);}
 
@@ -360,6 +406,8 @@ function lcdShow(id){const d=def(id);if(!d)return;$('#lcdTop').textContent=d.nam
 function paintFields(){
   const el=$('#fields');let f=[];
   if(H.screen[0]==='o'){const p=`${H.layer}.o${+H.screen[1]+1}.`;f=[['oct','OCT'],['semi','SEMI'],['fine','FINE'],['pan','PAN'],['spread','SPREAD'],['blend','BLEND'],['phase','PHASE']].map(([k,l])=>[p+k,l]);}
+  else if(H.screen==='mod'){const s=MOD.sel;f=s.indexOf('lfo')===0?[[s+'.rate','RATE'],[s+'.sync','SYNC'],[s+'.mode','MODE'],[s+'.shape','SHAPE'],[s+'.phase','PHASE'],[s+'.fade','FADE']]:[[s+'.a','A'],[s+'.d','D'],[s+'.s','S'],[s+'.r','R']];}
+  else if(H.screen==='matrix')f=[];
   else if(H.screen==='filter')f=[[H.layer+'.hp.cut','HP'],[H.layer+'.lp.cut','LP'],[H.layer+'.lp.res','RES'],[H.layer+'.lp.env','ENV'],[H.layer+'.lp.key','KEY']];
   else f=[[H.layer+'.aenv.a','A'],[H.layer+'.aenv.d','D'],[H.layer+'.aenv.s','S'],[H.layer+'.aenv.r','R'],[H.layer+'.fenv.a','F.A'],[H.layer+'.fenv.d','F.D']];
   el.innerHTML=f.map(([id,l])=>`<div class="fld" data-id="${id}"><span>${l}</span><b>${fmt(def(id),val(id))}</b></div>`).join('');
@@ -408,9 +456,10 @@ function drawScreen(){
       const db=20*Math.log10(Math.max(1e-6,mh*ml*m2));pts.push([20+(i/300)*(W-40),Hh*.35-db*(Hh*.55/48)]);}
     line(pts,'#8ee0ff',3,true);
   } else {
-    const L=H.layer,env=(pre,col)=>{const a=val(pre+'.a'),d=val(pre+'.d'),s=val(pre+'.s'),r=val(pre+'.r'),tot=a+d+r+Math.max(300,(a+d+r)*.3),X=t=>20+t/tot*(W-40),Y=v=>Hh-20-v*(Hh-50),hold=a+d+Math.max(300,(a+d+r)*.3);
-      const pts=[[X(0),Y(0)],[X(a),Y(1)]];for(let i=1;i<=30;i++){const t=d*i/30;pts.push([X(a+t),Y(s+(1-s)*Math.exp(-4.6*t/d))]);}pts.push([X(hold),Y(s)]);for(let i=1;i<=30;i++){const t=r*i/30;pts.push([X(hold+t),Y(s*Math.exp(-4.6*t/r))]);}line(pts,col,3,false);};
-    env(L+'.fenv','#ea8a1f');env(L+'.aenv','#e2552f');
+    if(H.screen==='mod'){g.clearRect(0,0,W,Hh);drawMod(g,W,Hh);return;}
+    if(H.screen==='matrix'){g.clearRect(0,0,W,Hh);return;}
+    drawEnv(g,H.layer+'.fenv','#ea8a1f',0);drawEnv(g,H.layer+'.aenv','#e2552f',0);
+    g.fillStyle='#4f93b4';g.font='18px JB, monospace';g.textAlign='left';g.fillText('drag ● to set the times and sustain',SCR.x0,Hh-14);
   }
 }
 
@@ -421,18 +470,21 @@ function drawScreen(){
 const FX={g:null,sig:'',store:0,drag:null,hot:null,nextId:1};
 const CAT=()=>(window.FXCAT||{cats:[],types:{}});
 const FT=t=>CAT().types[t];
-const FX_HIDE={macro:1};   // needs HyperSynth's macros (a later step)
+const FX_HIDE={};
 const CABLE_COLS=['#d8452f','#e2b33a','#3f86c9','#4fae6a','#c9c3b4','#b56bd8'];
 function fxId(p){let id;do{id=p+(FX.nextId++).toString(36);}while(FX.g&&FX.g.nodes.some(n=>n.id===id));return id;}
-function fxNew(type,x,y){const d=FT(type),n={id:fxId('n'),type,x:Math.round(x),y:Math.round(y),bypass:false,name:d.label,p:{},tag:{}};d.params.forEach(q=>{n.p[q.k]=q.def;});return n;}
+function fxNew(type,x,y){const d=FT(type),n={id:fxId('n'),type,x:Math.round(x),y:Math.round(y),bypass:false,name:d.label,p:{},tag:{}};d.params.forEach(q=>{n.p[q.k]=q.def;});
+  if(type==='macro')n.tag={value:'m1'};   // follows HyperSynth's macro 1 (the button on the module picks another)
+  return n;}
 function fxDefault(){const a=fxNew('input',24,150),b=fxNew('output',980,150);a.name='Synth';return{nodes:[a,b],cables:[{id:fxId('c'),from:{n:a.id,p:'out'},to:{n:b.id,p:'in'},amt:50}]};}
 const fxNode=id=>FX.g.nodes.find(n=>n.id===id);
 const fxIsMod=n=>FT(n.type).kind==='mod';
 function fxFill(n){const d=FT(n.type);if(!d)return;n.p=n.p||{};n.tag=n.tag||{};d.params.forEach(q=>{if(n.p[q.k]==null)n.p[q.k]=q.old!=null?q.old:q.def;});}
 /* what the plugin gets: the graph and the ranges of the modules in it */
 function fxState(){const r={};FX.g.nodes.forEach(n=>{const d=FT(n.type);if(!d||r[n.type])return;r[n.type]={};d.params.forEach(q=>{r[n.type][q.k]=[q.min,q.max,q.opts?1:0,q.sync?1:0,q.log?1:0,q.unit==='Hz'?1:0];});});
-  return{v:1,graph:FX.g,fxRanges:r};}
-function fxSig(){return JSON.stringify({n:FX.g.nodes.map(n=>[n.id,n.type,n.bypass,n.p]),c:FX.g.cables.map(c=>[c.from,c.to,c.amt])});}
+  return{v:1,graph:FX.g,fxRanges:r,tags:[0,1,2,3].map(i=>({id:'m'+(i+1),name:MOD.names[i],kind:'number',def:0,value:0}))};}   // HyperSynth's macros
+function fxSyncTags(){if(FX.g)fxSync(true);}
+function fxSig(){return JSON.stringify({n:FX.g.nodes.map(n=>[n.id,n.type,n.bypass,n.p,n.tag]),c:FX.g.cables.map(c=>[c.from,c.to,c.amt])});}
 function fxSync(rebuild){clearTimeout(FX.store);const j=JSON.stringify(fxState());if(rebuild){FX.sig=fxSig();call('setFx',j,true);}else FX.store=setTimeout(()=>call('setFx',j,false),300);}
 function fxChanged(){fxRender();fxSync(true);}
 async function fxLoad(){const j=await call('getFx');let g=null;try{const v=j?JSON.parse(j):null;g=v&&v.graph;}catch(_){}
@@ -452,7 +504,8 @@ function fxBuildLib(){
     return`<div class="g"><span>${esc(cat.toUpperCase())}</span><div>${items.map(t=>`<button class="btn fxadd${c.types[t].kind==='mod'?' mod':''}" data-t="${t}" title="${esc(c.types[t].hint||'')}">${esc(c.types[t].label)}</button>`).join('')}</div></div>`;}).join('');
 }
 /* ---- drawing the board ---- */
-function fxGeom(n){const d=FT(n.type),np=d.params.length,cols=np?Math.min(4,np):0,rows=cols?Math.ceil(np/cols):0,ports=Math.max(d.ins.length,d.outs.length);
+const fxShown=n=>n.type==='macro'?[]:FT(n.type).params;   // a Macro module is its HyperSynth macro: no knob of its own
+function fxGeom(n){const d=FT(n.type),np=fxShown(n).length,cols=np?Math.min(4,np):0,rows=cols?Math.ceil(np/cols):0,ports=Math.max(d.ins.length,d.outs.length);
   return{cols,w:Math.max(n.type==='input'||n.type==='output'?112:128,cols*56+18),kh:rows*58,ph:ports*18+4};}
 function fxH(n){const G=fxGeom(n);return 30+G.kh+G.ph;}
 /* a free place for a modulator, where it can be seen: below the chain, left to right */
@@ -464,9 +517,10 @@ function fxRender(){
   const modded=new Set(FX.g.cables.filter(c=>c.to.p.indexOf('p:')===0).map(c=>c.to.n+'|'+c.to.p.slice(2)));
   FX.g.nodes.forEach(n=>{const d=FT(n.type),G=fxGeom(n),io=d.kind==='io',el=document.createElement('div');
     el.className='fxm'+(io?' io':'')+(d.kind==='mod'?' modsrc':'')+(n.bypass?' byp':'');el.dataset.n=n.id;el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.width=G.w+'px';
-    const label=n.type==='input'?'SYNTH':n.type==='output'?'OUTPUT':n.name.toUpperCase();
-    let h=`<div class="hd" title="${esc(d.hint||'')}">${io?'':`<span class="led${n.bypass?'':' on'}" data-byp title="On / bypassed"></span>`}<b>${esc(label)}</b>${io?'':'<button class="x" data-del title="Remove">&#10005;</button>'}</div>`;
-    if(G.cols)h+=`<div class="kb2" style="grid-template-columns:repeat(${G.cols},52px)">${d.params.map(q=>{const v=n.p[q.k];
+    const mi=n.type==='macro'?Math.max(0,['m1','m2','m3','m4'].indexOf((n.tag||{}).value)):-1;
+    const label=n.type==='input'?'SYNTH':n.type==='output'?'OUTPUT':mi>=0?'MACRO':n.name.toUpperCase();
+    let h=`<div class="hd" title="${esc(d.hint||'')}">${io?'':`<span class="led${n.bypass?'':' on'}" data-byp title="On / bypassed"></span>`}<b>${esc(label)}</b>${mi>=0?`<button class="msel" data-msel title="Which of HyperSynth's macros (click: next)">${esc(MOD.names[mi])}</button>`:''}${io?'':'<button class="x" data-del title="Remove">&#10005;</button>'}</div>`;
+    if(G.cols)h+=`<div class="kb2" style="grid-template-columns:repeat(${G.cols},52px)">${fxShown(n).map(q=>{const v=n.p[q.k];
       return`<div class="fxk${modded.has(n.id+'|'+q.k)?' modded':''}" data-k="${q.k}" title="${esc(q.label)}"><span class="jack pj" data-n="${n.id}" data-p="p:${q.k}" data-dir="in" style="left:-1px;top:0"></span><div class="dial"><div class="cap" style="transform:rotate(${-135+270*fxNorm(q,v)}deg)"><i></i></div></div><span>${esc(q.label.toUpperCase())}</span><em>${esc(fxFmt(q,v))}</em></div>`;}).join('')}</div>`;
     h+=`<div style="position:relative;height:${G.ph}px">`;
     d.ins.forEach((p,i)=>{h+=`<span class="jack" data-n="${n.id}" data-p="${p}" data-dir="in" style="left:-16px;top:${i*18}px"></span><span class="jl" style="left:2px;top:${i*18+1}px">${esc(p.toUpperCase())}</span>`;});
@@ -541,6 +595,7 @@ function fxWire(){
       window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);return;}
     if(!n)return;
     if(e.target.closest('[data-del]')){FX.g.nodes=FX.g.nodes.filter(x=>x!==n);FX.g.cables=FX.g.cables.filter(c=>c.from.n!==n.id&&c.to.n!==n.id);fxChanged();return;}
+    if(e.target.closest('[data-msel]')){const i=['m1','m2','m3','m4'].indexOf((n.tag||{}).value);n.tag={value:'m'+((Math.max(0,i)+1)%4+1)};fxChanged();return;}
     if(e.target.closest('[data-byp]')){n.bypass=!n.bypass;fxChanged();fxLcd(n.name.toUpperCase(),n.bypass?'Bypassed':'On');return;}
     /* a knob */
     const k=e.target.closest('.fxk');
@@ -574,6 +629,161 @@ function fxSet(n,q,v,k){if(v===n.p[q.k])return;n.p[q.k]=v;
   if(k){k.querySelector('.cap').style.transform=`rotate(${-135+270*fxNorm(q,v)}deg)`;k.querySelector('em').textContent=fxFmt(q,v);}
   fxLcd(n.name.toUpperCase()+' · '+q.label.toUpperCase(),fxFmt(q,v));call('fxParam',n.id,q.k,v);fxSync(false);}
 
+/* ---------- modulation (Vital / Serum style): drag a source onto a knob ----------
+   Routes {src, dst, amt} live in the plugin (setMods); a knob shows each of its routes as a coloured ring, the
+   live value as a dot. Right-click a knob: its routes, with amounts. The screen edits LFOs (drawn) and envelopes. */
+const MOD={routes:[],shapes:[[],[],[],[]],names:['Macro 1','Macro 2','Macro 3','Macro 4'],live:{},sel:'lfo1',pop:null};
+const SRC=[['lfo1','LFO 1','#4fc3f7',1],['lfo2','LFO 2','#7be3b4',1],['lfo3','LFO 3','#f0a33a',1],['lfo4','LFO 4','#ff7eb6',1],['env1','ENV 1','#ff6a3d',0],['env2','ENV 2','#c38bff',0],
+  ['macro1','M1','#f4d35e',0],['macro2','M2','#f4d35e',0],['macro3','M3','#f4d35e',0],['macro4','M4','#f4d35e',0],
+  ['vel','VEL','#9ad1ff',0],['key','KEY','#c0e57b',1],['wheel','WHEEL','#ffd27f',0],['at','AT','#ff9f80',0],['rand','RAND','#d6d6d6',1]];
+const SRCI=Object.fromEntries(SRC.map((s,i)=>[s[0],i]));
+const srcName=s=>s.indexOf('macro')===0?MOD.names[+s.slice(5)-1]:(SRC[SRCI[s]]||[0,s])[1];
+const srcCol=s=>(SRC[SRCI[s]]||[0,0,'#fff'])[2];
+const srcBi=s=>!!(SRC[SRCI[s]]||[])[3];
+const modOk=id=>/^l[12]\./.test(id)&&def(id)&&!def(id).opts.length&&!def(id).whole;
+const curve=(x,c)=>{x=Math.max(0,Math.min(1,x));if(Math.abs(c)<1e-3)return x;const k=c*6;return(1-Math.exp(-k*x))/(1-Math.exp(-k));};   // = the engine's curveShape
+async function modLoad(){const m=await call('getMods');if(!m)return;MOD.routes=(m.routes||[]).map(r=>({src:r.src,dst:r.dst,amt:+r.amt}));
+  MOD.shapes=(m.shapes||[]).map(a=>a.slice());while(MOD.shapes.length<4)MOD.shapes.push([0,0,0,.5,1,0,1,0,0]);MOD.names=(m.names||MOD.names).slice();paintMacros();paint();}
+function modSend(){call('setMods',MOD.routes);paint();}
+function modAdd(src,dst){
+  if(!modOk(dst)){lcdMsg('CAN\'T MODULATE',def(dst)?def(dst).name+' is a switch':'that',true);return;}
+  let r=MOD.routes.find(r=>r.src===src&&r.dst===dst);
+  if(!r){if(MOD.routes.length>=64){lcdMsg('MODULATION','64 routes is the most',true);return;}r={src,dst,amt:srcBi(src)?.25:.4};MOD.routes.push(r);}
+  modSend();lcdMsg(srcName(src).toUpperCase()+' → '+def(dst).name.toUpperCase(),pct(r.amt)+' · right-click the knob to change',true);
+}
+const pct=a=>(a>0?'+':'')+Math.round(a*100)+'%';
+function lcdMsg(top,main,hold){$('#lcdTop').textContent=top;$('#lcdMain').textContent=main;H.flashT=Date.now()+(hold?2600:1400);clearTimeout(lcdShow.t);lcdShow.t=setTimeout(lcdIdle,hold?2650:1450);}
+/* rings on the knobs: one arc per route from the knob's value to where the route reaches; a dot where it is now */
+function paintRings(){
+  $$('.kn,.sl').forEach(el=>{const id=el.dataset.id;let svg=el.querySelector('svg.ring');const rs=id?MOD.routes.filter(r=>r.dst===id):[];
+    if(!rs.length){if(svg)svg.remove();el.classList.remove('modded');return;}
+    el.classList.add('modded');const d=def(id),n0=toNorm(d,val(id)),isK=el.classList.contains('kn');
+    if(!svg){svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('class','ring');(isK?el.querySelector('.dial'):el.querySelector('.track')).appendChild(svg);}
+    let h='';
+    if(isK){const D=el.querySelector('.dial').offsetWidth||54,C=D/2;svg.setAttribute('viewBox',`0 0 ${D} ${D}`);
+      const pt=(nm,R)=>{const a=(-135+270*Math.max(0,Math.min(1,nm)))*Math.PI/180;return[C+R*Math.sin(a),C-R*Math.cos(a)];};
+      const arc=(a,b,R)=>{if(a>b)[a,b]=[b,a];const p0=pt(a,R),p1=pt(b,R),big=(b-a)*270>180?1:0;return`M${p0[0]} ${p0[1]} A ${R} ${R} 0 ${big} 1 ${p1[0]} ${p1[1]}`;};
+      rs.slice(0,3).forEach((r,i)=>{const R=C+1+i*3.2,lo=srcBi(r.src)?n0-r.amt:n0,hi=n0+r.amt,col=srcCol(r.src);
+        h+=`<path d="${arc(Math.max(0,Math.min(1,lo)),Math.max(0,Math.min(1,hi)),R)}" stroke="${col}" stroke-width="2.4" fill="none" opacity=".9"/>`;
+        const lv=MOD.live[r.src];if(lv!=null){const p=pt(n0+r.amt*lv,R);h+=`<circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="#fff" stroke="${col}" stroke-width="1.2"/>`;}});}
+    else{rs.slice(0,3).forEach((r,i)=>{const Y=v=>176-176*Math.max(0,Math.min(1,v))+12,lo=srcBi(r.src)?n0-r.amt:n0,hi=n0+r.amt,x=1+i*3.5,col=srcCol(r.src);
+        h+=`<line x1="${x}" x2="${x}" y1="${Y(lo)}" y2="${Y(hi)}" stroke="${col}" stroke-width="2.4"/>`;const lv=MOD.live[r.src];if(lv!=null)h+=`<circle cx="${x}" cy="${Y(n0+r.amt*lv)}" r="2.4" fill="#fff"/>`;});
+      svg.setAttribute('viewBox','0 0 26 200');}
+    svg.innerHTML=h;});
+}
+/* a route's row (the knob's menu and the MATRIX screen): source, target, amount bar, remove */
+function routeRow(r,i,full){return`<div class="mrow" data-r="${i}"><i style="background:${srcCol(r.src)}"></i><b>${esc(srcName(r.src).toUpperCase())}</b>${full?`<span class="dst">${esc(def(r.dst).name)}</span>`:''}
+  <div class="amt" data-r="${i}" title="Drag: how far · double-click: 0"><div class="mid"></div><div class="bar" style="left:${50+Math.min(0,r.amt)*50}%;width:${Math.abs(r.amt)*50}%;background:${srcCol(r.src)}"></div></div><em>${pct(r.amt)}</em><button class="x" data-rm="${i}" title="Remove">&#10005;</button></div>`;}
+function openPop(id,x,y){
+  closePop();const rs=MOD.routes.map((r,i)=>[r,i]).filter(([r])=>r.dst===id);const p=document.createElement('div');p.id='modPop';
+  p.innerHTML=`<div class="ph">${esc(def(id).name.toUpperCase())}</div>`+(rs.length?rs.map(([r,i])=>routeRow(r,i,false)).join(''):'<div class="pe">Nothing moves this yet: drag LFO, ENV, a macro, VEL… onto the knob.</div>');
+  $('#hs').appendChild(p);const s=window.__hsScale||1,hb=$('#hs').getBoundingClientRect();p.style.left=Math.min(1600-300,(x-hb.left)/s)+'px';p.style.top=Math.min(880-40-rs.length*30,(y-hb.top)/s)+'px';MOD.pop=id;
+}
+function closePop(){const p=$('#modPop');if(p)p.remove();MOD.pop=null;}
+function wireRows(host){
+  host.addEventListener('pointerdown',e=>{
+    const rm=e.target.closest('[data-rm]');if(rm){e.preventDefault();e.stopPropagation();MOD.routes.splice(+rm.dataset.rm,1);modSend();refreshRows();return;}
+    const a=e.target.closest('.amt');if(!a)return;e.preventDefault();e.stopPropagation();const r=MOD.routes[+a.dataset.r];if(!r)return;
+    const set=ev=>{const b=a.getBoundingClientRect();r.amt=Math.round(Math.max(-1,Math.min(1,((ev.clientX-b.left)/b.width-.5)*2))*100)/100;a.querySelector('.bar').style.cssText=`left:${50+Math.min(0,r.amt)*50}%;width:${Math.abs(r.amt)*50}%;background:${srcCol(r.src)}`;a.parentNode.querySelector('em').textContent=pct(r.amt);paintRings();};
+    set(e);const mv=ev=>set(ev),up=()=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);modSend();};window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);});
+  host.addEventListener('dblclick',e=>{const a=e.target.closest('.amt');if(!a)return;const r=MOD.routes[+a.dataset.r];if(r){r.amt=0;modSend();refreshRows();}});
+}
+function refreshRows(){if(MOD.pop){const id=MOD.pop,p=$('#modPop'),b=p.getBoundingClientRect();openPop(id,b.left,b.top);}if(H.screen==='matrix')paintMatrix();}
+function paintMatrix(){const el=$('#matrix');el.innerHTML=MOD.routes.length?MOD.routes.map((r,i)=>routeRow(r,i,true)).join(''):'<div class="pe">No modulation yet. Drag a source (LFO 1…, ENV 1, M1…, VEL, KEY, WHEEL, AT, RAND) onto any knob of a layer.</div>';}
+/* the source strip and macros */
+function buildMod(){
+  $('#srcs').innerHTML=SRC.filter(s=>s[0].indexOf('macro')<0).map(s=>`<button class="btn src" data-src="${s[0]}" title="${s[0].match(/lfo|env/)?'Click: edit on the screen · d':'D'}rag onto a knob to modulate it"><span class="dot" style="background:${s[2]}"></span>${s[1]}</button>`).join('');
+  $('#macros').innerHTML=[0,1,2,3].map(i=>`<div class="mac"><div class="kn sm" data-p="macro${i+1}" data-l=""></div><button class="btn src mname" data-src="macro${i+1}" title="Drag onto a knob · double-click to rename"><span class="dot" style="display:none"></span><span class="nm"></span></button></div>`).join('');
+}
+function paintMacros(){$$('.mname').forEach((b,i)=>{b.querySelector('.nm').textContent=MOD.names[i]||('Macro '+(i+1));});}
+function modWire(){
+  buildMod();wireRows($('#hs'));
+  /* drag a source onto a knob (a click on LFO / ENV opens it on the screen) */
+  document.addEventListener('pointerdown',e=>{const c=e.target.closest('.src');if(!c)return;e.preventDefault();e.stopPropagation();const src=c.dataset.src,x0=e.clientX,y0=e.clientY;let g=null;
+    const mv=ev=>{if(!g&&Math.hypot(ev.clientX-x0,ev.clientY-y0)>5){g=document.createElement('div');g.className='ghost';g.innerHTML=`<span class="dot" style="background:${srcCol(src)}"></span>${esc(srcName(src))}`;document.body.appendChild(g);}
+      if(g){g.style.left=ev.clientX+8+'px';g.style.top=ev.clientY+8+'px';const t=document.elementFromPoint(ev.clientX,ev.clientY),k=t&&t.closest&&t.closest('.kn,.sl,.fld');$$('.droptgt').forEach(x=>x.classList.remove('droptgt'));if(k&&k.dataset.id&&modOk(k.dataset.id))k.classList.add('droptgt');}};
+    const up=ev=>{window.removeEventListener('pointermove',mv,true);window.removeEventListener('pointerup',up,true);$$('.droptgt').forEach(x=>x.classList.remove('droptgt'));
+      if(!g){if(/^(lfo|env)/.test(src)){MOD.sel=src;H.screen='mod';paint();}return;}g.remove();
+      const t=document.elementFromPoint(ev.clientX,ev.clientY),k=t&&t.closest&&t.closest('.kn,.sl,.fld');if(k&&k.dataset.id)modAdd(src,k.dataset.id);};
+    window.addEventListener('pointermove',mv,true);window.addEventListener('pointerup',up,true);},true);
+  document.addEventListener('dblclick',e=>{const b=e.target.closest('.mname');if(!b)return;e.stopPropagation();const i=[...$$('.mname')].indexOf(b);
+    const inp=document.createElement('input');inp.className='mren';inp.value=MOD.names[i];inp.maxLength=24;b.replaceWith(inp);inp.focus();inp.select();
+    const done=()=>{MOD.names[i]=inp.value.trim()||('Macro '+(i+1));call('setMacroName',i,MOD.names[i]);inp.replaceWith(b);paintMacros();paint();fxSyncTags();};
+    inp.addEventListener('keydown',ev=>{if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value=MOD.names[i];inp.blur();}});inp.addEventListener('blur',done,{once:true});},true);
+  document.addEventListener('contextmenu',e=>{const k=e.target.closest('.kn,.sl,.fld');e.preventDefault();if(k&&k.dataset.id&&modOk(k.dataset.id))openPop(k.dataset.id,e.clientX,e.clientY);else closePop();});
+  document.addEventListener('pointerdown',e=>{if(MOD.pop&&!e.target.closest('#modPop'))closePop();});
+  $('#modSel').addEventListener('click',e=>{const b=e.target.closest('[data-ms]');if(b){MOD.sel=b.dataset.ms;paint();}});
+  wireEditor();
+  on('mod',e=>{const ids=['lfo1','lfo2','lfo3','lfo4','env1','env2','vel','key','wheel','at','rand'];(e.v||[]).forEach((v,i)=>{MOD.live[ids[i]]=v;});
+    for(let m=1;m<=4;m++)MOD.live['macro'+m]=val('macro'+m);paintRings();$$('.src[data-src]').forEach(b=>{const v=MOD.live[b.dataset.src];if(v!=null)b.querySelector('.dot').style.opacity=.35+.65*Math.abs(v);});
+    if(H.screen==='mod'||H.screen==='env')drawScreen();});
+}
+/* ---- the screen: LFO (drawn) and envelope editors ---- */
+const SHAPE_PTS={0:[0,.5,-.6,.25,1,.6,.5,.5,-.6,.75,0,.6,1,.5,0],1:[0,.5,0,.25,1,0,.75,0,0,1,.5,0],2:[0,0,0,1,1,0],3:[0,1,0,1,0,0],4:[0,1,0,.5,1,0,.5,0,0,1,0,0],5:[0,.5,0,1,.5,0],6:[0,.5,0,1,.5,0]};
+function lfoPts(l){const s=MOD.shapes[l];return s&&s.length>=6?s:[0,0,0,.5,1,0,1,0,0];}
+function lfoY(l,x){   // the shape as the engine plays it (0..1), for drawing
+  const sh=Math.round(val(`lfo${l+1}.shape`));x-=Math.floor(x);
+  if(sh===0)return .5+.5*Math.sin(2*Math.PI*x);if(sh===1)return x<.5?x*2:2-x*2;if(sh===2)return x;if(sh===3)return 1-x;if(sh===4)return x<.5?1:0;
+  if(sh===5)return[.7,.2,.9,.4,.6,.1,.8,.3][Math.floor(x*8)];if(sh===6){const a=[.7,.2,.9,.4,.6,.1,.8,.3,.7],i=Math.floor(x*8),f=x*8-i;return a[i]+(a[i+1]-a[i])*(.5-.5*Math.cos(Math.PI*f));}
+  const p=lfoPts(l),n=p.length/3;let s=0;while(s+2<n&&p[(s+1)*3]<=x)s++;const x0=p[s*3],y0=p[s*3+1],x1=p[s*3+3],y1=p[s*3+4];return y0+(y1-y0)*curve(x1>x0?(x-x0)/(x1-x0):1,p[s*3+2]);}
+const SCR={x0:24,x1:728,y0:52,y1:330};
+function scrXY(e){const c=$('#scr'),r=c.getBoundingClientRect();return[(e.clientX-r.left)/r.width*c.width,(e.clientY-r.top)/r.height*c.height];}
+/* envelopes on the screen: [prefix, colour, has curves] */
+function screenEnvs(){return H.screen==='mod'?[[MOD.sel,srcCol(MOD.sel),1]]:[[H.layer+'.fenv','#ea8a1f',0],[H.layer+'.aenv','#e2552f',0]];}
+function envGeom(pre){const a=val(pre+'.a'),d=val(pre+'.d'),r=val(pre+'.r'),hold=Math.max(250,(a+d+r)*.25),tot=a+d+hold+r,X=t=>SCR.x0+t/tot*(SCR.x1-SCR.x0),Y=v=>SCR.y1-v*(SCR.y1-SCR.y0);
+  return{a,d,r,s:val(pre+'.s'),hold,X,Y};}
+function drawEnv(g,pre,col,curves,lw){const G=envGeom(pre),ac=curves?val(pre+'.ac'):0,dc=curves?val(pre+'.dc'):.767,rc=curves?val(pre+'.rc'):.767,pts=[];
+  for(let i=0;i<=40;i++)pts.push([G.X(G.a*i/40),G.Y(curve(i/40,ac))]);
+  for(let i=1;i<=40;i++)pts.push([G.X(G.a+G.d*i/40),G.Y(1+(G.s-1)*curve(i/40,dc))]);
+  pts.push([G.X(G.a+G.d+G.hold),G.Y(G.s)]);for(let i=1;i<=40;i++)pts.push([G.X(G.a+G.d+G.hold+G.r*i/40),G.Y(G.s*(1-curve(i/40,rc)))]);
+  g.strokeStyle=col;g.lineWidth=lw||3;g.beginPath();pts.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.stroke();
+  const hs=envHandles(pre,curves);g.fillStyle=col;hs.forEach(h=>{g.beginPath();if(h.k[0]==='c'){g.save();g.translate(h.x,h.y);g.rotate(Math.PI/4);g.fillRect(-5,-5,10,10);g.restore();}else g.arc(h.x,h.y,7,0,7);g.fill();});}
+function envHandles(pre,curves){const G=envGeom(pre),h=[{k:'a',x:G.X(G.a),y:G.Y(1)},{k:'ds',x:G.X(G.a+G.d),y:G.Y(G.s)},{k:'r',x:G.X(G.a+G.d+G.hold+G.r),y:G.Y(0)}];
+  if(curves){h.push({k:'ca',x:G.X(G.a/2),y:G.Y(curve(.5,val(pre+'.ac')))},{k:'cd',x:G.X(G.a+G.d/2),y:G.Y(1+(G.s-1)*curve(.5,val(pre+'.dc')))},{k:'cr',x:G.X(G.a+G.d+G.hold+G.r/2),y:G.Y(G.s*(1-curve(.5,val(pre+'.rc'))))});}
+  return h.map(o=>Object.assign(o,{pre}));}
+function lfoHandles(l){const p=lfoPts(l),n=p.length/3,X=x=>SCR.x0+x*(SCR.x1-SCR.x0),Y=y=>SCR.y1-y*(SCR.y1-SCR.y0),h=[];
+  for(let i=0;i<n;i++)h.push({k:'p',i,x:X(p[i*3]),y:Y(p[i*3+1])});
+  for(let i=0;i+1<n;i++){const xm=(p[i*3]+p[i*3+3])/2;h.push({k:'c',i,x:X(xm),y:Y(p[i*3+1]+(p[i*3+4]-p[i*3+1])*curve(.5,p[i*3+2]))});}return h;}
+function drawMod(g,W,Hh){
+  const s=MOD.sel,col=srcCol(s);g.strokeStyle='#12303f';g.lineWidth=1.5;g.strokeRect(SCR.x0,SCR.y0,SCR.x1-SCR.x0,SCR.y1-SCR.y0);
+  if(s.indexOf('lfo')===0){const l=+s[3]-1,pts=[];for(let i=0;i<=300;i++){const x=i/300;pts.push([SCR.x0+x*(SCR.x1-SCR.x0),SCR.y1-lfoY(l,x)*(SCR.y1-SCR.y0)]);}
+    g.strokeStyle=col;g.lineWidth=3;g.shadowColor=col;g.shadowBlur=8;g.beginPath();pts.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.stroke();g.shadowBlur=0;
+    if(Math.round(val(`lfo${l+1}.shape`))===7){g.fillStyle=col;lfoHandles(l).forEach(h=>{g.beginPath();if(h.k==='c'){g.save();g.translate(h.x,h.y);g.rotate(Math.PI/4);g.fillRect(-5,-5,10,10);g.restore();}else g.arc(h.x,h.y,7,0,7);g.fill();});}
+    const lv=MOD.live[s];if(lv!=null){const y=SCR.y1-(lv*.5+.5)*(SCR.y1-SCR.y0);g.strokeStyle='#ffffff55';g.setLineDash([6,6]);g.beginPath();g.moveTo(SCR.x0,y);g.lineTo(SCR.x1,y);g.stroke();g.setLineDash([]);}
+    g.fillStyle='#4f93b4';g.font='18px JB, monospace';g.textAlign='left';g.fillText(Math.round(val(`lfo${l+1}.shape`))===7?'drag points · double-click: add / remove · ◆ bends':'drag the line to draw your own shape',SCR.x0,Hh-14);}
+  else{drawEnv(g,s,col,1);const lv=MOD.live[s];if(lv!=null){const y=SCR.y1-lv*(SCR.y1-SCR.y0);g.strokeStyle='#ffffff55';g.setLineDash([6,6]);g.beginPath();g.moveTo(SCR.x0,y);g.lineTo(SCR.x1,y);g.stroke();g.setLineDash([]);}
+    g.fillStyle='#4f93b4';g.font='18px JB, monospace';g.textAlign='left';g.fillText('drag ● for times and sustain · drag ◆ to bend',SCR.x0,Hh-14);}
+}
+function wireEditor(){
+  const c=$('#scr');let sendT=0;const pushShape=l=>{clearTimeout(sendT);sendT=setTimeout(()=>call('setLfoShape',l,MOD.shapes[l]),25);};
+  const near=(hs,x,y)=>{let b=null,bd=22*22;hs.forEach(h=>{const d=(h.x-x)**2+(h.y-y)**2;if(d<bd){bd=d;b=h;}});return b;};
+  const toDrawn=l=>{const id=`lfo${l+1}.shape`,sh=Math.round(val(id));if(sh!==7){MOD.shapes[l]=(SHAPE_PTS[sh]||lfoPts(l)).slice();setVal(id,7,true);pushShape(l);}};
+  c.addEventListener('pointerdown',e=>{
+    const [x,y]=scrXY(e);let h=null,lfo=-1;
+    if(H.screen==='mod'&&MOD.sel.indexOf('lfo')===0){lfo=+MOD.sel[3]-1;if(Math.round(val(`lfo${lfo+1}.shape`))!==7){toDrawn(lfo);}h=near(lfoHandles(lfo),x,y);}
+    else if(H.screen==='mod'||H.screen==='env'){const hs=[];screenEnvs().forEach(([pre,,cv])=>hs.push(...envHandles(pre,cv)));h=near(hs,x,y);}
+    if(!h)return;e.preventDefault();c.setPointerCapture(e.pointerId);const W=SCR.x1-SCR.x0,Hh=SCR.y1-SCR.y0,start={x,y};
+    const ids=[];const g0={};if(h.pre)['a','d','s','r','ac','dc','rc'].forEach(k=>{const id=h.pre+'.'+k;if(def(id)){g0[k]=val(id);ids.push(id);}});
+    ids.forEach(id=>call('gesture',id,true));
+    const mv=ev=>{const [mx,my]=scrXY(ev),dx=mx-start.x,dy=my-start.y;
+      if(lfo>=0){const p=MOD.shapes[lfo],n=p.length/3;
+        if(h.k==='p'){const i=h.i;if(i>0&&i<n-1)p[i*3]=Math.max(p[i*3-3],Math.min(p[i*3+3],(mx-SCR.x0)/W));p[i*3+1]=Math.max(0,Math.min(1,(SCR.y1-my)/Hh));}
+        else{const i=h.i,up=p[i*3+4]>=p[i*3+1]?1:-1;p[i*3+2]=Math.max(-1,Math.min(1,(h.c0!=null?h.c0:(h.c0=p[i*3+2]))-dy/120*up));}
+        pushShape(lfo);drawScreen();return;}
+      const P=h.pre,fac=Math.pow(2,dx/70),set=(k,v)=>{const id=P+'.'+k,d=def(id);setVal(id,Math.max(d.min,Math.min(d.max,v)),true);lcdShow(id);};
+      if(h.k==='a')set('a',g0.a*fac);
+      else if(h.k==='ds'){set('d',g0.d*fac);set('s',g0.s-dy/(Hh));}
+      else if(h.k==='r')set('r',g0.r*fac);
+      else{const k=h.k==='ca'?'ac':h.k==='cd'?'dc':'rc',sg=h.k==='ca'?-1:1;set(k,g0[k]+dy/120*sg);}};
+    const up=()=>{c.removeEventListener('pointermove',mv);c.removeEventListener('pointerup',up);ids.forEach(id=>call('gesture',id,false));};
+    c.addEventListener('pointermove',mv);c.addEventListener('pointerup',up);});
+  c.addEventListener('dblclick',e=>{if(H.screen!=='mod'||MOD.sel.indexOf('lfo')!==0)return;const l=+MOD.sel[3]-1;toDrawn(l);const [x,y]=scrXY(e),p=MOD.shapes[l],n=p.length/3,W=SCR.x1-SCR.x0,Hh=SCR.y1-SCR.y0;
+    const h=near(lfoHandles(l).filter(h=>h.k==='p'),x,y);
+    if(h){if(h.i>0&&h.i<n-1)p.splice(h.i*3,3);}
+    else if(n<64){const px=Math.max(0,Math.min(1,(x-SCR.x0)/W)),py=Math.max(0,Math.min(1,(SCR.y1-y)/Hh));let i=1;while(i<n&&p[i*3]<px)i++;p.splice(i*3,0,px,py,0);}
+    pushShape(l);drawScreen();});
+}
+
 /* ---------- controls ---------- */
 function drag(el,id,start){
   const d=def(id);if(!d)return;let n0=toNorm(d,val(id)),y0=start.clientY,last=val(id);
@@ -583,8 +793,8 @@ function drag(el,id,start){
   window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up);
 }
 function wire(){
-  document.addEventListener('pointerdown',e=>{
-    const k=e.target.closest('.kn,.sl,.fld');if(!k||!k.dataset.id)return;e.preventDefault();drag(k,k.dataset.id,e);});
+  document.addEventListener('pointerdown',e=>{if(e.button!==0)return;
+    const k=e.target.closest('.kn,.sl,.fld');if(!k||!k.dataset.id||k.closest('#modPop'))return;e.preventDefault();drag(k,k.dataset.id,e);});
   document.addEventListener('dblclick',e=>{const k=e.target.closest('.kn,.sl,.fld');if(!k||!k.dataset.id)return;const id=k.dataset.id;call('gesture',id,true);setVal(id,def(id).def,true);call('gesture',id,false);lcdShow(id);});
   document.addEventListener('wheel',e=>{const k=e.target.closest('.kn,.sl,.fld');if(!k||!k.dataset.id)return;e.preventDefault();const id=k.dataset.id,d=def(id);
     const step=d.opts.length||d.whole?Math.sign(-e.deltaY)/(d.max-d.min):-e.deltaY/2000;setVal(id,fromNorm(d,toNorm(d,val(id))+step),true);lcdShow(id);},{passive:false});
@@ -593,7 +803,7 @@ function wire(){
   /* the page never zooms (Ctrl + wheel, Ctrl + / -): the panel already fits the window */
   window.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault();},{passive:false,capture:true});
   window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&['+','-','=','0','_'].includes(e.key))e.preventDefault();},{capture:true});
-  fxWire();
+  fxWire();modWire();
   $$('.play').forEach(b=>b.onclick=()=>setVal('play',+b.dataset.v,true));
   const cyc=(id,ready)=>{const d=def(id),opts=ready||d.opts.map((_,i)=>i);const cur=Math.round(val(id)),i=opts.indexOf(cur);setVal(id,opts[(i+1)%opts.length],true);lcdShow(id);};
   $('#slope').onclick=()=>cyc(H.layer+'.lp.type');$('#mode').onclick=()=>cyc('mode');$('#subOct').onclick=()=>cyc(H.layer+'.subOct');
@@ -643,7 +853,7 @@ function wire(){
 function paintKeys(){const all=new Set([...H.keys,...H.uiKeys]);$$('#keys [data-key]').forEach(k=>k.classList.toggle('on',all.has(+k.dataset.key)));}
 async function listPresets(){H.presets=(await call('listPresets'))||[];}
 async function loadPreset(id){const r=await call('loadPreset',id);if(!r||r.error){$('#pMsg').textContent=(r&&r.error)||'could not load';return;}
-  H.name=r.name;H.category=r.category;H.cur=id;if(r.values)H.vals=r.values.slice();H.flashT=0;clearTimeout(lcdShow.t);paint();renderBrowser();refreshCustom();fxLoad();}
+  H.name=r.name;H.category=r.category;H.cur=id;if(r.values)H.vals=r.values.slice();H.flashT=0;clearTimeout(lcdShow.t);paint();renderBrowser();refreshCustom();fxLoad();modLoad();}
 function step(dir){if(!H.presets.length)return;let i=H.presets.findIndex(p=>p.id===H.cur);i=(i+dir+H.presets.length)%H.presets.length;loadPreset(H.presets[i].id);}
 async function openBrowser(){await listPresets();renderBrowser();$('#pName').value=H.name;$('#pCat').value=H.category;$('#browser').classList.add('open');}
 function renderBrowser(){
@@ -658,9 +868,9 @@ async function start(){
   const st=await call('getState');if(!st){document.body.textContent='HyperSynth could not reach the plugin.';return;}
   H.defs=st.defs;H.defs.forEach((d,i)=>{H.idx[d.id]=i;d.opts=d.opts||[];});H.vals=st.values.slice();H.name=st.name||'Init';H.category=st.category||'Basics';
   H.tabs=(await call('tablePreviews'))||[];
-  buildOscs();buildSliders();buildKeys();wire();fit();paint();await listPresets();await refreshCustom();await fxLoad();
+  buildOscs();buildSliders();buildKeys();wire();fit();paint();await listPresets();await refreshCustom();await fxLoad();await modLoad();
   const cur=H.presets.find(p=>p.name===H.name&&p.category===H.category);if(cur)H.cur=cur.id;
-  on('values',e=>{(e.i||[]).forEach((i,j)=>{H.vals[i]=e.v[j];});const fresh=e.name&&e.name!==H.name;if(e.name)H.name=e.name;paint();if(fresh){refreshCustom();fxLoad();}});
+  on('values',e=>{(e.i||[]).forEach((i,j)=>{H.vals[i]=e.v[j];});const fresh=e.name&&e.name!==H.name;if(e.name)H.name=e.name;paint();if(fresh){refreshCustom();fxLoad();modLoad();}});
   on('play',e=>{H.keys=new Set(e.keys||[]);paintKeys();});
   window.addEventListener('resize',fit);
 }

@@ -278,5 +278,35 @@
     0
    ]
   }
- }
+ },
+ "tags": [
+  {
+   "id": "m1",
+   "name": "Bright",
+   "kind": "number",
+   "def": 0,
+   "value": 0
+  },
+  {
+   "id": "m2",
+   "name": "Macro 2",
+   "kind": "number",
+   "def": 0,
+   "value": 0
+  },
+  {
+   "id": "m3",
+   "name": "Macro 3",
+   "kind": "number",
+   "def": 0,
+   "value": 0
+  },
+  {
+   "id": "m4",
+   "name": "Macro 4",
+   "kind": "number",
+   "def": 0,
+   "value": 0
+  }
+ ]
 }

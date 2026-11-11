@@ -33,6 +33,7 @@ HyperSynthProcessor::HyperSynthProcessor()
         params_.push_back(p); addParameter(p);
     }
     sent_.assign(params_.size(), std::numeric_limits<float>::quiet_NaN());
+    for (int m = 0; m < 4; ++m) macroIdx_[m] = indexOf("macro" + juce::String(m + 1));
     startTimerHz(10);
 }
 
@@ -116,7 +117,7 @@ void HyperSynthProcessor::prepareToPlay(double sr, int)
 void HyperSynthProcessor::fxNote(int key, float velocity, bool on)
 {
     auto& d = fxDown_[(size_t) (key & 127)];
-    if (on) { if (!d) { d = true; ++fxHeld_; } if (fxCurrent_) fxCurrent_->noteOn(key, velocity); }
+    if (on) { if (!d) { d = true; ++fxHeld_; } if (fxCurrent_) fxCurrent_->noteOn(key, velocity * 127.f); }
     else if (d) { d = false; if (--fxHeld_ <= 0) { fxHeld_ = 0; if (fxCurrent_) fxCurrent_->noteOff(); } }
 }
 
@@ -126,6 +127,7 @@ void HyperSynthProcessor::handle(const juce::MidiMessage& m)
     else if (m.isNoteOff()) { synth_.noteOff(m.getNoteNumber()); keysDown[(size_t) m.getNoteNumber()] = false; fxNote(m.getNoteNumber(), 0, false); }
     else if (m.isPitchWheel()) { const float b = (float) (m.getPitchWheelValue() - 8192) / 8192.0f; synth_.setBend(b); bendNow = b; }
     else if (m.isControllerOfType(1)) { const float v = (float) m.getControllerValue() / 127.0f; synth_.setModWheel(v); modNow = v; }
+    else if (m.isChannelPressure()) { const float v = (float) m.getChannelPressureValue() / 127.0f; synth_.setAftertouch(v); atNow = v; }
     else if (m.isSustainPedalOn()) synth_.setSustain(true);
     else if (m.isSustainPedalOff()) synth_.setSustain(false);
     else if (m.isAllNotesOff() || m.isAllSoundOff()) { synth_.allNotesOff(m.isAllSoundOff()); for (auto& k : keysDown) k = false;
@@ -139,10 +141,15 @@ void HyperSynthProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         const juce::SpinLock::ScopedTryLockType l(swapLock_);
         if (l.isLocked() && !fxRetired_) { fxRetired_ = std::move(fxCurrent_); fxCurrent_ = std::move(fxPending_); fxHasPending_ = false; }
     }
+    double hostBpm = 120;
+    if (auto* ph = getPlayHead()) if (auto pos = ph->getPosition()) if (auto b = pos->getBpm()) hostBpm = *b;
+    synth_.setTempo(hostBpm);   // synced LFOs
     if (auto* rack = fxCurrent_.get()) {   // knobs moved on the FX tab
         int s1, n1, s2, n2; fxFifo_.prepareToRead(fxFifo_.getNumReady(), s1, n1, s2, n2);
         for (int k = 0; k < n1 + n2; ++k) { const auto& m = fxMsgs_[(size_t) (k < n1 ? s1 + k : s2 + k - n1)]; rack->setParam(m.node, m.key, m.value, false); }
         fxFifo_.finishedRead(n1 + n2);
+        for (int m = 0; m < 4; ++m) rack->setTag(rack->macro[m], value(macroIdx_[m]));   // the FX tab's Macro modules follow HyperSynth's macros
+        rack->setControllers(modNow.load(), atNow.load(), 1.f, bendNow.load());
         if (auto* ph = getPlayHead()) if (auto pos = ph->getPosition()) {
             double bpm = 120; int sn = 4, sd = 4;
             if (auto b = pos->getBpm()) bpm = *b;
@@ -187,6 +194,9 @@ void HyperSynthProcessor::copyTables(const visu::hs::Synth& from, visu::hs::Synt
         std::vector<float> fr; std::string nm;
         if (from.customTable(L, k, &fr, &nm)) to.setCustomTable(L, k, fr, nm); else to.clearCustomTable(L, k);
     }
+    to.setMods(from.mods());
+    for (int l = 0; l < visu::hs::Synth::kLfos; ++l) to.setLfoShape(l, from.lfoShape(l));
+    for (int m = 0; m < visu::hs::Synth::kMacros; ++m) to.setMacroName(m, from.macroName(m));
 }
 
 juce::String HyperSynthProcessor::stateJson(const juce::String& name, const juce::String& category) const
@@ -355,6 +365,29 @@ juce::var HyperSynthProcessor::tablePreview(int layer, int osc) const
     auto* o = new juce::DynamicObject(); o->setProperty("name", juce::String::fromUTF8(nm.c_str())); o->setProperty("count", F); o->setProperty("frames", frames);
     return juce::var(o);
 }
+
+/* ---------- modulation, for the panel ---------- */
+juce::var HyperSynthProcessor::modState() const
+{
+    juce::Array<juce::var> routes, shapes, names;
+    for (const auto& r : synth_.mods()) { auto* o = new juce::DynamicObject(); o->setProperty("src", juce::String(r.src)); o->setProperty("dst", juce::String(r.dst)); o->setProperty("amt", r.amt); routes.add(juce::var(o)); }
+    for (int l = 0; l < visu::hs::Synth::kLfos; ++l) { juce::Array<juce::var> p; for (float x : synth_.lfoShape(l)) p.add(x); shapes.add(p); }
+    for (int m = 0; m < visu::hs::Synth::kMacros; ++m) names.add(juce::String::fromUTF8(synth_.macroName(m).c_str()));
+    auto* o = new juce::DynamicObject(); o->setProperty("routes", routes); o->setProperty("shapes", shapes); o->setProperty("names", names);
+    return juce::var(o);
+}
+void HyperSynthProcessor::setMods(const juce::var& routes)
+{
+    std::vector<visu::hs::ModRoute> r;
+    if (auto* a = routes.getArray()) for (const auto& x : *a) r.push_back({ x["src"].toString().toStdString(), x["dst"].toString().toStdString(), (float) (double) x["amt"] });
+    synth_.setMods(r);
+}
+void HyperSynthProcessor::setLfoShape(int lfo, const juce::var& pts)
+{
+    std::vector<float> p; if (auto* a = pts.getArray()) for (const auto& x : *a) p.push_back((float) (double) x);
+    synth_.setLfoShape(lfo, p);
+}
+void HyperSynthProcessor::setMacroName(int i, const juce::String& name) { synth_.setMacroName(i, name.toStdString()); }
 
 juce::AudioProcessorEditor* HyperSynthProcessor::createEditor() { return new HyperSynthEditor(*this); }
 

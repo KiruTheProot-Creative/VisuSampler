@@ -33,6 +33,15 @@ std::vector<float> wavetablePreview(int table, int frames, int points);
 // how: what was done, in words.
 std::vector<float> framesFromAudio(const float* mono, size_t n, double sampleRate, int frameSize, std::string* how, int maxFrames = 64);
 
+// modulation (Vital / Serum style): a source moves any continuous parameter of a voice. Sources by id:
+// lfo1..lfo4 (-1..1), env1, env2 (the mod envelopes, 0..1), macro1..macro4 (0..1), vel, wheel, at (aftertouch) 0..1,
+// key (-1..1 around middle C), rand (-1..1, new on every note). amt -1..1: how far, in the knob's own travel.
+// Destinations: the settings of the layers ("l1." / "l2."), the continuous ones.
+struct ModRoute { std::string src, dst; float amt = 0; };
+const std::vector<std::string>& modSources();
+// the shape of a drawn LFO segment (and a mod envelope stage): x 0..1 -> 0..1; curve -1..1 bends it (0 = straight)
+float curveShape(float x, float curve);
+
 class Synth {
 public:
     static constexpr int kMaxVoices = 32, kMaxUnison = 16;
@@ -57,6 +66,18 @@ public:
     bool setCustomTable(int layer, int osc, const std::vector<float>& frames, const std::string& name);
     void clearCustomTable(int layer, int osc);
     bool customTable(int layer, int osc, std::vector<float>* frames, std::string* name) const;
+    // modulation: message thread (the audio thread picks the routes up without waiting)
+    static constexpr int kMaxRoutes = 64, kLfos = 4, kMacros = 4;
+    void setMods(const std::vector<ModRoute>& routes);   // unknown sources / destinations are dropped
+    std::vector<ModRoute> mods() const;
+    // a drawn LFO: points x,y,curve (x 0..1 rising, y 0..1); used while its shape is "Drawn"
+    void setLfoShape(int lfo, const std::vector<float>& xyc);
+    std::vector<float> lfoShape(int lfo) const;
+    void setMacroName(int i, const std::string& name);
+    std::string macroName(int i) const;
+    void setTempo(double bpm);                  // for synced LFOs
+    void setAftertouch(float v);                // 0..1 (channel pressure)
+    float sourceValue(const std::string& src) const;   // the newest note's value of a source, for the panel
     // presets
     std::string presetJson(const std::string& name, const std::string& category) const;
     bool loadPreset(const std::string& json, std::string* error = nullptr, std::string* name = nullptr, std::string* category = nullptr);

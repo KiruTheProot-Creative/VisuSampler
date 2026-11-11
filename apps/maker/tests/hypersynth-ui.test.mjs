@@ -27,6 +27,10 @@ await p.addInitScript(([defs,factory,tables])=>{
     if(name==='loadPreset'){const f=factory.find(f=>'f:'+f.category+'/'+f.name===a[0]);defs.forEach((d,i)=>{vals[i]=f.params[d.id]!=null?f.params[d.id]:d.def;});return{name:f.name,category:f.category,values:vals.slice()};}
     if(name==='tablePreviews')return tables;
     if(name==='getFx')return window.__fx||null;
+    if(name==='getMods')return window.__mods||{routes:[],shapes:[[0,0,0,.5,1,0,1,0,0],[0,0,0,.5,1,0,1,0,0],[0,0,0,.5,1,0,1,0,0],[0,0,0,.5,1,0,1,0,0]],names:['Macro 1','Macro 2','Macro 3','Macro 4']};
+    if(name==='setMods'){window.__routes=JSON.parse(JSON.stringify(a[0]));return true;}
+    if(name==='setLfoShape'){(window.__shapes=window.__shapes||{})[a[0]]=a[1].slice();return true;}
+    if(name==='setMacroName'){(window.__mnames=window.__mnames||{})[a[0]]=a[1];return true;}
     if(name==='setFx'){window.__fx=a[0];window.__fxBuilds=(window.__fxBuilds||0)+(a[1]?1:0);return true;}
     if(name==='fxParam'){(window.__fxParams=window.__fxParams||[]).push(a);return true;}
     if(name==='tablePreview')return window.__custom&&a[0]===0&&a[1]===1?window.__custom:null;
@@ -79,6 +83,52 @@ await p.click('#wtFac');const fac=await p.evaluate(()=>({src:window.__vals[windo
 await p.click('#wtCus');const back=await p.evaluate(()=>window.__vals[window.__hs.idx['l1.o2.wtsrc']]);
 ok(fac.src===0&&!/My Growl/.test(fac.name)&&back===1,'FACTORY / CUSTOM switch between the two, the import stays ('+JSON.stringify(fac)+')');
 ok(errs.length===0,'still no script errors'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
+/* modulation: drag LFO 1 onto LP CUT, a ring appears; right-click shows its amount; the LFO is drawn on the screen */
+const drop=async(fromSel,toSel)=>{const a=await p.locator(fromSel).boundingBox(),b=await p.locator(toSel).boundingBox();
+  await p.mouse.move(a.x+a.width/2,a.y+a.height/2);await p.mouse.down();await p.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:10});await p.mouse.up();await p.waitForTimeout(60);};
+await drop('.src[data-src="lfo1"]','.kn[data-id="l1.lp.cut"] .dial');
+const md1=await p.evaluate(()=>({routes:window.__routes,ring:!!document.querySelector('.kn[data-id="l1.lp.cut"] svg.ring path'),lcd:document.querySelector('#lcdTop').textContent}));
+ok(md1.routes&&md1.routes.length===1&&md1.routes[0].src==='lfo1'&&md1.routes[0].dst==='l1.lp.cut'&&md1.ring&&/LFO 1 →/.test(md1.lcd),'dragging LFO 1 onto LP CUT modulates it, the knob shows a ring ('+JSON.stringify(md1)+')');
+await drop('.src[data-src="vel"]','.kn[data-id="l1.lp.cut"] .dial');await drop('.mname[data-src="macro2"]','.sl[data-id="l1.aenv.r"] .track');
+await drop('.src[data-src="env1"]','.kn[data-id="l1.lp.type"]').catch(()=>{});
+const m2=await p.evaluate(()=>({n:window.__routes.length,dsts:window.__routes.map(r=>r.src+'>'+r.dst).join(' '),rings:document.querySelectorAll('.kn[data-id="l1.lp.cut"] svg.ring path').length}));
+ok(m2.n===3&&m2.rings===2&&/macro2>l1.aenv.r/.test(m2.dsts),'more sources stack up as rings; macros drag too, onto sliders as well ('+JSON.stringify(m2)+')');
+const kb2=await p.locator('.kn[data-id="l1.lp.cut"] .dial').boundingBox();
+await p.mouse.click(kb2.x+kb2.width/2,kb2.y+kb2.height/2,{button:'right'});await p.waitForTimeout(80);
+const pop=await p.evaluate(()=>({rows:document.querySelectorAll('#modPop .mrow').length}));
+const bar=await p.locator('#modPop .mrow >> nth=0 >> .amt').boundingBox();
+await p.mouse.move(bar.x+bar.width*.5,bar.y+bar.height/2);await p.mouse.down();await p.mouse.move(bar.x+bar.width*.95,bar.y+bar.height/2,{steps:4});await p.mouse.up();await p.waitForTimeout(60);
+const amt=await p.evaluate(()=>window.__routes.find(r=>r.src==='lfo1').amt);
+await p.click('#modPop .mrow >> nth=-1 >> [data-rm]');const left=await p.evaluate(()=>window.__routes.length);
+ok(pop.rows===2&&amt>.8&&left===2,'right-click a knob: its routes, drag an amount (LFO 1 now '+amt+'), remove one');
+await p.mouse.click(5,5);
+/* the LFO editor: click LFO 1 opens it; dragging the line makes it a drawn shape; a double-click adds a point */
+await p.click('.src[data-src="lfo1"]');await p.waitForTimeout(60);
+const ed=await p.evaluate(()=>({tab:document.querySelector('#stabs a.on').dataset.s,sel:document.querySelector('#modSel button.on').dataset.ms,flds:[...document.querySelectorAll('#fields .fld span')].map(x=>x.textContent).join(',')}));
+ok(ed.tab==='mod'&&ed.sel==='lfo1'&&ed.flds==='RATE,SYNC,MODE,SHAPE,PHASE,FADE','clicking LFO 1 shows it on the screen ('+JSON.stringify(ed)+')');
+const cv=await p.locator('#scr').boundingBox(),cx=f=>cv.x+cv.width*(24+704*f)/752,cy=f=>cv.y+cv.height*(330-278*f)/380;
+await p.mouse.move(cx(.25),cy(1));await p.mouse.down();await p.mouse.move(cx(.3),cy(.6),{steps:4});await p.mouse.up();await p.waitForTimeout(60);
+await p.mouse.dblclick(cx(.8),cy(.9));await p.waitForTimeout(60);
+const sh=await p.evaluate(()=>({shape:window.__vals[window.__hs.idx['lfo1.shape']],pts:window.__shapes&&window.__shapes[0]}));
+ok(sh.shape===7&&sh.pts&&sh.pts.length/3===6,'editing turns the sine into a drawn shape you can change and add points to ('+(sh.pts?sh.pts.length/3:0)+' points)');
+await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-lfo.png')});
+/* envelopes drag on the screen */
+await p.click('.src[data-src="env1"]');await p.waitForTimeout(40);
+const d0=await p.evaluate(()=>window.__vals[window.__hs.idx['env1.d']]);
+const dh=await p.evaluate(()=>{const h=envHandles('env1',1).find(h=>h.k==='ds');return[h.x,h.y];});
+await p.mouse.move(cv.x+cv.width*dh[0]/752,cv.y+cv.height*dh[1]/380);await p.mouse.down();await p.mouse.move(cv.x+cv.width*dh[0]/752+40,cv.y+cv.height*dh[1]/380+20,{steps:4});await p.mouse.up();
+const e1=await p.evaluate(()=>({d:window.__vals[window.__hs.idx['env1.d']],s:window.__vals[window.__hs.idx['env1.s']]}));
+ok(e1.d>d0*1.5&&e1.s<.4,'dragging the envelope on the screen sets decay and sustain ('+JSON.stringify(e1)+')');
+await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-env.png')});
+/* macros rename */
+await p.dblclick('.mname[data-src="macro1"]');await p.keyboard.type('Bright');await p.keyboard.press('Enter');
+const mn=await p.evaluate(()=>({sent:window.__mnames&&window.__mnames[0],shown:document.querySelector('.mname[data-src="macro1"] .nm').textContent}));
+ok(mn.sent==='Bright'&&mn.shown==='Bright','a macro can be renamed ('+JSON.stringify(mn)+')');
+/* the matrix */
+await p.click('#stabs a[data-s="matrix"]');const mx=await p.evaluate(()=>document.querySelectorAll('#matrix .mrow').length);
+ok(mx===2,'the MATRIX screen lists every route ('+mx+')');await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-matrix.png')});
+await p.click('#stabs a[data-s="o0"]');
+ok(errs.length===0,'no script errors with modulation'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
 /* the FX tab: modules from NodeFX's catalogue, patched like NodeFX */
 await p.click('.tab[data-tab="fx"]');await p.waitForTimeout(100);
 const fx0=await p.evaluate(()=>({shown:!document.querySelector('#fxView').hidden,synth:getComputedStyle(document.querySelector('#synthView')).display,lib:document.querySelectorAll('.fxadd').length,mods:[...document.querySelectorAll('.fxm b')].map(b=>b.textContent),cables:document.querySelectorAll('#fxCables path.hit').length}));

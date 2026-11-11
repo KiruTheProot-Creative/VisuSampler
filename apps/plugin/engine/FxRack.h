@@ -15,9 +15,11 @@ public:
     // the host's audio, changed in place (any block size)
     void process(float* left, float* right, int n);
     void setTempo(double bpm, int sigN, int sigD) { c_.bpm = bpm > 0 ? bpm : 120; c_.sigN = sigN > 0 ? sigN : 4; c_.sigD = sigD > 0 ? sigD : 4; }
-    // notes, for effects that follow them (the ring mod's sweep, envelopes); audio thread
+    // notes, for effects that follow them (the ring mod's sweep, envelopes); audio thread. velocity 0..127
     void noteOn(int key, float velocity) { c_.gate = true; c_.tOn = c_.time; c_.key = (float) key; c_.vel = velocity; }
     void noteOff() { c_.gate = false; c_.tOff = c_.time; }
+    // the MIDI source module's controllers: mod wheel, aftertouch, expression 0..1, bend -1..1
+    void setControllers(float wheel, float aftertouch, float expression, float bend) { c_.mod = wheel; c_.at = aftertouch; c_.expr = expression; c_.bend = .5f + .5f * bend; }
     // a macro (tag) by index, 0..1; safe from any thread
     void setTag(int index, float v) { if (index >= 0 && index < (int) lib_->tags.size()) lib_->tagValues[(size_t) index].store(v < 0 ? 0 : v > 1 ? 1 : v); }
     float tag(int index) const { return index >= 0 && index < (int) lib_->tags.size() ? lib_->tagValues[(size_t) index].load() : 0.f; }

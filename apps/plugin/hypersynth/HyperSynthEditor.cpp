@@ -75,6 +75,10 @@ juce::WebBrowserComponent::Options HyperSynthEditor::makeOptions()
                 for (int f = 0; f < 9; ++f) { juce::Array<juce::var> pts; for (int i = 0; i < 128; ++i) pts.add(v[(size_t) f * 128 + (size_t) i]); frames.add(pts); }
                 auto* o = new juce::DynamicObject(); o->setProperty("name", juce::String(names[(size_t) t])); o->setProperty("frames", frames); all.add(juce::var(o)); }
             reply(done, all); })
+        .withNativeFunction("getMods", [this, reply](const juce::Array<juce::var>&, auto done) { reply(done, proc_.modState()); })
+        .withNativeFunction("setMods", [this, reply](const juce::Array<juce::var>& a, auto done) { if (!a.isEmpty()) proc_.setMods(a[0]); reply(done, juce::var(true)); })
+        .withNativeFunction("setLfoShape", [this, reply](const juce::Array<juce::var>& a, auto done) { if (a.size() >= 2) proc_.setLfoShape((int) a[0], a[1]); reply(done, juce::var(true)); })
+        .withNativeFunction("setMacroName", [this, reply](const juce::Array<juce::var>& a, auto done) { if (a.size() >= 2) proc_.setMacroName((int) a[0], a[1].toString()); reply(done, juce::var(true)); })
         .withNativeFunction("getFx", [this, reply](const juce::Array<juce::var>&, auto done) { const auto j = proc_.fxJson(); reply(done, j.isEmpty() ? juce::var() : juce::var(j)); })
         .withNativeFunction("setFx", [this, reply](const juce::Array<juce::var>& a, auto done) {
             if (!a.isEmpty()) proc_.setFx(a[0].toString(), a.size() < 2 || (bool) a[1]);
@@ -102,6 +106,12 @@ void HyperSynthEditor::timerCallback()
     juce::Array<juce::var> ii, vv;
     for (int i = 0; i < proc_.numParams(); ++i) { const float v = proc_.value(i); if (v != shown_[(size_t) i]) { shown_[(size_t) i] = v; ii.add(i); vv.add(v); } }
     if (!ii.isEmpty()) { auto* o = new juce::DynamicObject(); o->setProperty("i", ii); o->setProperty("v", vv); o->setProperty("name", proc_.presetName()); browser_.emitEventIfBrowserIsVisible("values", juce::var(o)); }
+    {   // what the modulators are doing right now (the panel's moving dots and rings)
+        static const char* src[] = { "lfo1", "lfo2", "lfo3", "lfo4", "env1", "env2", "vel", "key", "wheel", "at", "rand" };
+        juce::Array<juce::var> sv; bool moved = false;
+        for (int i = 0; i < 11; ++i) { const float x = proc_.sourceValue(src[i]); if (std::abs(x - srcShown_[(size_t) i]) > 1e-3f) moved = true; srcShown_[(size_t) i] = x; sv.add(x); }
+        if (moved) { auto* o = new juce::DynamicObject(); o->setProperty("v", sv); browser_.emitEventIfBrowserIsVisible("mod", juce::var(o)); }
+    }
     bool keysChanged = false; juce::Array<juce::var> down;
     for (int k = 0; k < 128; ++k) { const bool d = proc_.keysDown[(size_t) k].load(); if (d != keys_[(size_t) k]) keysChanged = true; keys_[(size_t) k] = d; if (d) down.add(k); }
     const int nv = proc_.activeVoices.load();

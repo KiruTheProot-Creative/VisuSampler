@@ -55,6 +55,12 @@ public:
     // wavetable import: a file picker, then the sound -> frames -> oscillator `osc` (0..2) of `layer` (0/1)
     void importTable(int layer, int osc, std::function<void(juce::var)> done);
     juce::var tablePreview(int layer, int osc) const;   // {name, frames: [[...128 samples], ...]} or void
+    // modulation (message thread): {routes:[{src,dst,amt}], shapes:[[x,y,curve,...] x4], names:[macro names]}
+    juce::var modState() const;
+    void setMods(const juce::var& routes);
+    void setLfoShape(int lfo, const juce::var& pts);
+    void setMacroName(int i, const juce::String& name);
+    float sourceValue(const juce::String& src) const { return synth_.sourceValue(src.toStdString()); }
     // the FX tab: NodeFX's modules after the synth. json = {"graph":{nodes,cables},"fxRanges":{...}} ("" = no effects);
     // rebuild = the sound changed (not just where modules sit). Saved in .hsyn presets and the DAW project as "fx".
     juce::String fxJson() const { const juce::ScopedLock l(fxLock_); return fxJson_; }
@@ -67,7 +73,7 @@ public:
 
     std::array<std::atomic<bool>, 128> keysDown {};
     std::atomic<int> activeVoices { 0 };
-    std::atomic<float> bendNow { 0 }, modNow { 0 };
+    std::atomic<float> bendNow { 0 }, modNow { 0 }, atNow { 0 };
 
 private:
     juce::String stateJson(const juce::String& name, const juce::String& category) const;
@@ -91,7 +97,8 @@ private:
     juce::AbstractFifo fxFifo_ { 256 };
     std::array<FxMsg, 256> fxMsgs_ {};
     juce::SpinLock fxPushLock_;
-    void copyTables(const visu::hs::Synth& from, visu::hs::Synth& to) const;
+    void copyTables(const visu::hs::Synth& from, visu::hs::Synth& to) const;   // imported wavetables and the modulation
+    int macroIdx_[4] = { -1, -1, -1, -1 };
     std::unique_ptr<juce::FileChooser> chooser_;
     visu::hs::Synth synth_;
     std::vector<juce::RangedAudioParameter*> params_;
