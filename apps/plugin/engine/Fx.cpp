@@ -1017,11 +1017,13 @@ static float lfoValue(Node& m, Control& c) {
 }
 static float adsrValue(Node& m, Control& c) {
     if (c.tOn < 0) return .5f;
+    // Trigger: Every note restarts it (as before this setting existed); First note runs on through a legato phrase
+    const double t0 = m.P(m.idx("trig"), 0) > .5f && c.tLeg >= 0 ? c.tLeg : c.tOn;
     const float a = m.P(m.idx("a"), 10) / 1000, d = m.P(m.idx("d"), 300) / 1000, s = m.P(m.idx("s"), 60) / 100, r = m.P(m.idx("r"), 400) / 1000;
     auto level = [&](double x) -> float { return x < a ? (a > 0 ? (float) (x / a) : 1.f) : x < a + d ? (float) (1 - (1 - s) * ((x - a) / std::max(1e-4f, d))) : s; };
     float e;
-    if (c.gate) e = level(c.time - c.tOn);
-    else { const double rel = c.time - c.tOff; const float at = level(c.tOff - c.tOn); e = rel >= r ? 0 : at * (float) (1 - rel / std::max(1e-4f, r)); }
+    if (c.gate) e = level(c.time - t0);
+    else { const double rel = c.time - c.tOff; const float at = level(c.tOff - t0); e = rel >= r ? 0 : at * (float) (1 - rel / std::max(1e-4f, r)); }
     return .5f + .5f * e * (m.P(m.idx("depth"), 100) / 100);
 }
 static float modOut(Node& m, Control& c, double blockSec, const std::vector<TagDef>& tags) {

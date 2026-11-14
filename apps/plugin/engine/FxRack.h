@@ -16,7 +16,7 @@ public:
     void process(float* left, float* right, int n);
     void setTempo(double bpm, int sigN, int sigD) { c_.bpm = bpm > 0 ? bpm : 120; c_.sigN = sigN > 0 ? sigN : 4; c_.sigD = sigD > 0 ? sigD : 4; }
     // notes, for effects that follow them (the ring mod's sweep, envelopes); audio thread. velocity 0..127
-    void noteOn(int key, float velocity) { c_.gate = true; c_.tOn = c_.time; c_.key = (float) key; c_.vel = velocity; }
+    void noteOn(int key, float velocity) { if (!c_.gate) c_.tLeg = c_.time; c_.gate = true; c_.tOn = c_.time; c_.key = (float) key; c_.vel = velocity; }
     void noteOff() { c_.gate = false; c_.tOff = c_.time; }
     // the MIDI source module's controllers: mod wheel, aftertouch, expression 0..1, bend -1..1
     void setControllers(float wheel, float aftertouch, float expression, float bend) { c_.mod = wheel; c_.at = aftertouch; c_.expr = expression; c_.bend = .5f + .5f * bend; }

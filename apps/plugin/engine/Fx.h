@@ -23,6 +23,7 @@ struct Control {
     double bpm = 120; int sigN = 4, sigD = 4;
     float vel = 0, key = 60, mod = 0, expr = 1, at = 0, bend = .5f;
     bool gate = false; double tOn = -1, tOff = -1; float lvlOn = 0;
+    double tLeg = -1;                              // when the current phrase began: the first note while no key was down
     const std::atomic<float>* tags = nullptr; int numTags = 0;
 };
 

@@ -1011,6 +1011,27 @@ static void testSynth() {
       int fine = 0; for (int wv = 1; wv <= 8; ++wv) { Synth z; z.prepare(sr); set(z, "l1.o1.mode", 0); set(z, "l1.o1.table", 2); set(z, "l1.o1.pos", .5f); set(z, "l1.o1.warp", (float) wv); set(z, "l1.o1.warpAmt", .8f);
         set(z, "l1.o2.on", 1); z.noteOn(48, .9f); z.noteOn(84, .9f); auto zo = render(z, 24000); const double pk = peakOf(zo.first); if (pk > .01 && pk < 1 && std::isfinite(pk)) ++fine; }
       CHECK(fine == 8, "hypersynth warps: all 8 warps play cleanly on a wavetable (%d/8)", fine); }
+    /* the FX tab's Envelope: Trigger "First note" runs on through a chord; "Every note" (and older files) restarts it */
+    { auto run = [&](const char* trig) {
+        const std::string t = trig ? std::string(",\"trig\":") + trig : std::string();
+        const std::string js = "{\"v\":1,\"graph\":{\"nodes\":[{\"id\":\"i\",\"type\":\"input\",\"p\":{}},{\"id\":\"u\",\"type\":\"util\",\"p\":{\"gain\":-40,\"pan\":0,\"width\":100}},"
+          "{\"id\":\"e\",\"type\":\"adsr\",\"p\":{\"a\":300,\"d\":0,\"s\":100,\"r\":300,\"depth\":100" + t + "}},{\"id\":\"o\",\"type\":\"output\",\"p\":{}}],"
+          "\"cables\":[{\"id\":\"c1\",\"from\":{\"n\":\"i\",\"p\":\"out\"},\"to\":{\"n\":\"u\",\"p\":\"in\"},\"amt\":50},{\"id\":\"c2\",\"from\":{\"n\":\"u\",\"p\":\"out\"},\"to\":{\"n\":\"o\",\"p\":\"in\"},\"amt\":50},"
+          "{\"id\":\"c3\",\"from\":{\"n\":\"e\",\"p\":\"out\"},\"to\":{\"n\":\"u\",\"p\":\"p:gain\"},\"amt\":100}]},"
+          "\"fxRanges\":{\"util\":{\"gain\":[-60,12,0,0,0,0],\"pan\":[-100,100,0,0,0,0],\"width\":[0,200,0,0,0,0]},\"adsr\":{\"a\":[0,5000,0,0,0,0],\"d\":[0,5000,0,0,0,0],\"s\":[0,100,0,0,0,0],\"r\":[0,8000,0,0,0,0],\"depth\":[0,100,0,0,0,0],\"trig\":[0,1,1,0,0,0]}}}";
+        std::string err; auto r = visu::FxRack::build(js, sr, err); std::vector<double> lv;
+        if (!r) { std::printf("   (build: %s)\n", err.c_str()); return lv; }
+        const int B = 480; std::vector<float> l(B), rr(B); double ph = 0;
+        for (int b = 0; b < 100; ++b) {   // 1 s: a note at 0, a second note at 0.5 s while the first is held
+          if (b == 0) r->noteOn(60, 100); if (b == 50) r->noteOn(64, 100);
+          for (int i = 0; i < B; ++i) { l[(size_t) i] = rr[(size_t) i] = (float) (.5 * std::sin(ph)); ph += 2 * kPiT * 440 / sr; }
+          r->process(l.data(), rr.data(), B); lv.push_back(rms(l, 0, (size_t) B)); }
+        return lv; };
+      const auto leg = run("1"), every = run("0"), old = run(nullptr);
+      const bool ok = leg.size() == 100 && every.size() == 100 && old.size() == 100;
+      CHECK(ok && leg[52] > leg[48] * .9 && every[52] < every[48] * .7 && std::fabs(old[52] - every[52]) < 1e-6,
+            "FX Envelope: on First note a second note does not restart it (%.3f -> %.3f); Every note (and older files) does (%.3f -> %.3f)",
+            ok ? leg[48] : 0, ok ? leg[52] : 0, ok ? every[48] : 0, ok ? every[52] : 0); }
     /* the FX tab: the chain the panel's test made (Ring mod -> Reverb, an LFO on the ring's frequency) runs after the synth */
     { std::string err; auto rack = visu::FxRack::build(readText(std::string(TEST_DATA_DIR) + "/hypersynth-fx.json"), sr, err);
       Synth s; s.prepare(sr); s.noteOn(57, .9f); auto dry = render(s, 48000);

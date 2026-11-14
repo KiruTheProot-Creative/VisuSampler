@@ -1,7 +1,7 @@
 /* ---------- what the modulators put out: shown live in the Effects editor (and played by the old JS path) ----------
    FXA holds the Web Audio FX state (p330); FXM what the keyboard plays. */
 const FXA={ctx:null,gin:{},gout:{},min:null,sig:'',scopes:{},follow:{},buses:[],wl:null,wlReady:false,noise:null,timer:0,last:0};
-const FXM={vel:0,key:60,gate:false,tOn:-1,tOff:-1,mod:0,expr:1,at:0,bend:.5,lvlOn:0};
+const FXM={vel:0,key:60,gate:false,tOn:-1,tOff:-1,tLeg:-1,held:new Set(),mod:0,expr:1,at:0,bend:.5,lvlOn:0};
 /* ---- modulator outputs (used by modOut) ---- */
 function lfoOut(g,n,t){
   const v=n.p,r=paramReal(g,n,FXT.lfo.params[0],t,false),hz=typeof r==='number'?r:r.v;
@@ -13,7 +13,8 @@ function adsrOut(v,t){
   if(FXM.tOn<0) return 0;
   const a=v.a/1000,d=v.d/1000,s=v.s/100,r=v.r/1000;
   const level=x=>x<a?(a>0?x/a:1):x<a+d?1-(1-s)*((x-a)/Math.max(1e-4,d)):s;
-  if(FXM.gate) return level(t-FXM.tOn);
+  const t0=v.trig&&FXM.tLeg>=0?FXM.tLeg:FXM.tOn;   // Trigger: First note runs on through a legato phrase (same as the plugins' engine)
+  if(FXM.gate) return level(t-t0);
   const rel=t-FXM.tOff; return rel>=r?0:FXM.lvlOn*(1-rel/Math.max(1e-4,r));
 }
 function midiSrcOut(src){

@@ -85,8 +85,9 @@ Object.assign(FXT,{
   pvol:{label:'Volume Pedal',kind:'fx',cat:'Pedals',pedal:'#444',raw:1,ins:['in'],outs:['out'],cpu:.1,lat:0,hint:'Swells. Link Pedal to the Expression source.',
     params:[FP('pos','Pedal',0,100,'%',100)]},
   /* ---- modulators ---- */
-  adsr:{label:'Envelope',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:.1,lat:0,hint:'Starts on every note: attack, decay, sustain, release.',
-    params:[FP('a','Attack',0,5000,'ms',10),FP('d','Decay',0,5000,'ms',300),FP('s','Sustain',0,100,'%',60),FP('r','Release',0,8000,'ms',400),FP('depth','Depth',0,100,'%',100)]},
+  adsr:{label:'Envelope',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:.1,lat:0,hint:'Attack, decay, sustain, release, started by notes. Trigger: Every note restarts it; First note starts it only when no key is held, so it runs on through chords and legato playing. It releases when the last key is let go.',
+    params:[FP('a','Attack',0,5000,'ms',10),FP('d','Decay',0,5000,'ms',300),FP('s','Sustain',0,100,'%',60),FP('r','Release',0,8000,'ms',400),FP('depth','Depth',0,100,'%',100),
+      OPT('trig','Trigger',['Every note','First note'],1,{old:0})]},
   midisrc:{label:'MIDI source',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:0,lat:0,hint:'Velocity, key, mod wheel, expression (CC 11), aftertouch or pitch bend as a control signal.',
     params:[OPT('src','Source',['Velocity','Key','Mod wheel','Expression','Aftertouch','Pitch bend'],0)]},
   rand:{label:'Random',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:.1,lat:0,hint:'Sample and hold: jumps to a new random value at the rate, smoothed if you like.',

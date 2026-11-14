@@ -123,4 +123,4 @@ function noteOn(m,vel){
   if(hasSampler()&&sampNoteOn(m,vel)) return;
   if(!hasSampler()) synthOn(m);
 }
-function noteOff(m){if(S.lists.some(x=>x.ks===m))return;fxNoteOff();if(engineOn())ENG.node.port.postMessage({t:'off',n:m});sampNoteOff(m);synthOff(m);}
+function noteOff(m){if(S.lists.some(x=>x.ks===m))return;fxNoteOff(m);if(engineOn())ENG.node.port.postMessage({t:'off',n:m});sampNoteOff(m);synthOff(m);}

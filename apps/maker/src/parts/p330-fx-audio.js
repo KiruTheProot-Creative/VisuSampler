@@ -1,11 +1,13 @@
 /* ---------- FX audio: turns the FX graphs into real Web Audio ----------
    voices -> group input -> [group graph] -> master input -> [master graph] -> sampler bus -> output
    The graph is rebuilt when its structure changes; parameters (including modulation) are applied about 60 times a second. */
-function fxNoteOn(note,vel){FXM.vel=vel;FXM.key=note;FXM.gate=true;FXM.tOn=fxClock();}
-function fxNoteOff(){const t=fxClock();FXM.lvlOn=1;FXM.gate=false;FXM.tOff=t;
+function fxNoteOn(note,vel){const t=fxClock();if(!FXM.gate)FXM.tLeg=t;FXM.held.add(note);FXM.vel=vel;FXM.key=note;FXM.gate=true;FXM.tOn=t;}
+/* the envelopes release when the last held key is let go (not while a chord is still down) */
+function fxNoteOff(note){if(note!=null){FXM.held.delete(note);if(FXM.held.size)return;}FXM.held.clear();if(!FXM.gate)return;
+  const t=fxClock();FXM.lvlOn=1;FXM.gate=false;FXM.tOff=t;
   /* remember the level at release so the envelope releases from where it was */
   const g=Object.values(S.fx.graphs).flatMap(x=>x.nodes).find(n=>n.type==='adsr');
-  if(g){const p=g.p,x=t-FXM.tOn,a=p.a/1000,d=p.d/1000,s=p.s/100;FXM.lvlOn=x<a?(a>0?x/a:1):x<a+d?1-(1-s)*((x-a)/Math.max(1e-4,d)):s;}}
+  if(g){const p=g.p,x=t-(p.trig&&FXM.tLeg>=0?FXM.tLeg:FXM.tOn),a=p.a/1000,d=p.d/1000,s=p.s/100;FXM.lvlOn=x<a?(a>0?x/a:1):x<a+d?1-(1-s)*((x-a)/Math.max(1e-4,d)):s;}}
 /* ---- helpers ---- */
 const dbg=db=>Math.pow(10,db/20);
 const logF=(pct,lo,hi)=>lo*Math.pow(hi/lo,clamp(pct/100,0,1));

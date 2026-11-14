@@ -489,7 +489,7 @@ const ENGINE_SIG_SKIP={x:1,y:1,name:1,skin:1,open:1,collapsed:1};
 /* ---------- what the modulators put out: shown live in the Effects editor (and played by the old JS path) ----------
    FXA holds the Web Audio FX state (p330); FXM what the keyboard plays. */
 const FXA={ctx:null,gin:{},gout:{},min:null,sig:'',scopes:{},follow:{},buses:[],wl:null,wlReady:false,noise:null,timer:0,last:0};
-const FXM={vel:0,key:60,gate:false,tOn:-1,tOff:-1,mod:0,expr:1,at:0,bend:.5,lvlOn:0};
+const FXM={vel:0,key:60,gate:false,tOn:-1,tOff:-1,tLeg:-1,held:new Set(),mod:0,expr:1,at:0,bend:.5,lvlOn:0};
 /* ---- modulator outputs (used by modOut) ---- */
 function lfoOut(g,n,t){
   const v=n.p,r=paramReal(g,n,FXT.lfo.params[0],t,false),hz=typeof r==='number'?r:r.v;
@@ -501,7 +501,8 @@ function adsrOut(v,t){
   if(FXM.tOn<0) return 0;
   const a=v.a/1000,d=v.d/1000,s=v.s/100,r=v.r/1000;
   const level=x=>x<a?(a>0?x/a:1):x<a+d?1-(1-s)*((x-a)/Math.max(1e-4,d)):s;
-  if(FXM.gate) return level(t-FXM.tOn);
+  const t0=v.trig&&FXM.tLeg>=0?FXM.tLeg:FXM.tOn;   // Trigger: First note runs on through a legato phrase (same as the plugins' engine)
+  if(FXM.gate) return level(t-t0);
   const rel=t-FXM.tOff; return rel>=r?0:FXM.lvlOn*(1-rel/Math.max(1e-4,r));
 }
 function midiSrcOut(src){
@@ -605,8 +606,9 @@ Object.assign(FXT,{
   pvol:{label:'Volume Pedal',kind:'fx',cat:'Pedals',pedal:'#444',raw:1,ins:['in'],outs:['out'],cpu:.1,lat:0,hint:'Swells. Link Pedal to the Expression source.',
     params:[FP('pos','Pedal',0,100,'%',100)]},
   /* ---- modulators ---- */
-  adsr:{label:'Envelope',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:.1,lat:0,hint:'Starts on every note: attack, decay, sustain, release.',
-    params:[FP('a','Attack',0,5000,'ms',10),FP('d','Decay',0,5000,'ms',300),FP('s','Sustain',0,100,'%',60),FP('r','Release',0,8000,'ms',400),FP('depth','Depth',0,100,'%',100)]},
+  adsr:{label:'Envelope',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:.1,lat:0,hint:'Attack, decay, sustain, release, started by notes. Trigger: Every note restarts it; First note starts it only when no key is held, so it runs on through chords and legato playing. It releases when the last key is let go.',
+    params:[FP('a','Attack',0,5000,'ms',10),FP('d','Decay',0,5000,'ms',300),FP('s','Sustain',0,100,'%',60),FP('r','Release',0,8000,'ms',400),FP('depth','Depth',0,100,'%',100),
+      OPT('trig','Trigger',['Every note','First note'],1,{old:0})]},
   midisrc:{label:'MIDI source',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:0,lat:0,hint:'Velocity, key, mod wheel, expression (CC 11), aftertouch or pitch bend as a control signal.',
     params:[OPT('src','Source',['Velocity','Key','Mod wheel','Expression','Aftertouch','Pitch bend'],0)]},
   rand:{label:'Random',kind:'mod',cat:'Modulators',ins:[],outs:['out'],cpu:.1,lat:0,hint:'Sample and hold: jumps to a new random value at the rate, smoothed if you like.',
