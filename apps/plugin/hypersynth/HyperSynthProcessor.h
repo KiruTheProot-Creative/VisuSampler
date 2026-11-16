@@ -50,7 +50,13 @@ public:
     juce::String presetCategory() const { const juce::ScopedLock l(nameLock_); return category_; }
     juce::var listPresets() const;
     juce::var loadPreset(const juce::String& id);         // {name, category} or {error}
-    juce::var savePreset(const juce::String& name, const juce::String& category);
+    juce::var savePreset(const juce::String& name, const juce::String& category, const juce::String& author = {}, const juce::String& notes = {});
+    // the presets tab: what a preset is and uses (without loading it), favourites (kept in the preset folder)
+    juce::var describePreset(const juce::String& id) const;
+    juce::var favorites() const;
+    void setFavorite(const juce::String& id, bool on);
+    juce::String presetAuthor() const { const juce::ScopedLock l(nameLock_); return author_; }
+    juce::String presetNotes() const { const juce::ScopedLock l(nameLock_); return notes_; }
     bool deletePreset(const juce::String& id);
     // INIT: everything back to the Init sound (no samples, tables, modulation or effects); undoInit() brings back what was there
     juce::var initSound();
@@ -113,7 +119,8 @@ private:
     juce::AbstractFifo fifo_ { 256 };
     std::array<UiEvent, 256> events_ {};
     juce::CriticalSection nameLock_;
-    juce::String name_ { "Init" }, category_ { "Basics" };
+    juce::String name_ { "Init" }, category_ { "Basics" }, author_, notes_;
+    juce::String presetText(const juce::String& id) const;   // a preset's .hsyn text by id ("" = not found)
     juce::String beforeInit_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HyperSynthProcessor)

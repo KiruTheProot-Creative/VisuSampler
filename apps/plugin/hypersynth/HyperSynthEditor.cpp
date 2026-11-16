@@ -54,6 +54,7 @@ juce::WebBrowserComponent::Options HyperSynthEditor::makeOptions()
         .withNativeFunction("getState", [this, reply](const juce::Array<juce::var>&, auto done) {
             auto* o = new juce::DynamicObject(); o->setProperty("defs", proc_.paramDefs()); o->setProperty("values", proc_.values());
             o->setProperty("name", proc_.presetName()); o->setProperty("category", proc_.presetCategory()); o->setProperty("version", HyperSynthProcessor::versionText());
+            o->setProperty("author", proc_.presetAuthor()); o->setProperty("notes", proc_.presetNotes());
             reply(done, juce::var(o)); })
         .withNativeFunction("setParam", [this, reply, idx](const juce::Array<juce::var>& a, auto done) {
             if (a.size() >= 2) { const int i = idx(a[0]); proc_.setFromUi(i, (float) (double) a[1]); if (i >= 0) shown_[(size_t) i] = proc_.value(i); }
@@ -100,7 +101,10 @@ juce::WebBrowserComponent::Options HyperSynthEditor::makeOptions()
             for (int i = 0; i < proc_.numParams(); ++i) shown_[(size_t) i] = proc_.value(i);
             reply(done, r); })
         .withNativeFunction("savePreset", [this, reply](const juce::Array<juce::var>& a, auto done) {
-            reply(done, a.size() >= 2 ? proc_.savePreset(a[0].toString(), a[1].toString()) : juce::var()); })
+            reply(done, a.size() >= 2 ? proc_.savePreset(a[0].toString(), a[1].toString(), a.size() > 2 ? a[2].toString() : juce::String(), a.size() > 3 ? a[3].toString() : juce::String()) : juce::var()); })
+        .withNativeFunction("describePreset", [this, reply](const juce::Array<juce::var>& a, auto done) { reply(done, a.isEmpty() ? juce::var() : proc_.describePreset(a[0].toString())); })
+        .withNativeFunction("getFavorites", [this, reply](const juce::Array<juce::var>&, auto done) { reply(done, proc_.favorites()); })
+        .withNativeFunction("setFavorite", [this, reply](const juce::Array<juce::var>& a, auto done) { if (a.size() >= 2) proc_.setFavorite(a[0].toString(), (bool) a[1]); reply(done, proc_.favorites()); })
         .withNativeFunction("deletePreset", [this, reply](const juce::Array<juce::var>& a, auto done) {
             reply(done, juce::var(!a.isEmpty() && proc_.deletePreset(a[0].toString()))); })
         .withNativeFunction("openPresetFolder", [reply](const juce::Array<juce::var>&, auto done) {

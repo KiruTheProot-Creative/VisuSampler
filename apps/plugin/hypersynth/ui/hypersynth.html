@@ -99,15 +99,41 @@ body{font-family:var(--font);color:var(--ink);user-select:none;-webkit-user-sele
 .rctl .rr b{color:var(--lcd);font-family:'JB',monospace;font-size:11.5px;min-width:42px;text-align:right}
 .ribbon .touch{position:absolute;top:2px;bottom:2px;width:10px;margin-left:-5px;border-radius:2px;background:var(--accent);opacity:0;box-shadow:0 0 8px var(--accent)}
 /* presets */
-#browser{position:absolute;left:540px;top:78px;width:520px;max-height:540px;z-index:5;display:none;flex-direction:column;gap:8px;padding:12px;border-radius:6px;
-  background:linear-gradient(180deg,#26282c,#1a1b1e);box-shadow:0 14px 30px #000000d9,0 0 0 1px #000,inset 0 1px 0 #ffffff1f}
-#browser.open{display:flex}
-#plist{overflow:auto;max-height:400px;display:flex;flex-direction:column;gap:6px}
-.pcat{font-size:11px;letter-spacing:3px;color:var(--quiet);margin-top:4px}
-.pitems{display:flex;flex-wrap:wrap;gap:4px}
-.pitem{font-family:var(--font);font-size:13px;font-weight:600;padding:5px 9px}
-.pitem.cur{box-shadow:0 0 0 2px var(--accent),0 3px 4px #000000b3}
-#browser input{font-family:'JB',monospace;font-size:13px;color:var(--lcd);background:#070c11;border:none;border-radius:4px;padding:7px 9px;box-shadow:inset 0 2px 5px #000000f2;outline:none}
+#presetView{height:428px;display:flex;gap:14px}
+#presetView[hidden]{display:none}
+#pbLeft{width:196px;display:flex;flex-direction:column;gap:8px;min-height:0}
+#pbCats{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding-right:3px;scrollbar-width:thin;scrollbar-color:#4a4d54 #0a0b0c}
+.pbc{display:flex;align-items:center;gap:6px;height:26px;padding:0 9px;border:none;border-radius:4px;background:none;color:var(--quiet);font:700 12px var(--font);letter-spacing:1.5px;cursor:pointer;text-align:left}
+.pbc span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pbc em{font-style:normal;font-family:'JB',monospace;font-size:11px;color:#6d6758}
+.pbc:hover{color:var(--ink);background:#ffffff0d}.pbc.on{color:var(--ink);background:#0a0b0c;box-shadow:inset 0 2px 4px #000000e6,inset 3px 0 0 var(--accent)}
+.pbsep{height:1px;margin:4px 6px;background:#00000099;box-shadow:0 1px 0 #ffffff1a}
+#presetView input,#presetView textarea{font-family:'JB',monospace;font-size:13px;color:var(--lcd);background:#070c11;border:none;border-radius:4px;padding:7px 9px;box-shadow:inset 0 2px 5px #000000f2;outline:none;box-sizing:border-box;width:100%}
+#presetView textarea{resize:none;height:46px;font-size:12px;line-height:1.35}
+#presetView input::placeholder,#presetView textarea::placeholder{color:#2f5a6e}
+#pbMid{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.pbbar{display:flex;align-items:center;gap:8px;height:28px}.pbbar .btn{height:26px;padding:0 10px;font-size:11.5px;letter-spacing:1.5px}
+#pbCount{font-family:'JB',monospace;font-size:11px;color:var(--quiet)}
+#pbList{flex:1;overflow-y:auto;border-radius:6px;padding:4px;scrollbar-width:thin;scrollbar-color:#1f4b60 #061018}
+.prow{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:3px;cursor:pointer;font-family:'JB',monospace;font-size:13px;color:#7fb8d1}
+.prow:hover{background:#4fc3f712}.prow.sel{background:#4fc3f726;color:var(--lcd)}.prow.cur .pn{color:var(--lcd);text-shadow:0 0 6px #4fc3f780}
+.prow .pn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .pc{width:120px;font-size:11px;color:var(--lcdq);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .pk{width:58px;font-size:10px;color:#2f5a6e;text-align:right;letter-spacing:1px}
+.prow .led{width:7px;height:7px}
+.star{border:none;background:none;color:#24485a;font-size:14px;cursor:pointer;padding:0;width:16px;line-height:1}.star:hover{color:#7fb8d1}.star.on{color:#f4d35e;text-shadow:0 0 5px #f4d35e80}
+.pbempty{font-family:'JB',monospace;font-size:12px;color:var(--lcdq);padding:10px}
+#pbRight{width:330px;display:flex;flex-direction:column;gap:8px;min-height:0}
+#pbInfo{flex:1;min-height:0;overflow-y:auto;padding:10px 12px;scrollbar-width:thin;scrollbar-color:#1f4b60 #061018}
+.pbt{font-size:18px;color:var(--lcd);text-shadow:0 0 6px #4fc3f780;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbq{font-size:10.5px;color:var(--lcdq);letter-spacing:1px;margin-top:3px}
+.pbn{font-size:12px;color:#9fd6ee;line-height:1.4;margin-top:8px;white-space:pre-wrap}
+.pbh{font-size:10px;color:#3f6f86;letter-spacing:2px;margin:10px 0 4px}
+.pbchips{display:flex;flex-wrap:wrap;gap:4px}.pbchip{font-size:11px;color:var(--lcd);border:1px solid #1f4b60;border-radius:3px;padding:2px 6px;background:#08141a}
+.pbbtns{display:flex;gap:6px}.pbbtns .btn{flex:1;height:28px;font-size:11.5px;letter-spacing:1.5px}
+#pbDel.arm{color:#ffb38a;box-shadow:0 0 0 2px #e2552f,0 3px 4px #000000b3}
+.pbsave{display:grid;grid-template-columns:1fr 1fr;gap:6px}.pbsave textarea{grid-column:1/3}
+#pbSave{grid-column:1/3;height:32px;font-size:13px;letter-spacing:3px}
+#pbMsg{font-size:11.5px;color:var(--quiet);min-height:14px}
 /* the FX tab: NodeFX's modules as hardware, patched with cables */
 #fxView{height:428px;display:flex;gap:14px}
 #fxView[hidden]{display:none}
@@ -205,6 +231,7 @@ svg.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;point
     <button class="btn tab" data-tab="l1" role="tab" style="width:92px;height:38px;font-size:14px;letter-spacing:1px;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:6px"><span class="led"></span>LAYER I</button>
     <button class="btn tab" data-tab="l2" role="tab" style="width:92px;height:38px;font-size:14px;letter-spacing:1px;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:6px"><span class="led"></span>LAYER II</button>
     <button class="btn tab" data-tab="fx" role="tab" style="width:62px;height:38px;font-size:14px;letter-spacing:2px;display:flex;align-items:center;justify-content:center;gap:6px"><span class="led"></span>FX</button>
+    <button class="btn tab" data-tab="presets" role="tab" style="width:98px;height:38px;font-size:14px;letter-spacing:1px;display:flex;align-items:center;justify-content:center;gap:6px"><span class="led"></span>PRESETS</button>
   </div>
   <div style="flex:1"></div>
   <button class="btn" id="init" title="Start from scratch: the Init sound (no samples, modulation or effects)" style="width:58px;height:44px;font-size:12px;letter-spacing:2px">INIT</button>
@@ -287,6 +314,29 @@ svg.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;point
 </div>
 </div>
 
+<div id="presetView" hidden>
+  <section id="pbLeft" aria-label="Preset categories">
+    <input id="pbSearch" placeholder="Search…" aria-label="Search presets">
+    <div id="pbCats"></div>
+  </section>
+  <section id="pbMid" aria-label="Presets">
+    <div class="pbbar"><div class="sh" style="flex:1"><b>PRESETS</b><i></i></div><span id="pbCount"></span><button class="btn" id="pbSort" title="Sort by category or by name"></button></div>
+    <div id="pbList" class="lcd" role="listbox" aria-label="Preset list"></div>
+    <span class="hq" style="font-size:11px">click a preset to play it · ↑ ↓ walk the list · ★ keeps a favorite</span>
+  </section>
+  <section id="pbRight" aria-label="Preset details">
+    <div id="pbInfo" class="lcd"></div>
+    <div class="pbbtns"><button class="btn" id="pbFav">☆ FAVORITE</button><button class="btn" id="pbDel" title="Delete this preset file (yours only; click twice)">DELETE</button><button class="btn" id="pbFolder" title="Open your preset folder">FOLDER</button></div>
+    <div class="sh"><b>SAVE THE SOUND</b><i></i></div>
+    <div class="pbsave"><input id="pbName" placeholder="Name" aria-label="Preset name"><input id="pbCat" placeholder="Category" list="pbCatList" aria-label="Category">
+      <datalist id="pbCatList"></datalist>
+      <input id="pbAuthor" placeholder="Author (optional)" aria-label="Author" style="grid-column:1/3">
+      <textarea id="pbNotes" placeholder="Notes: how to play it, what the macros do… (optional)" aria-label="Notes"></textarea>
+      <button class="btn" id="pbSave">SAVE</button></div>
+    <div id="pbMsg"></div>
+  </section>
+</div>
+
 <div id="fxView" hidden>
   <section id="fxLib" aria-label="Effect modules">
     <div class="sh"><b>MODULES</b><i></i></div>
@@ -320,14 +370,6 @@ svg.ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;point
 </div>
 </div>
 
-<div id="browser" role="dialog" aria-label="Presets">
-  <div style="display:flex;align-items:center;gap:8px"><b style="font-size:14px;letter-spacing:4px">PRESETS</b><span style="flex:1"></span>
-    <button class="btn" id="pFolder" style="height:28px;padding:0 10px;font-size:12px">OPEN FOLDER</button>
-    <button class="btn" id="pClose" style="height:28px;width:30px;font-size:13px" aria-label="Close">&#10005;</button></div>
-  <div id="plist"></div>
-  <div style="display:flex;gap:6px;align-items:center"><input id="pName" placeholder="Name" style="flex:2" aria-label="Preset name"><input id="pCat" placeholder="Category" style="flex:1" aria-label="Category">
-    <button class="btn" id="pSave" style="height:32px;padding:0 12px;font-size:13px">SAVE</button></div>
-  <div id="pMsg" style="font-size:12px;color:var(--quiet);min-height:14px"></div>
 </div>
 </div>
 
@@ -406,8 +448,8 @@ function paint(){
   [0,1,2].forEach(k=>{const p=`${H.layer}.o${k+1}.`;const onB=$(`[data-on="${k}"] .led`);if(onB)onB.classList.toggle('on',val(p+'on')>.5);
     const md=$(`[data-mode="${k}"]`);if(md)md.textContent=(def(p+'mode').opts[Math.round(val(p+'mode'))]||'').toUpperCase();
     const row=$(`.osc[data-k="${k}"]`);if(row){row.classList.toggle('sel',H.screen==='o'+k);row.style.opacity=val(p+'on')>.5?1:.55;}});
-  const fxOn=H.view==='fx';$('#synthView').hidden=fxOn;$('#fxView').hidden=!fxOn;$('#synthView').style.display=fxOn?'none':'flex';
-  $$('.tab').forEach(t=>{const sel=fxOn?t.dataset.tab==='fx':t.dataset.tab===H.layer;t.classList.toggle('down',sel);const l=t.querySelector('.led');if(l)l.classList.toggle('on',sel);});
+  const fxOn=H.view==='fx',pbOn=H.view==='presets',other=fxOn||pbOn;$('#synthView').hidden=other;$('#fxView').hidden=!fxOn;$('#presetView').hidden=!pbOn;$('#synthView').style.display=other?'none':'flex';
+  $$('.tab').forEach(t=>{const sel=fxOn?t.dataset.tab==='fx':pbOn?t.dataset.tab==='presets':t.dataset.tab===H.layer;t.classList.toggle('down',sel);const l=t.querySelector('.led');if(l)l.classList.toggle('on',sel);});
   const play=Math.round(val('play'));$$('.play').forEach(b=>b.querySelector('.led').classList.toggle('on',+b.dataset.v===play||(play===2&&+b.dataset.v<2)));
   $('#slope').textContent=def(H.layer+'.lp.type').opts[Math.round(val(H.layer+'.lp.type'))];
   $('#mode').textContent=def('mode').opts[Math.round(val('mode'))].toUpperCase();
@@ -419,7 +461,7 @@ function paint(){
   $('#matrix').classList.toggle('show',H.screen==='matrix');if(H.screen==='matrix')paintMatrix();
   paintRings();
 }
-function lcdIdle(){if(Date.now()<H.flashT)return;$('#lcdTop').textContent=(H.category||'').toUpperCase()+' · EDITING '+(H.view==='fx'?'FX':H.layer==='l1'?'LAYER I':'LAYER II');$('#lcdMain').textContent=H.name||'Init';}
+function lcdIdle(){if(Date.now()<H.flashT)return;$('#lcdTop').textContent=(H.category||'').toUpperCase()+(H.view==='presets'?' · PRESETS':' · EDITING '+(H.view==='fx'?'FX':H.layer==='l1'?'LAYER I':'LAYER II'));$('#lcdMain').textContent=H.name||'Init';}
 function lcdShow(id){const d=def(id);if(!d)return;$('#lcdTop').textContent=d.name.toUpperCase();let txt=fmt(d,val(id));
   if(/^macro\d$/.test(id)){$('#lcdTop').textContent=(MOD.names[+id[5]-1]||d.name).toUpperCase();txt=Math.round(val(id)*100)+'%';}
   if(/\.table$/.test(id)){const p=id.slice(0,-5),c=H.custom[id.slice(0,5)];if(val(p+'wtsrc')>.5&&c)txt='CUSTOM: '+c.name;}
@@ -843,7 +885,7 @@ function wire(){
   document.addEventListener('wheel',e=>{const k=e.target.closest('.kn,.sl,.fld');if(!k||!k.dataset.id)return;e.preventDefault();const id=k.dataset.id,d=def(id);
     const step=d.opts.length||d.whole?Math.sign(-e.deltaY)/(d.max-d.min):-e.deltaY/2000;setVal(id,fromNorm(d,toNorm(d,val(id))+step),true);lcdShow(id);},{passive:false});
   document.addEventListener('mouseover',e=>{const k=e.target.closest('.kn,.sl,.fld');if(k&&k.dataset.id)lcdShow(k.dataset.id);});
-  $$('.tab').forEach(t=>t.onclick=()=>{const v=t.dataset.tab;if(!v)return;if(v==='fx')H.view='fx';else{H.view='synth';H.layer=v;}paint();if(H.view==='fx')fxRender();});
+  $$('.tab').forEach(t=>t.onclick=()=>{const v=t.dataset.tab;if(!v)return;if(v==='fx'||v==='presets')H.view=v;else{H.view='synth';H.layer=v;}paint();if(H.view==='fx')fxRender();if(H.view==='presets')pbLoad();});
   /* the page never zooms (Ctrl + wheel, Ctrl + / -): the panel already fits the window */
   window.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault();},{passive:false,capture:true});
   window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&['+','-','=','0','_'].includes(e.key))e.preventDefault();},{capture:true});
@@ -880,7 +922,7 @@ function wire(){
   kb.addEventListener('pointermove',e=>{if(held==null)return;const k=noteAt(e);if(k!=null&&k!==held){kOff(held);held=k;kOn(k,vel(e));}});
   const end=()=>{if(held!=null){kOff(held);held=null;}};kb.addEventListener('pointerup',end);kb.addEventListener('pointercancel',end);
   const MAP='awsedftgyhujk';let oct=60;const qwerty=new Map();
-  window.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.repeat||e.ctrlKey||e.metaKey)return;const c=e.key.toLowerCase();
+  window.addEventListener('keydown',e=>{if(/INPUT|TEXTAREA/.test(e.target.tagName)||e.repeat||e.ctrlKey||e.metaKey)return;const c=e.key.toLowerCase();
     if(c==='z'){oct=Math.max(24,oct-12);return;}if(c==='x'){oct=Math.min(96,oct+12);return;}const i=MAP.indexOf(c);if(i<0)return;const k=oct+i;qwerty.set(c,k);kOn(k,.8);});
   window.addEventListener('keyup',e=>{const c=e.key.toLowerCase();if(qwerty.has(c)){kOff(qwerty.get(c));qwerty.delete(c);}});
   /* wheels: pitch springs back, mod stays */
@@ -899,39 +941,96 @@ function wire(){
   const rcyc=(id,n)=>()=>{setVal(id,(Math.round(val(id))+1)%n,true);paint();lcdShow(id);};
   $('#rMode').onclick=rcyc('ribbon.mode',3);$('#rTouch').onclick=rcyc('ribbon.touch',2);$('#rHold').onclick=()=>{rcyc('ribbon.hold',2)();if(Math.round(val('ribbon.hold'))===0){setVal('ribbon',0,true);paintRibbon();}};
   /* presets */
-  $('#lcd').onclick=()=>openBrowser();$('#pClose').onclick=()=>$('#browser').classList.remove('open');
+  $('#lcd').onclick=()=>{H.view='presets';paint();pbLoad();};pbWire();
   /* INIT: one click starts from scratch; for 6 s the button is UNDO, in case it was a stray click */
   $('#init').onclick=async()=>{const b=$('#init'),undo=b.classList.contains('arm');clearTimeout(b.t);b.classList.remove('arm');b.textContent='INIT';
     const r=await call(undo?'undoInit':'initSound');if(!r||r.error){lcdMsg(undo?'UNDO':'INIT',(r&&r.error)||'did not work',true);return;}
     presetLoaded(r,undo?null:'f:Basics/Init');
     if(!undo){b.classList.add('arm');b.textContent='UNDO';b.t=setTimeout(()=>{b.classList.remove('arm');b.textContent='INIT';},6000);lcdMsg('INIT','a fresh start · UNDO brings yours back',true);}
     else lcdMsg('UNDO',r.name+' is back',true);};
-  $('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);$('#pFolder').onclick=()=>call('openPresetFolder');
-  $('#pSave').onclick=async()=>{const n=$('#pName').value.trim()||H.name,c=$('#pCat').value.trim()||'User';const r=await call('savePreset',n,c);
-    if(r&&r.error){$('#pMsg').textContent=r.error;return;}H.name=n;H.category=c;$('#pMsg').textContent='Saved as '+c+' / '+n+'.hsyn';await listPresets();renderBrowser();lcdIdle();};
+  $('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
 }
 function paintRibbon(){const v=val('ribbon'),e=$('#rval');if(!e)return;e.style.left=(50+Math.min(0,v)*50)+'%';e.style.width=Math.abs(v)*50+'%';
   $('#rMode').textContent=['PITCH','MOD','BOTH'][Math.round(val('ribbon.mode'))]||'PITCH';$('#rTouch').textContent=Math.round(val('ribbon.touch'))?'ABS':'REL';
   $('#rHold').textContent=Math.round(val('ribbon.hold'))?'HOLD':'SPRING';$('.rctl .rr b').textContent='±'+(Math.round(val('ribbon.range')*10)/10)+' st';}
 function paintKeys(){const all=new Set([...H.keys,...H.uiKeys]);$$('#keys [data-key]').forEach(k=>k.classList.toggle('on',all.has(+k.dataset.key)));}
 async function listPresets(){H.presets=(await call('listPresets'))||[];}
-async function loadPreset(id){const r=await call('loadPreset',id);if(!r||r.error){const m=(r&&r.error)||'could not load';$('#pMsg').textContent=m;lcdMsg('PRESET',m,true);return;}
+async function loadPreset(id){const r=await call('loadPreset',id);if(!r||r.error){const m=(r&&r.error)||'could not load';$('#pbMsg').textContent=m;lcdMsg('PRESET',m,true);return;}
   presetLoaded(r,id);}
 function presetLoaded(r,id){
-  H.name=r.name;H.category=r.category;H.cur=id||(H.presets.find(p=>p.name===r.name&&p.category===r.category)||{}).id;if(r.values)H.vals=r.values.slice();H.flashT=0;clearTimeout(lcdShow.t);paint();renderBrowser();refreshCustom();fxLoad();modLoad();}
+  H.name=r.name;H.category=r.category;H.author=r.author||'';H.notes=r.notes||'';H.cur=id||(H.presets.find(p=>p.name===r.name&&p.category===r.category)||{}).id;
+  if(r.values)H.vals=r.values.slice();H.flashT=0;clearTimeout(lcdShow.t);if(H.cur)PB.sel=H.cur;paint();if(H.view==='presets'){pbRender();pbFillSave();}refreshCustom();fxLoad();modLoad();}
 function step(dir){if(!H.presets.length)return;let i=H.presets.findIndex(p=>p.id===H.cur);i=(i+dir+H.presets.length)%H.presets.length;loadPreset(H.presets[i].id);}
-async function openBrowser(){await listPresets();renderBrowser();$('#pName').value=H.name;$('#pCat').value=H.category;$('#browser').classList.add('open');}
-function renderBrowser(){
+/* ---------- the PRESETS tab: categories, search, favourites, what a preset uses, saving with credits ---------- */
+const PB={filter:'all',q:'',favs:new Set(),sel:null,info:{},sort:'cat',del:null};
+async function pbLoad(){await listPresets();const f=await call('getFavorites');PB.favs=new Set(f||[]);if(!PB.sel)PB.sel=H.cur;pbRender();pbFillSave();}
+function pbItems(){const q=PB.q.trim().toLowerCase();let a=H.presets.filter(p=>{
+    if(PB.filter==='fav'&&!PB.favs.has(p.id))return false;if(PB.filter==='factory'&&!p.factory)return false;if(PB.filter==='user'&&p.factory)return false;
+    if(PB.filter.indexOf('c:')===0&&p.category!==PB.filter.slice(2))return false;
+    return !q||p.name.toLowerCase().includes(q)||p.category.toLowerCase().includes(q);});
+  if(PB.sort==='name')a=a.slice().sort((x,y)=>x.name.localeCompare(y.name));return a;}
+function pbRender(){
   const cats=[];H.presets.forEach(p=>{if(cats.indexOf(p.category)<0)cats.push(p.category);});
-  $('#plist').innerHTML=cats.map(c=>`<div class="pcat">${esc(c).toUpperCase()}</div><div class="pitems">${H.presets.filter(p=>p.category===c).map(p=>`<button class="btn pitem${p.id===H.cur?' cur':''}" data-id="${esc(p.id)}">${esc(p.name)}</button>`).join('')}</div>`).join('');
-  $$('#plist .pitem').forEach(b=>b.onclick=()=>loadPreset(b.dataset.id));
+  const cnt=f=>H.presets.filter(f).length,row=(k,label,n)=>`<button class="pbc${PB.filter===k?' on':''}" data-f="${esc(k)}"><span>${esc(label)}</span><em>${n}</em></button>`;
+  $('#pbCats').innerHTML=row('all','ALL',H.presets.length)+row('fav','★ FAVORITES',cnt(p=>PB.favs.has(p.id)))+row('factory','FACTORY',cnt(p=>p.factory))+row('user','MINE',cnt(p=>!p.factory))
+    +'<div class="pbsep"></div>'+cats.map(c=>row('c:'+c,c.toUpperCase(),cnt(p=>p.category===c))).join('');
+  const items=pbItems();
+  $('#pbList').innerHTML=items.length?items.map(p=>`<div class="prow${p.id===H.cur?' cur':''}${p.id===PB.sel?' sel':''}" data-id="${esc(p.id)}" role="option" aria-selected="${p.id===PB.sel}">
+      <button class="star${PB.favs.has(p.id)?' on':''}" data-star title="Favorite">★</button><span class="led${p.id===H.cur?' on':''}"></span><span class="pn">${esc(p.name)}</span><span class="pc">${esc(p.category)}</span><span class="pk">${p.factory?'FACTORY':'MINE'}</span></div>`).join('')
+    :`<div class="pbempty">${PB.filter==='fav'?'No favorites yet: click a ★ to add one.':'Nothing matches.'}</div>`;
+  $('#pbCount').textContent=items.length+' / '+H.presets.length;
+  $('#pbSort').textContent=PB.sort==='cat'?'BY CATEGORY':'A → Z';
+  $('#pbCatList').innerHTML=cats.map(c=>`<option value="${esc(c)}">`).join('');
+  pbInfo();
 }
+async function pbInfo(){const id=PB.sel,el=$('#pbInfo');const p=H.presets.find(x=>x.id===id);
+  if(!p){el.innerHTML='<div class="pbempty">Pick a preset to see what it uses.</div>';$('#pbFav').disabled=$('#pbDel').disabled=true;return;}
+  $('#pbFav').disabled=false;$('#pbFav').textContent=PB.favs.has(id)?'★ FAVORITE':'☆ FAVORITE';$('#pbFav').classList.toggle('down',PB.favs.has(id));
+  $('#pbDel').disabled=p.factory;if(PB.del!==id){$('#pbDel').textContent='DELETE';$('#pbDel').classList.remove('arm');}
+  let d=PB.info[id];if(!d){el.innerHTML=`<div class="pbt">${esc(p.name)}</div><div class="pbq">${esc(p.category.toUpperCase())}</div>`;d=PB.info[id]=await call('describePreset',id);if(PB.sel!==id)return;}
+  if(!d||d.error){el.innerHTML=`<div class="pbt">${esc(p.name)}</div><div class="pbq">${esc((d&&d.error)||'could not read it')}</div>`;return;}
+  const chip=t=>`<span class="pbchip">${esc(t)}</span>`,fx=(d.fx||[]).map(t=>((window.FXCAT||{types:{}}).types[t]||{label:t}).label);
+  el.innerHTML=`<div class="pbt">${esc(d.name)}</div><div class="pbq">${esc(d.category.toUpperCase())} · ${d.factory?'FACTORY':'MINE'}${d.author?' · BY '+esc(d.author.toUpperCase()):''}</div>
+    ${d.notes?`<div class="pbn">${esc(d.notes)}</div>`:''}
+    <div class="pbh">SOUND</div><div class="pbchips">${chip(d.layers)}${chip(d.voice)}${(d.oscillators||[]).map(chip).join('')}${d.sample?chip('Own sample'):''}${d.customTable?chip('Own wavetable'):''}</div>
+    <div class="pbh">MOVES</div><div class="pbchips">${d.mods?chip(d.mods+' modulation'+(d.mods>1?'s':'')):chip('No modulation')}${(d.macros||[]).map(m=>chip('Macro: '+m)).join('')}</div>
+    <div class="pbh">EFFECTS</div><div class="pbchips">${fx.length?fx.map(chip).join(''):chip('None')}</div>`;
+}
+function pbFillSave(){$('#pbName').value=H.name||'';$('#pbCat').value=H.presets.some(p=>p.id===H.cur&&p.factory)?'User':(H.category||'User');$('#pbAuthor').value=H.author||'';$('#pbNotes').value=H.notes||'';pbSaveLabel();}
+function pbSaveLabel(){const n=$('#pbName').value.trim(),c=$('#pbCat').value.trim()||'User';const ex=H.presets.some(p=>!p.factory&&p.name===n&&p.category===c);$('#pbSave').textContent=ex?'REPLACE':'SAVE';}
+function pbSelect(id,load){PB.sel=id;PB.del=null;if(load)loadPreset(id);else pbRender();
+  const r=$(`#pbList .prow[data-id="${CSS.escape(id)}"]`);if(r)r.scrollIntoView({block:'nearest'});}
+function pbWire(){
+  $('#pbCats').onclick=e=>{const b=e.target.closest('[data-f]');if(!b)return;PB.filter=b.dataset.f;pbRender();};
+  $('#pbSearch').addEventListener('input',e=>{PB.q=e.target.value;pbRender();});
+  $('#pbSort').onclick=()=>{PB.sort=PB.sort==='cat'?'name':'cat';pbRender();};
+  $('#pbList').addEventListener('click',async e=>{const r=e.target.closest('.prow');if(!r)return;const id=r.dataset.id;
+    if(e.target.closest('[data-star]')){await pbFav(id);return;}pbSelect(id,true);});   // a click plays it at once: audition by clicking down the list
+  $('#pbFav').onclick=()=>PB.sel&&pbFav(PB.sel);
+  $('#pbDel').onclick=async()=>{const id=PB.sel,b=$('#pbDel');if(!id)return;
+    if(PB.del!==id){PB.del=id;b.textContent='SURE?';b.classList.add('arm');clearTimeout(b.t);b.t=setTimeout(()=>{PB.del=null;b.textContent='DELETE';b.classList.remove('arm');},3000);return;}
+    PB.del=null;const ok=await call('deletePreset',id);if(!ok){$('#pbMsg').textContent='Could not delete it.';return;}
+    if(PB.favs.has(id))await pbFav(id);delete PB.info[id];PB.sel=null;await listPresets();pbRender();$('#pbMsg').textContent='Deleted. Your sound is still loaded, so you can save it again.';};
+  $('#pbFolder').onclick=()=>call('openPresetFolder');
+  ['pbName','pbCat'].forEach(i=>$('#'+i).addEventListener('input',pbSaveLabel));
+  $('#pbSave').onclick=async()=>{const n=$('#pbName').value.trim(),c=$('#pbCat').value.trim()||'User';
+    if(!n){$('#pbMsg').textContent='Give it a name first.';$('#pbName').focus();return;}
+    const r=await call('savePreset',n,c,$('#pbAuthor').value.trim(),$('#pbNotes').value.trim());
+    if(!r||r.error){$('#pbMsg').textContent=(r&&r.error)||'Could not save.';return;}
+    H.name=n;H.category=c;H.author=$('#pbAuthor').value.trim();H.notes=$('#pbNotes').value.trim();
+    await listPresets();H.cur=r.id||H.cur;PB.sel=H.cur;delete PB.info[H.cur];pbRender();pbSaveLabel();lcdIdle();$('#pbMsg').textContent='Saved: '+c+' / '+n+'.hsyn';};
+  /* up / down walk the list and play each preset (not while typing) */
+  window.addEventListener('keydown',e=>{if(H.view!=='presets'||/INPUT|TEXTAREA/.test(e.target.tagName))return;
+    if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;e.preventDefault();const it=pbItems();if(!it.length)return;
+    let i=it.findIndex(p=>p.id===PB.sel);i=i<0?0:Math.max(0,Math.min(it.length-1,i+(e.key==='ArrowDown'?1:-1)));pbSelect(it[i].id,true);},{capture:true});
+}
+async function pbFav(id){const on=!PB.favs.has(id);const f=await call('setFavorite',id,on);PB.favs=new Set(f||[...PB.favs].filter(x=>x!==id).concat(on?[id]:[]));pbRender();}
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function fit(){const s=Math.min(window.innerWidth/1600,window.innerHeight/880);window.__hsScale=s;$('#hs').style.transform=`scale(${s})`;}
 
 async function start(){
   const st=await call('getState');if(!st){document.body.textContent='HyperSynth could not reach the plugin.';return;}
-  H.defs=st.defs;H.defs.forEach((d,i)=>{H.idx[d.id]=i;d.opts=d.opts||[];});H.vals=st.values.slice();H.name=st.name||'Init';H.category=st.category||'Basics';
+  H.defs=st.defs;H.defs.forEach((d,i)=>{H.idx[d.id]=i;d.opts=d.opts||[];});H.vals=st.values.slice();H.name=st.name||'Init';H.category=st.category||'Basics';H.author=st.author||'';H.notes=st.notes||'';
   H.tabs=(await call('tablePreviews'))||[];
   buildOscs();buildSliders();buildKeys();wire();fit();paint();await listPresets();await refreshCustom();await fxLoad();await modLoad();
   const cur=H.presets.find(p=>p.name===H.name&&p.category===H.category);if(cur)H.cur=cur.id;

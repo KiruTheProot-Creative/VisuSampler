@@ -211,6 +211,9 @@ juce::String HyperSynthProcessor::stateJson(const juce::String& name, const juce
     auto j = juce::String::fromUTF8(s.presetJson(name.toStdString(), category.toStdString()).c_str()).trimEnd();
     const auto fx = fxJson();   // the effects ride along as "fx" (the engine ignores keys it doesn't know)
     if (fx.isNotEmpty() && j.endsWithChar('}')) j = j.dropLastCharacters(1).trimEnd() + ",\n  \"fx\": " + fx + "\n}";
+    const auto au = presetAuthor(), no = presetNotes();   // who made it and a few words about it (optional; the engine ignores them)
+    if (au.isNotEmpty() && j.endsWithChar('}')) j = j.dropLastCharacters(1).trimEnd() + ",\n  \"author\": " + juce::JSON::toString(juce::var(au)) + "\n}";
+    if (no.isNotEmpty() && j.endsWithChar('}')) j = j.dropLastCharacters(1).trimEnd() + ",\n  \"notes\": " + juce::JSON::toString(juce::var(no)) + "\n}";
     return j;
 }
 
@@ -223,6 +226,7 @@ bool HyperSynthProcessor::applyJson(const juce::String& json, juce::String* erro
     {   // a preset from before the FX tab (no "fx") plays with no effects, as it did
         const auto v = juce::JSON::parse(json); const auto fx = v.getProperty("fx", juce::var());
         setFx(fx.isObject() ? juce::JSON::toString(fx, true) : juce::String(), true);
+        const juce::ScopedLock l(nameLock_); author_ = v.getProperty("author", {}).toString(); notes_ = v.getProperty("notes", {}).toString();
     }
     setNames(juce::String::fromUTF8(name.c_str()), juce::String::fromUTF8(cat.c_str()));
     return true;
@@ -284,8 +288,9 @@ juce::var HyperSynthProcessor::initSound()
     visu::hs::Synth s; s.resetParams();   // the defaults (a preset's missing values would be the older ones)
     for (int i = 0; i < (int) params_.size(); ++i) setFromUi(i, s.param(i));
     juce::String err; visu::hs::Synth empty; empty.loadPreset(init.toStdString()); copyTables(empty, synth_);
-    setFx({}, true); setNames("Init", "Basics");
+    setFx({}, true); setNames("Init", "Basics"); { const juce::ScopedLock l(nameLock_); author_.clear(); notes_.clear(); }
     auto* o = new juce::DynamicObject(); o->setProperty("name", presetName()); o->setProperty("category", presetCategory()); o->setProperty("values", values());
+    o->setProperty("author", presetAuthor()); o->setProperty("notes", presetNotes());
     return juce::var(o);
 }
 
@@ -295,34 +300,87 @@ juce::var HyperSynthProcessor::undoInit()
     if (beforeInit_.isEmpty() || !applyJson(beforeInit_, &err)) { o->setProperty("error", err.isEmpty() ? juce::String("nothing to undo") : err); return juce::var(o); }
     beforeInit_.clear();
     o->setProperty("name", presetName()); o->setProperty("category", presetCategory()); o->setProperty("values", values());
+    o->setProperty("author", presetAuthor()); o->setProperty("notes", presetNotes());
     return juce::var(o);
 }
 
-juce::var HyperSynthProcessor::loadPreset(const juce::String& id)
+juce::String HyperSynthProcessor::presetText(const juce::String& id) const
 {
-    juce::String json, err;
     if (id.startsWith("f:")) {
         if (auto* a = factory().getArray()) for (const auto& p : *a)
             if ("f:" + p["category"].toString() + "/" + p["name"].toString() == id) {
                 auto* o = new juce::DynamicObject(); o->setProperty("format", "hsyn"); o->setProperty("v", 1);
                 o->setProperty("name", p["name"]); o->setProperty("category", p["category"]); o->setProperty("params", p["params"]);
-                for (auto* k : { "mods", "lfoShapes", "macroNames", "fx" }) if (p.hasProperty(k)) o->setProperty(k, p[k]);   // modulation and effects
-                json = juce::JSON::toString(juce::var(o), true);
+                for (auto* k : { "mods", "lfoShapes", "macroNames", "fx", "author", "notes" }) if (p.hasProperty(k)) o->setProperty(k, p[k]);   // modulation, effects, credits
+                if (!p.hasProperty("author")) o->setProperty("author", "Kiru CAS");
+                return juce::JSON::toString(juce::var(o), true);
             }
     } else if (id.startsWith("u:") && !id.contains("..")) {
         const auto f = presetFolder().getChildFile(id.substring(2));
-        if (f.existsAsFile() && f.isAChildOf(presetFolder())) json = f.loadFileAsString();
+        if (f.existsAsFile() && f.isAChildOf(presetFolder())) return f.loadFileAsString();
     }
+    return {};
+}
+
+/* what a preset is and uses, for the presets tab: read through a scratch engine, nothing is loaded */
+juce::var HyperSynthProcessor::describePreset(const juce::String& id) const
+{
+    auto* o = new juce::DynamicObject(); const auto json = presetText(id);
+    if (json.isEmpty()) { o->setProperty("error", "preset not found"); return juce::var(o); }
+    visu::hs::Synth s; std::string err, name, cat;
+    if (!s.loadPreset(json.toStdString(), &err, &name, &cat)) { o->setProperty("error", juce::String(err)); return juce::var(o); }
+    const auto v = juce::JSON::parse(json);
+    auto P = [&](const char* pid) { const int i = visu::hs::paramIndex(pid); return i < 0 ? 0.f : s.param(i); };
+    o->setProperty("id", id); o->setProperty("name", juce::String::fromUTF8(name.c_str())); o->setProperty("category", juce::String::fromUTF8(cat.c_str()));
+    o->setProperty("factory", id.startsWith("f:")); o->setProperty("author", v.getProperty("author", {}).toString()); o->setProperty("notes", v.getProperty("notes", {}).toString());
+    const int play = (int) std::lround(P("play")), mode = (int) std::lround(P("mode"));
+    o->setProperty("layers", play == 0 ? "Layer I" : play == 1 ? "Layer II" : "Layers I + II");
+    o->setProperty("voice", mode == 0 ? "Poly" : mode == 1 ? "Mono" : "Legato");
+    static const char* modes[] = { "Wavetable", "Spectrum", "Sample", "Analog", "FM", "Noise" };
+    juce::StringArray osc; bool sample = false, table = false;
+    for (int L = 0; L < 2; ++L) { if ((play == 0 && L == 1) || (play == 1 && L == 0)) continue;
+        for (int k = 0; k < 3; ++k) { const auto p = "l" + std::to_string(L + 1) + ".o" + std::to_string(k + 1) + ".";
+            if (P((p + "on").c_str()) < .5f) continue; const int m = juce::jlimit(0, 5, (int) std::lround(P((p + "mode").c_str()))); osc.addIfNotAlreadyThere(modes[m]);
+            if (m == 2 && s.sample(L, k, nullptr, nullptr, nullptr, nullptr)) sample = true;
+            if (m == 0 && P((p + "wtsrc").c_str()) > .5f && s.customTable(L, k, nullptr, nullptr)) table = true; } }
+    juce::Array<juce::var> oa; for (auto& x : osc) oa.add(x); o->setProperty("oscillators", oa);
+    o->setProperty("sample", sample); o->setProperty("customTable", table); o->setProperty("mods", (int) s.mods().size());
+    juce::Array<juce::var> macros; for (int m = 0; m < visu::hs::Synth::kMacros; ++m) { const auto n = juce::String::fromUTF8(s.macroName(m).c_str()); if (n != "Macro " + juce::String(m + 1)) macros.add(n); }
+    o->setProperty("macros", macros);
+    juce::Array<juce::var> fx;
+    if (auto* nodes = v["fx"]["graph"]["nodes"].getArray()) for (const auto& n : *nodes) { const auto t = n["type"].toString(); if (t != "input" && t != "output") fx.add(t); }
+    o->setProperty("fx", fx);
+    return juce::var(o);
+}
+
+static juce::File favoritesFile() { return HyperSynthProcessor::presetFolder().getChildFile("favorites.json"); }
+juce::var HyperSynthProcessor::favorites() const
+{
+    const auto v = juce::JSON::parse(favoritesFile().loadFileAsString());
+    return v.isArray() ? v : juce::var(juce::Array<juce::var>());
+}
+void HyperSynthProcessor::setFavorite(const juce::String& id, bool on)
+{
+    juce::Array<juce::var> list; if (auto* a = favorites().getArray()) list = *a;
+    list.removeAllInstancesOf(juce::var(id)); if (on) list.add(id);
+    presetFolder().createDirectory(); favoritesFile().replaceWithText(juce::JSON::toString(juce::var(list)));
+}
+
+juce::var HyperSynthProcessor::loadPreset(const juce::String& id)
+{
+    juce::String err; const auto json = presetText(id);
     auto* o = new juce::DynamicObject();
     if (json.isEmpty()) { o->setProperty("error", "preset not found"); return juce::var(o); }
     if (!applyJson(json, &err)) { o->setProperty("error", err); return juce::var(o); }
     o->setProperty("name", presetName()); o->setProperty("category", presetCategory()); o->setProperty("values", values());
+    o->setProperty("author", presetAuthor()); o->setProperty("notes", presetNotes());
     return juce::var(o);
 }
 
-juce::var HyperSynthProcessor::savePreset(const juce::String& name, const juce::String& category)
+juce::var HyperSynthProcessor::savePreset(const juce::String& name, const juce::String& category, const juce::String& author, const juce::String& notes)
 {
     auto* o = new juce::DynamicObject();
+    { const juce::ScopedLock l(nameLock_); author_ = author.trim().substring(0, 80); notes_ = notes.trim().substring(0, 600); }
     auto dir = presetFolder().getChildFile(safeName(category.trim().isEmpty() ? juce::String("User") : category));
     if (!dir.createDirectory()) { o->setProperty("error", "could not make the folder " + dir.getFullPathName()); return juce::var(o); }
     const auto f = dir.getChildFile(safeName(name) + ".hsyn");

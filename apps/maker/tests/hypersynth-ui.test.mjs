@@ -23,7 +23,7 @@ await p.addInitScript(([defs,factory,tables])=>{
     if(name==='getState')return{defs,values:vals.slice(),name:'Init',category:'Basics',version:'test'};
     if(name==='setParam'){const i=idx(a[0]);if(i>=0)vals[i]=a[1];return true;}
     if(name==='note'){window.__notes.push(a);return true;}
-    if(name==='listPresets')return factory.map(f=>({id:'f:'+f.category+'/'+f.name,name:f.name,category:f.category,factory:true}));
+    if(name==='listPresets')return factory.map(f=>({id:'f:'+f.category+'/'+f.name,name:f.name,category:f.category,factory:true})).concat(window.__user||[]);
     if(name==='loadPreset'){const f=factory.find(f=>'f:'+f.category+'/'+f.name===a[0]);defs.forEach((d,i)=>{vals[i]=f.params[d.id]!=null?f.params[d.id]:d.def;});return{name:f.name,category:f.category,values:vals.slice()};}
     if(name==='tablePreviews')return tables;
     if(name==='initSound'){window.__before=vals.slice();defs.forEach((d,i)=>{vals[i]=d.def;});return{name:'Init',category:'Basics',values:vals.slice()};}
@@ -43,7 +43,12 @@ await p.addInitScript(([defs,factory,tables])=>{
       const fr=[0,1].map(f=>Array.from({length:128},(_,i)=>Math.sin(2*Math.PI*i/128)*(f?.5:1)+(f?.5*Math.sin(6*Math.PI*i/128):0)));
       window.__custom={name:'My Growl',count:2,frames:fr};vals[idx('l1.o2.mode')]=0;vals[idx('l1.o2.wtsrc')]=1;
       return{name:'My Growl',how:'single cycles of a 110 Hz sound',preview:window.__custom,values:vals.slice()};}
-    if(name==='savePreset')return{id:'u:'+a[1]+'/'+a[0]+'.hsyn'};
+    if(name==='savePreset'){window.__saved=a.slice();window.__user=(window.__user||[]).filter(u=>u.id!=='u:'+a[1]+'/'+a[0]+'.hsyn').concat([{id:'u:'+a[1]+'/'+a[0]+'.hsyn',name:a[0],category:a[1],factory:false}]);return{id:'u:'+a[1]+'/'+a[0]+'.hsyn'};}
+    if(name==='deletePreset'){window.__user=(window.__user||[]).filter(u=>u.id!==a[0]);return true;}
+    if(name==='getFavorites')return window.__favs||[];
+    if(name==='setFavorite'){window.__favs=(window.__favs||[]).filter(x=>x!==a[0]).concat(a[1]?[a[0]]:[]);return window.__favs;}
+    if(name==='describePreset'){const f=factory.find(f=>'f:'+f.category+'/'+f.name===a[0]);if(!f)return{id:a[0],name:a[0].split('/').pop().replace('.hsyn',''),category:'Mine',factory:false,author:'Kiru',notes:'',layers:'Layer I',voice:'Poly',oscillators:['Analog'],mods:0,macros:[],fx:[]};
+      return{id:a[0],name:f.name,category:f.category,factory:true,author:'Kiru CAS',notes:f.name==='Radiophonic Bass'?'Twang opens the filter.':'',layers:'Layer I',voice:'Poly',oscillators:['Analog'],mods:(f.mods||[]).length,macros:(f.macroNames||[]).filter((m,i)=>m!=='Macro '+(i+1)),fx:((f.fx||{}).graph||{nodes:[]}).nodes.map(n=>n.type).filter(t=>t!=='input'&&t!=='output')};}
     return true;};
   window.__vals=vals;
   window.__JUCE__={backend:{addEventListener:(n,f)=>{(ls[n]=ls[n]||[]).push(f);},removeEventListener:()=>{},
@@ -216,10 +221,30 @@ const notes=await p.evaluate(()=>window.__notes);
 ok(notes.length>=2&&notes[0][0]===60&&notes[0][2]===true&&notes[1][2]===false,'the keyboard plays middle C (note on, then off)');
 /* presets */
 await p.click('#lcd');await p.waitForTimeout(150);
-await p.click('.pitem:has-text("CS Brass")');await p.waitForTimeout(150);
-const ps=await p.evaluate(()=>({name:document.querySelector('#lcdMain').textContent,cut:window.__hs.vals[window.__hs.idx['l1.lp.cut']],items:document.querySelectorAll('.pitem').length}));
-ok(ps.name==='CS Brass'&&ps.cut===600&&ps.items===factory.length,'the preset browser lists '+ps.items+' presets and loads CS Brass ('+JSON.stringify(ps)+')');
-await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-browser.png')});await p.click('#pClose');await p.click('#stabs a[data-s="filter"]');await p.waitForTimeout(100);await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-ui.png')});
+const pv=await p.evaluate(()=>({shown:!document.querySelector('#presetView').hidden,tab:document.querySelector('.tab.down').dataset.tab,rows:document.querySelectorAll('#pbList .prow').length,cats:document.querySelectorAll('#pbCats .pbc').length}));
+ok(pv.shown&&pv.tab==='presets'&&pv.rows===factory.length&&pv.cats>=6,'clicking the screen opens the PRESETS tab with every preset ('+JSON.stringify(pv)+')');
+await p.click('#pbList .prow:has-text("CS Brass")');await p.waitForTimeout(150);
+const ps=await p.evaluate(()=>({name:document.querySelector('#lcdMain').textContent,cut:window.__hs.vals[window.__hs.idx['l1.lp.cut']],cur:document.querySelector('#pbList .prow.cur .pn').textContent}));
+ok(ps.name==='CS Brass'&&ps.cut===600&&ps.cur==='CS Brass','clicking a preset plays it ('+JSON.stringify(ps)+')');
+await p.keyboard.press('ArrowDown');await p.waitForTimeout(150);
+const nx=await p.evaluate(()=>document.querySelector('#lcdMain').textContent);ok(nx!=='CS Brass','↓ moves on to the next preset and plays it ('+nx+')');
+await p.fill('#pbSearch','radio');await p.waitForTimeout(60);
+const sr=await p.evaluate(()=>[...document.querySelectorAll('#pbList .pn')].map(x=>x.textContent).join(','));
+await p.click('#pbList .prow:has-text("Radiophonic Bass")');await p.waitForTimeout(200);
+const inf=await p.evaluate(()=>document.querySelector('#pbInfo').textContent.replace(/\s+/g,' '));
+ok(sr==='Radiophonic Bass'&&/BY KIRU CAS/.test(inf)&&/Macro: Twang/.test(inf)&&/Reverb/.test(inf)&&/Twang opens/.test(inf),'search finds it; the screen shows its author, notes, macros and effects ('+inf.slice(0,160)+')');
+await p.click('#pbList .prow:has-text("Radiophonic Bass") [data-star]');await p.fill('#pbSearch','');await p.click('.pbc[data-f="fav"]');await p.waitForTimeout(60);
+const fv=await p.evaluate(()=>({rows:[...document.querySelectorAll('#pbList .pn')].map(x=>x.textContent).join(','),saved:window.__favs}));
+ok(fv.rows==='Radiophonic Bass'&&fv.saved.length===1,'★ makes a favorite, and FAVORITES lists it ('+JSON.stringify(fv)+')');
+await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-presets.png')});
+await p.fill('#pbName','My Bass');await p.fill('#pbCat','Bass');await p.fill('#pbAuthor','Kiru');await p.fill('#pbNotes','Wheel = more grit');await p.click('#pbSave');await p.waitForTimeout(120);
+await p.click('.pbc[data-f="user"]');await p.waitForTimeout(60);
+const sv=await p.evaluate(()=>({saved:window.__saved,rows:[...document.querySelectorAll('#pbList .pn')].map(x=>x.textContent).join(','),btn:document.querySelector('#pbSave').textContent,lcd:document.querySelector('#lcdMain').textContent}));
+ok(JSON.stringify(sv.saved)==='["My Bass","Bass","Kiru","Wheel = more grit"]'&&sv.rows==='My Bass'&&sv.btn==='REPLACE'&&sv.lcd==='My Bass','SAVE stores name, category, author and notes; MINE lists it; saving again would REPLACE ('+JSON.stringify(sv)+')');
+await p.click('#pbList .prow:has-text("My Bass")');await p.waitForTimeout(100);await p.click('#pbDel');const arm=await p.textContent('#pbDel');await p.click('#pbDel');await p.waitForTimeout(100);
+const dl=await p.evaluate(()=>({rows:document.querySelectorAll('#pbList .prow').length,msg:document.querySelector('#pbMsg').textContent}));
+ok(arm==='SURE?'&&dl.rows===0&&/Deleted/.test(dl.msg),'DELETE asks once, then removes your preset ('+JSON.stringify(dl)+')');
+await p.click('.pbc[data-f="all"]');await p.click('.tab[data-tab="l1"]');await p.click('#stabs a[data-s="filter"]');await p.waitForTimeout(100);await p.screenshot({path:path.join(os.tmpdir(),'hypersynth-ui.png')});
 /* the host moves a parameter (automation): the knob follows */
 await p.evaluate(()=>window.__JUCE__.__fire('values',{i:[window.__hs.idx['master']],v:[-24]}));
 const rot=await p.evaluate(()=>document.querySelector('.kn[data-id="master"] .cap').style.transform);
