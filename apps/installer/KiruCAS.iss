@@ -33,7 +33,13 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
-WizardStyle=modern
+; the look: dark, with the suite's own artwork (Inno Setup 6.7 or later): a panel with a wooden side and a keyboard on the
+; welcome and finish pages, a brushed-metal background, the K keyboard tile. Made by apps/installer/art/make-art.py.
+WizardStyle=modern dark
+WizardImageFile=art\wizard-164.png,art\wizard-202.png,art\wizard-246.png,art\wizard-328.png,art\wizard-410.png
+WizardSmallImageFile=art\small-55.png,art\small-69.png,art\small-83.png,art\small-110.png,art\small-138.png
+WizardBackImageFile=art\back-600.png,art\back-900.png,art\back-1200.png
+WizardImageBackColor=#1d1e21
 ChangesAssociations=yes
 CloseApplications=yes
 UninstallDisplayName=Kiru Creative Audio Suite (Kiru CAS) {#Version}
