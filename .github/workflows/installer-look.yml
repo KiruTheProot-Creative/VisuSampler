@@ -10,7 +10,8 @@ jobs:
         shell: pwsh
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          gh release download --repo "${{ github.repository }}" --pattern KiruCAS-Setup.exe --dir . --clobber
+          $t = gh release list --repo "${{ github.repository }}" --limit 1 --json tagName -q '.[0].tagName'   # newest, prereleases too
+          gh release download $t --repo "${{ github.repository }}" --pattern KiruCAS-Setup.exe --dir . --clobber
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           Add-Type @"
           using System; using System.Runtime.InteropServices;
