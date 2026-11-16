@@ -81,3 +81,5 @@ d.rectangle([0,386,600,450],fill=(18,18,20)); d.rounded_rectangle([420,404,500,4
 pv.paste(small(55),(530,10),small(55))
 pv.save('installer-preview.png')
 print('ok')
+# the setup's own icon (title bar, taskbar, the .exe in Explorer)
+small(256).save(OUT+'setup.ico',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
