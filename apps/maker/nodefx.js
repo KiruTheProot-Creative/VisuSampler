@@ -1237,7 +1237,7 @@ function nfxInitChain(){const a=fxNode('input',40,160),b=fxNode('output',620,160
 function nfxDom(){
   document.body.classList.add('nodefx');document.title='NodeFX';
   const top=$('.top');
-  const logo=$('.logo',top);if(logo)logo.innerHTML='Node<em>FX</em>';
+  const logo=$('.logo',top);if(logo)logo.innerHTML='<img src="../../assets/logos/nodefx-96.png" alt="" draggable="false"><span>Node<em>FX</em></span>';
   const bar=document.createElement('div');bar.className='nfxbar';
   bar.innerHTML='<button type="button" class="btn pnav" id="nfxPrev" aria-label="Previous preset">◀</button>'
     +'<div class="nfxpw"><button type="button" class="btn" id="nfxPName" aria-haspopup="true" aria-expanded="false" aria-controls="nfxMenu" title="Presets: load, save, organise"></button><div class="menu insmenu" id="nfxMenu" hidden role="dialog" aria-label="Presets"></div></div>'

@@ -4,7 +4,8 @@ const req=createRequire(import.meta.url);let pw;try{pw=req('playwright');}catch(
 import {readFileSync,writeFileSync} from 'node:fs';
 /* the test page is the real index.html with the stand-in plugin in front of ui.js */
 writeFileSync(new URL('harness.html',import.meta.url),readFileSync(new URL('../index.html',import.meta.url),'utf8')
-  .replace('<meta charset="utf-8">','<meta charset="utf-8"><base href="../">').replace('<script type="module" src="ui.js"></script>','<script type="module" src="test/mock-host.js"></script>'));
+  .replace('<meta charset="utf-8">','<meta charset="utf-8"><base href="../">').replace('<script type="module" src="ui.js"></script>','<script type="module" src="test/mock-host.js"></script>')
+  .replace('src="visusampler-96.png"','src="../../../assets/logos/visusampler-96.png"'));   // the plugin serves the logo by its name
 const {server}=await import('../../../../tools/serve.mjs');await new Promise(r=>server.listen(0,r));
 const b=await pw.chromium.launch(),p=await b.newPage({viewport:{width:1000,height:660}}),errs=[],fails=[];
 p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error'&&!/ERR_|favicon|Failed to load resource/.test(m.text()))errs.push(m.text());});

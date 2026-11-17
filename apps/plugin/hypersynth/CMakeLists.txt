@@ -18,10 +18,11 @@ juce_add_plugin(HyperSynth
   COPY_PLUGIN_AFTER_BUILD FALSE
   VST3_CATEGORIES Instrument Synth
   FORMATS ${HS_FORMATS}
+  ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/../../../assets/logos/hypersynth.png"
   PRODUCT_NAME "HyperSynth")
 
 # the panel: one page, its fonts
-juce_add_binary_data(HyperSynthUI SOURCES ui/hypersynth.html ui/fxcatalog.js ../../../assets/fonts/Unbounded.ttf ../../../assets/fonts/JetBrainsMono.ttf)
+juce_add_binary_data(HyperSynthUI SOURCES ui/hypersynth.html ui/fxcatalog.js ../../../assets/fonts/Unbounded.ttf ../../../assets/fonts/JetBrainsMono.ttf ../../../assets/logos/hypersynth-96.png)
 juce_add_binary_data(HyperSynthPresets HEADER_NAME HyperSynthData.h NAMESPACE hypersynth SOURCES presets/factoryPresets.json)
 target_sources(HyperSynth PRIVATE HyperSynthProcessor.cpp HyperSynthEditor.cpp)
 target_compile_definitions(HyperSynth PUBLIC

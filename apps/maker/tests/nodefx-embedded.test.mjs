@@ -13,7 +13,7 @@ const files=new Map(list.map(f=>{const abs=path.resolve(nfxDir,f);return[path.ba
 const factory=JSON.parse(fs.readFileSync(path.join(nfxDir,'presets/factoryPresets.json'),'utf8'));
 const fails=[],missing=[],errs=[];const ok=(c,m)=>{console.log((c?'ok  ':'FAIL ')+m);if(!c)fails.push(m);};
 ok(list.length===files.size,'every built-in file has its own name ('+list.length+' files)');
-const mime=f=>f.endsWith('.html')?'text/html':f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.ttf')?'font/ttf':'application/octet-stream';
+const mime=f=>f.endsWith('.html')?'text/html':f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.ttf')?'font/ttf':f.endsWith('.png')?'image/png':'application/octet-stream';
 const b=await chromium.launch(),p=await b.newPage({viewport:{width:1280,height:780}});
 p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error')errs.push(m.text());});
 await p.route('**/*',r=>{

@@ -23,7 +23,7 @@ process.on('uncaughtException',e=>{log('error','main process: '+(e&&e.stack||e))
 const argProject=argv=>argv.slice(1).find(a=>/\.vmproj$/i.test(a)&&fs.existsSync(a))||null;
 let pendingOpen=argProject(process.argv);
 function createWindow(){
-  const win=new BrowserWindow({width:1500,height:900,minWidth:1100,minHeight:640,backgroundColor:'#262626',title:TITLE,
+  const win=new BrowserWindow({width:1500,height:900,minWidth:1100,minHeight:640,backgroundColor:'#262626',title:TITLE,icon:path.join(WWW,'assets','logos','visusampler.png'),
     webPreferences:{contextIsolation:true,sandbox:true,preload:path.join(__dirname,'preload.js')}});
   const q=[process.argv.includes('--worklet-file')?'wfile=1':'',process.argv.includes('--smoke-native')?'nodev=1':''].filter(Boolean).join('&');   /* nodev: CI machines have no sound card */
   win.loadURL('app://local/apps/maker/index.html'+(q?'?'+q:''));

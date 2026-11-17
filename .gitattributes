@@ -1,2 +1,3 @@
 # factory presets are compared byte for byte by the engine test: no line-ending changes
 *.hsyn -text
+*.ini -text

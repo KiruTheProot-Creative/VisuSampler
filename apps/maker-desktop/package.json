@@ -25,7 +25,7 @@
     "extraResources": [{ "from": "native", "to": "native", "filter": ["VisuMakerAudio*"] }],
     "directories": { "output": "dist" },
     "fileAssociations": [{ "ext": "vmproj", "name": "VisuMaker project", "role": "Editor" }],
-    "win": { "target": "nsis" },
+    "win": { "target": "nsis", "icon": "www/assets/logos/visusampler.ico" },
     "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
     "mac": { "target": "dmg", "category": "public.app-category.music" }
   }

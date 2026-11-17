@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import os
 UI=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','..','..','assets','fonts')+'/'
 OUT=os.path.dirname(os.path.abspath(__file__))+'/'
+LOGOS=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','..','..','assets','logos')+'/'
 UNB=UI+'Unbounded.ttf'; MONO=UI+'JetBrainsMono.ttf'
 PANEL=(29,30,33); INK=(239,232,214); QUIET=(169,162,145); LCD=(142,224,255); ACC=(226,85,47)
 def wood(w,h,seed=3):
@@ -52,6 +53,14 @@ def big(W,H):   # the welcome / finish page image (left side), drawn large and s
     glow=Image.new('RGBA',im.size,(0,0,0,0)); gd=ImageDraw.Draw(glow); gd.text((cx-(tb[2]-tb[0])/2,ly+int(h*0.075)/2-(tb[3]-tb[1])/2-tb[1]),t,font=fm,fill=LCD+(255,))
     im.paste(Image.alpha_composite(Image.new('RGBA',im.size,(0,0,0,0)),glow.filter(ImageFilter.GaussianBlur(3*S))).convert('RGB'),(0,0),glow.filter(ImageFilter.GaussianBlur(3*S)))
     d=ImageDraw.Draw(im); d.text((cx-(tb[2]-tb[0])/2,ly+int(h*0.075)/2-(tb[3]-tb[1])/2-tb[1]),t,font=fm,fill=LCD)
+    # the three products' logos (assets/logos), on a shadow
+    sz=int(min((lx1-lx0)*0.29,h*0.12)); y=int(h*0.415)
+    for i,name in enumerate(['visusampler','hypersynth','nodefx']):
+        lg=Image.open(LOGOS+name+'.png').convert('RGBA').resize((sz,sz),Image.LANCZOS)
+        x=lx0+int((lx1-lx0)*(0.18+0.32*i))-sz//2
+        sh=Image.new('RGBA',lg.size,(0,0,0,0)); sh.putalpha(lg.getchannel('A').point(lambda v:int(v*0.7)))
+        im.paste((0,0,0),(x+S,y+2*S),sh.filter(ImageFilter.GaussianBlur(2*S)).getchannel('A')); im.paste(lg,(x,y),lg)
+    d=ImageDraw.Draw(im)
     # three LEDs and a sliders row
     for i,c in enumerate([ACC,(234,138,31),LCD]):
         x=lx0+int((lx1-lx0)*(0.2+0.3*i)); y=int(h*0.71); d.ellipse([x-5*S,y-5*S,x+5*S,y+5*S],fill=c)

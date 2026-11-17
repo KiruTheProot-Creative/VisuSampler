@@ -9,6 +9,7 @@ juce::String mimeFor(const juce::String& p)
     if (p.endsWithIgnoreCase(".js")) return "text/javascript";
     if (p.endsWithIgnoreCase(".css")) return "text/css";
     if (p.endsWithIgnoreCase(".ttf")) return "font/ttf";
+    if (p.endsWithIgnoreCase(".png")) return "image/png";
     return "application/octet-stream";
 }
 }

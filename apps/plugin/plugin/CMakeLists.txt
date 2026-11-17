@@ -17,11 +17,12 @@ juce_add_plugin(VisuPlayer
   NEEDS_WEBVIEW2 TRUE
   COPY_PLUGIN_AFTER_BUILD FALSE
   FORMATS ${VISU_FORMATS}
+  ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/../../../assets/logos/visusampler.png"
   PRODUCT_NAME "VisuPlayer")
 
 juce_add_binary_data(VisuPlayerUI SOURCES ../ui/index.html ../ui/ui.css ../ui/ui.js ../ui/bridge.js
   ../ui/runtime.html ../ui/runtime.js ../ui/runtime.css
-  ../../../assets/fonts/Figtree.ttf ../../../assets/fonts/Unbounded.ttf ../../../assets/fonts/JetBrainsMono.ttf ../../../assets/fonts/Pacifico.ttf ../../../assets/fonts/VT323.ttf)
+  ../../../assets/fonts/Figtree.ttf ../../../assets/fonts/Unbounded.ttf ../../../assets/fonts/JetBrainsMono.ttf ../../../assets/fonts/Pacifico.ttf ../../../assets/fonts/VT323.ttf ../../../assets/logos/visusampler-96.png)
 target_sources(VisuPlayer PRIVATE PluginProcessor.cpp PluginEditor.cpp)
 target_compile_definitions(VisuPlayer PUBLIC
   VISU_VERSION="${PROJECT_VERSION}" VISU_BUILD_ID="${VISU_BUILD_ID}"

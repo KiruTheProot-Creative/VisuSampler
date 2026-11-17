@@ -6,7 +6,7 @@ import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {chromium} from './_helper.mjs';
 const here=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(here,'../../..'),hs=path.join(root,'apps/plugin/hypersynth');
-const files=new Map([['hypersynth.html',path.join(hs,'ui/hypersynth.html')],['fxcatalog.js',path.join(hs,'ui/fxcatalog.js')],['Unbounded.ttf',path.join(root,'assets/fonts/Unbounded.ttf')],['JetBrainsMono.ttf',path.join(root,'assets/fonts/JetBrainsMono.ttf')]]);
+const files=new Map([['hypersynth.html',path.join(hs,'ui/hypersynth.html')],['fxcatalog.js',path.join(hs,'ui/fxcatalog.js')],['Unbounded.ttf',path.join(root,'assets/fonts/Unbounded.ttf')],['JetBrainsMono.ttf',path.join(root,'assets/fonts/JetBrainsMono.ttf')],['hypersynth-96.png',path.join(root,'assets/logos/hypersynth-96.png')]]);
 const defs=JSON.parse(fs.readFileSync(path.join(root,'apps/plugin/tests/golden/hypersynth-params.json'),'utf8'));
 const tables=JSON.parse(fs.readFileSync(path.join(root,'apps/plugin/tests/golden/hypersynth-tables.json'),'utf8'));
 const factory=JSON.parse(fs.readFileSync(path.join(hs,'presets/factoryPresets.json'),'utf8'));
@@ -57,6 +57,7 @@ await p.addInitScript(([defs,factory,tables])=>{
 },[defs,factory,tables]);
 await p.goto('https://juce.backend/hypersynth.html');await p.waitForTimeout(800);
 ok(missing.length===0,'everything the panel loads is built into the plugin'+(missing.length?' (missing '+missing.join()+')':''));
+ok(await p.evaluate(()=>{const i=document.querySelector('#logo');return !!i&&i.complete&&i.naturalWidth===96;}),'the HyperSynth logo shows in the header');
 ok(errs.length===0,'no script errors'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
 const st=await p.evaluate(()=>({knobs:document.querySelectorAll('.kn[data-id]').length,sliders:document.querySelectorAll('.sl[data-id]').length,keys:document.querySelectorAll('#keys [data-key]').length,
   name:document.querySelector('#lcdMain').textContent,scale:window.__hsScale}));

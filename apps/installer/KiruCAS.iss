@@ -79,20 +79,40 @@ Name: "hypersynth"; Description: "HyperSynth: two-layer synthesizer (VST3 and st
 [Tasks]
 Name: "desktopicon"; Description: "Create desktop shortcuts"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
+[Dirs]
+#ifdef Vst3Dir
+Name: "{commoncf64}\VST3\VisuPlayer.vst3"; Components: vst3; Attribs: system
+#endif
+#ifdef NodeFXVst3Dir
+Name: "{commoncf64}\VST3\NodeFX.vst3"; Components: nodefx; Attribs: system
+#endif
+#ifdef HyperSynthVst3Dir
+Name: "{commoncf64}\VST3\HyperSynth.vst3"; Components: hypersynth; Attribs: system
+#endif
+
 [Files]
 #ifdef MakerDir
 Source: "{#MakerDir}\*"; DestDir: "{app}\VisuMaker"; Components: maker; Flags: ignoreversion recursesubdirs createallsubdirs
 #endif
 #ifdef Vst3Dir
 Source: "{#Vst3Dir}\*"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs createallsubdirs
+; the bundle's folder icon in Explorer (Steinberg's VST3 layout: PlugIn.ico + desktop.ini, the folder marked system)
+Source: "{#Root}\assets\logos\visusampler.ico"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; DestName: "PlugIn.ico"; Components: vst3; Attribs: hidden system; Flags: ignoreversion
+Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; DestName: "desktop.ini"; Components: vst3; Attribs: hidden system; Flags: ignoreversion
 Source: "{#StandaloneExe}"; DestDir: "{app}\VisuPlayer"; DestName: "VisuPlayer.exe"; Components: standalone; Flags: ignoreversion
 #endif
 #ifdef NodeFXVst3Dir
 Source: "{#NodeFXVst3Dir}\*"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; Components: nodefx; Flags: ignoreversion recursesubdirs createallsubdirs
+; the bundle's folder icon in Explorer (Steinberg's VST3 layout: PlugIn.ico + desktop.ini, the folder marked system)
+Source: "{#Root}\assets\logos\nodefx.ico"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; DestName: "PlugIn.ico"; Components: nodefx; Attribs: hidden system; Flags: ignoreversion
+Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; DestName: "desktop.ini"; Components: nodefx; Attribs: hidden system; Flags: ignoreversion
 Source: "{#NodeFXExe}"; DestDir: "{app}\NodeFX"; DestName: "NodeFX.exe"; Components: nodefx; Flags: ignoreversion
 #endif
 #ifdef HyperSynthVst3Dir
 Source: "{#HyperSynthVst3Dir}\*"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; Components: hypersynth; Flags: ignoreversion recursesubdirs createallsubdirs
+; the bundle's folder icon in Explorer (Steinberg's VST3 layout: PlugIn.ico + desktop.ini, the folder marked system)
+Source: "{#Root}\assets\logos\hypersynth.ico"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; DestName: "PlugIn.ico"; Components: hypersynth; Attribs: hidden system; Flags: ignoreversion
+Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; DestName: "desktop.ini"; Components: hypersynth; Attribs: hidden system; Flags: ignoreversion
 Source: "{#HyperSynthExe}"; DestDir: "{app}\HyperSynth"; DestName: "HyperSynth.exe"; Components: hypersynth; Flags: ignoreversion
 ; the factory presets as .hsyn files, to look at, copy and share (the plugin has them built in as well)
 Source: "{#Root}\apps\plugin\hypersynth\presets\hsyn\*"; DestDir: "{app}\HyperSynth\Factory Presets"; Components: hypersynth; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -123,6 +143,9 @@ Name: "{autodesktop}\VisuMaker"; Filename: "{app}\VisuMaker\VisuMaker.exe"; Comp
 #endif
 #ifdef Vst3Dir
 Name: "{autodesktop}\VisuPlayer"; Filename: "{app}\VisuPlayer\VisuPlayer.exe"; Components: standalone; Tasks: desktopicon
+#endif
+#ifdef NodeFXVst3Dir
+Name: "{autodesktop}\NodeFX"; Filename: "{app}\NodeFX\NodeFX.exe"; Components: nodefx; Tasks: desktopicon
 #endif
 #ifdef HyperSynthVst3Dir
 Name: "{autodesktop}\HyperSynth"; Filename: "{app}\HyperSynth\HyperSynth.exe"; Components: hypersynth; Tasks: desktopicon

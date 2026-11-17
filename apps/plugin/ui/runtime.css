@@ -37,6 +37,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .top{grid-column:1/-1;display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px}
 .logo{font-family:var(--f-disp);font-weight:700;font-size:15px;letter-spacing:.2px}
 .logo em{font-style:normal;color:var(--accent)}
+.logo{display:flex;align-items:center;gap:7px}.logo img{width:24px;height:24px;filter:drop-shadow(0 1px 1px #0009)}
+.tabico{width:14px;height:14px;vertical-align:-2px;margin-right:5px}
 .tabs{display:flex;gap:2px;flex:1;min-width:0;flex-wrap:wrap}
 .tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:6px 10px;color:var(--muted);cursor:default}
 .tabs button.on{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}

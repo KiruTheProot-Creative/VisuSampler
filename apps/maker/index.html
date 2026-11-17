@@ -41,6 +41,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .top{grid-column:1/-1;display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px}
 .logo{font-family:var(--f-disp);font-weight:700;font-size:15px;letter-spacing:.2px}
 .logo em{font-style:normal;color:var(--accent)}
+.logo{display:flex;align-items:center;gap:7px}.logo img{width:24px;height:24px;filter:drop-shadow(0 1px 1px #0009)}
+.tabico{width:14px;height:14px;vertical-align:-2px;margin-right:5px}
 .tabs{display:flex;gap:2px;flex:1;min-width:0;flex-wrap:wrap}
 .tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:6px 10px;color:var(--muted);cursor:default}
 .tabs button.on{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
@@ -737,11 +739,11 @@ body:not(.tips) .hint:not(.keep),body:not(.tips) .mapfoot .muted:last-child,body
 </head><body>
 <div class="app">
   <header class="top">
-    <div class="logo">Visu<em>Maker</em></div>
+    <div class="logo"><img src="../../assets/logos/visusampler-96.png" alt="" draggable="false"><span>Visu<em>Maker</em></span></div>
     <nav class="tabs" id="viewTabs" aria-label="Maker sections">
       <button type="button" data-view="sound">Sound</button>
       <button type="button" class="on" data-view="design" aria-current="page">Interface</button>
-      <button type="button" data-view="fx">Effects</button>
+      <button type="button" data-view="fx"><img class="tabico" src="../../assets/logos/nodefx-96.png" alt="" draggable="false">Effects</button>
       <button type="button" data-view="export">Export</button>
     </nav>
     <div class="insw">
