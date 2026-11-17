@@ -1,7 +1,7 @@
 Welcome to the Kiru Creative Audio Suite (Kiru CAS)!
 
 Kiru CAS is the audio side of Kiru's Creative Suite (KCS): plugins and audio tools, in one setup.
-This installs (the parts this setup carries; for now: HyperSynth):
+This installs:
 
   * VisuMaker  - build your own sample libraries (instruments, interface, effects).
   * VisuPlayer - plays them: a VST3 plugin for your DAW, and a standalone app.
@@ -13,12 +13,14 @@ You can pick which parts to install on the next pages.
 
 Where things go
   * VisuMaker and the standalone apps: the folder you choose (Program Files\Kiru CAS by default).
-  * The VST3 plugins (VisuPlayer, NodeFX): C:\Program Files\Common Files\VST3, where every DAW looks for plugins.
+  * The VST3 plugins (VisuPlayer, NodeFX, HyperSynth): the folder you choose (C:\Program Files\Common Files\VST3
+    by default, where every DAW looks for plugins).
   * Your libraries: Documents\VisuSampler\Libraries (made the first time you start VisuMaker or VisuPlayer).
   * NodeFX presets: Documents\VisuSampler\NodeFX Presets.
+  * HyperSynth presets: Documents\VisuSampler\HyperSynth Presets (the factory presets are in its program folder).
   * Log files for bug reports: Documents\VisuSampler\Logs.
 
-Uninstalling removes the programs and the plugin, never your libraries, projects or presets.
+Uninstalling removes the programs and the plugins, never your libraries, projects or presets.
 
 Community
 Questions, bug reports, libraries and news: Kiru's Creative Suite (KCS) on Discord, https://discord.gg/JFnu6HTwgs
