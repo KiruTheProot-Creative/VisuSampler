@@ -62,6 +62,7 @@ SetupLogging=yes
 SelectDirDesc=Where should the standalone apps go?
 SelectDirLabel3=The standalone apps (HyperSynth and the others you pick next) go into this folder, each in its own subfolder. The VST3 plugins get a folder of their own on a later page.
 SelectDirBrowseLabel=To continue, click Next. To pick another folder, click Browse.
+ReadyMemoDir=Standalone apps folder:
 
 [Types]
 Name: "full"; Description: "Everything in this setup"
