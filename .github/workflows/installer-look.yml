@@ -32,8 +32,11 @@ jobs:
           Shot "1-welcome"; [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
           Shot "2-license"; [System.Windows.Forms.SendKeys]::SendWait("%a"); Start-Sleep -Milliseconds 400; [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
           Shot "3-info"; [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-          Shot "4-next"; [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-          Shot "5-next"
+          Shot "4-apps-folder"; [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+          Shot "5-parts"; [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+          Shot "6-vst3-folder"; [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+          Shot "7-next"; [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+          Shot "8-ready"
           Get-Process | Where-Object { $_.ProcessName -like "KiruCAS-Setup*" -or $_.MainWindowTitle -like "Setup*" } | Stop-Process -Force -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v4
         if: always()

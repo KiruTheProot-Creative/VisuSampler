@@ -66,14 +66,29 @@ jobs:
       - name: Install it, try it, uninstall it
         shell: pwsh
         run: |
-          $p = Start-Process out\KiruCAS-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=install.log' -Wait -PassThru
-          if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; throw "setup exit code $($p.ExitCode)" }
-          $app = "$env:ProgramFiles\Kiru CAS"; $hvst = "$env:CommonProgramFiles\VST3\HyperSynth.vst3"
-          foreach ($f in "$app\HyperSynth\HyperSynth.exe", "$app\LICENSE.txt", $hvst, "$app\HyperSynth\Factory Presets\Basics\Init.hsyn", "$app\HyperSynth\Factory Presets\Bass\Radiophonic Bass.hsyn", "$hvst\PlugIn.ico", "$hvst\desktop.ini") { if (-not (Test-Path $f)) { throw "missing after install: $f" } else { "installed: $f" } }
-          if ((Get-ChildItem $hvst -Recurse -Force -Filter *.vst3 -File).Count -lt 1) { Get-ChildItem $hvst -Recurse -Force | Select-Object FullName, Attributes | Format-Table -AutoSize | Out-String -Width 300; throw "the HyperSynth VST3 bundle has no plugin binary" }
-          $u = Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          function Setup($more) {
+            $p = Start-Process out\KiruCAS-Setup.exe -ArgumentList (@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=install.log') + $more) -Wait -PassThru
+            if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; throw "setup exit code $($p.ExitCode)" }
+          }
+          function Installed($app, $vst) {
+            $hvst = "$vst\HyperSynth.vst3"
+            foreach ($f in "$app\HyperSynth\HyperSynth.exe", "$app\LICENSE.txt", $hvst, "$app\HyperSynth\Factory Presets\Basics\Init.hsyn", "$app\HyperSynth\Factory Presets\Bass\Radiophonic Bass.hsyn", "$hvst\PlugIn.ico", "$hvst\desktop.ini") { if (-not (Test-Path $f)) { throw "missing after install: $f" } else { "installed: $f" } }
+            if ((Get-ChildItem $hvst -Recurse -Force -Filter *.vst3 -File).Count -lt 1) { Get-ChildItem $hvst -Recurse -Force | Select-Object FullName, Attributes | Format-Table -AutoSize | Out-String -Width 300; throw "the HyperSynth VST3 bundle has no plugin binary" }
+          }
+          function Gone($app, $vst, $why) {
+            foreach ($f in "$app\HyperSynth\HyperSynth.exe", "$vst\HyperSynth.vst3", "$app\HyperSynth\Factory Presets\Basics\Init.hsyn", "$app\unins000.exe") { if (Test-Path $f) { throw "still there $($why): $f" } }
+            "gone $($why): $app, $vst\HyperSynth.vst3"
+          }
+          # 1. the standard folders
+          $app = "$env:ProgramFiles\Kiru CAS"; $vst = "$env:CommonProgramFiles\VST3"
+          Setup @(); Installed $app $vst
+          # 2. an update into folders of your own choosing moves everything there
+          $app2 = "C:\KCAS test\Apps"; $vst2 = "C:\KCAS test\My Plugins"
+          Setup @("/DIR=""$app2""", "/VST3DIR=""$vst2"""); Installed $app2 $vst2; Gone $app $vst "after moving"
+          # 3. uninstalling finds them there
+          $u = Start-Process "$app2\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
           Start-Sleep -Seconds 3
-          foreach ($f in "$app\HyperSynth\HyperSynth.exe", $hvst, "$app\HyperSynth\Factory Presets\Basics\Init.hsyn") { if (Test-Path $f) { throw "still there after uninstall: $f" } }
+          Gone $app2 $vst2 "after uninstall"
           "uninstalled cleanly"
       - uses: actions/upload-artifact@v4
         with: { name: KiruCAS-Setup, path: out }

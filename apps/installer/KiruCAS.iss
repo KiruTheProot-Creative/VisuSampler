@@ -24,6 +24,10 @@ VersionInfoVersion={#Version}
 DefaultDirName={autopf}\Kiru CAS
 DefaultGroupName=Kiru CAS
 DisableProgramGroupPage=yes
+; two folders to choose: the standalone apps ({app}, the next page) and the VST3 plugins (a page of its own, after
+; the parts). Both are shown on every run, filled in with the last choice; a silent setup takes /DIR= and /VST3DIR=.
+DisableDirPage=no
+UsePreviousAppDir=yes
 LicenseFile={#Root}\LICENSE
 InfoBeforeFile={#Root}\apps\installer\before-install.txt
 OutputDir={#OutDir}
@@ -54,6 +58,11 @@ VersionInfoDescription=Kiru Creative Audio Suite setup
 VersionInfoProductName=Kiru Creative Audio Suite
 SetupLogging=yes
 
+[Messages]
+SelectDirDesc=Where should the standalone apps go?
+SelectDirLabel3=The standalone apps (HyperSynth and the others you pick next) go into this folder, each in its own subfolder. The VST3 plugins get a folder of their own on a later page.
+SelectDirBrowseLabel=To continue, click Next. To pick another folder, click Browse.
+
 [Types]
 Name: "full"; Description: "Everything in this setup"
 #ifdef Vst3Dir
@@ -81,13 +90,13 @@ Name: "desktopicon"; Description: "Create desktop shortcuts"; GroupDescription: 
 
 [Dirs]
 #ifdef Vst3Dir
-Name: "{commoncf64}\VST3\VisuPlayer.vst3"; Components: vst3; Attribs: system
+Name: "{code:Vst3Root}\VisuPlayer.vst3"; Components: vst3; Attribs: system
 #endif
 #ifdef NodeFXVst3Dir
-Name: "{commoncf64}\VST3\NodeFX.vst3"; Components: nodefx; Attribs: system
+Name: "{code:Vst3Root}\NodeFX.vst3"; Components: nodefx; Attribs: system
 #endif
 #ifdef HyperSynthVst3Dir
-Name: "{commoncf64}\VST3\HyperSynth.vst3"; Components: hypersynth; Attribs: system
+Name: "{code:Vst3Root}\HyperSynth.vst3"; Components: hypersynth; Attribs: system
 #endif
 
 [Files]
@@ -95,24 +104,24 @@ Name: "{commoncf64}\VST3\HyperSynth.vst3"; Components: hypersynth; Attribs: syst
 Source: "{#MakerDir}\*"; DestDir: "{app}\VisuMaker"; Components: maker; Flags: ignoreversion recursesubdirs createallsubdirs
 #endif
 #ifdef Vst3Dir
-Source: "{#Vst3Dir}\*"; Excludes: "desktop.ini,PlugIn.ico"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#Vst3Dir}\*"; Excludes: "desktop.ini,PlugIn.ico"; DestDir: "{code:Vst3Root}\VisuPlayer.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs createallsubdirs
 ; the bundle's folder icon in Explorer (Steinberg's VST3 layout: PlugIn.ico + desktop.ini, the folder marked system)
-Source: "{#Root}\assets\logos\visusampler.ico"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; DestName: "PlugIn.ico"; Components: vst3; Attribs: hidden system; Flags: ignoreversion
-Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; DestName: "desktop.ini"; Components: vst3; Attribs: hidden system; Flags: ignoreversion
+Source: "{#Root}\assets\logos\visusampler.ico"; DestDir: "{code:Vst3Root}\VisuPlayer.vst3"; DestName: "PlugIn.ico"; Components: vst3; Attribs: hidden system; Flags: ignoreversion
+Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{code:Vst3Root}\VisuPlayer.vst3"; DestName: "desktop.ini"; Components: vst3; Attribs: hidden system; Flags: ignoreversion
 Source: "{#StandaloneExe}"; DestDir: "{app}\VisuPlayer"; DestName: "VisuPlayer.exe"; Components: standalone; Flags: ignoreversion
 #endif
 #ifdef NodeFXVst3Dir
-Source: "{#NodeFXVst3Dir}\*"; Excludes: "desktop.ini,PlugIn.ico"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; Components: nodefx; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#NodeFXVst3Dir}\*"; Excludes: "desktop.ini,PlugIn.ico"; DestDir: "{code:Vst3Root}\NodeFX.vst3"; Components: nodefx; Flags: ignoreversion recursesubdirs createallsubdirs
 ; the bundle's folder icon in Explorer (Steinberg's VST3 layout: PlugIn.ico + desktop.ini, the folder marked system)
-Source: "{#Root}\assets\logos\nodefx.ico"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; DestName: "PlugIn.ico"; Components: nodefx; Attribs: hidden system; Flags: ignoreversion
-Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; DestName: "desktop.ini"; Components: nodefx; Attribs: hidden system; Flags: ignoreversion
+Source: "{#Root}\assets\logos\nodefx.ico"; DestDir: "{code:Vst3Root}\NodeFX.vst3"; DestName: "PlugIn.ico"; Components: nodefx; Attribs: hidden system; Flags: ignoreversion
+Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{code:Vst3Root}\NodeFX.vst3"; DestName: "desktop.ini"; Components: nodefx; Attribs: hidden system; Flags: ignoreversion
 Source: "{#NodeFXExe}"; DestDir: "{app}\NodeFX"; DestName: "NodeFX.exe"; Components: nodefx; Flags: ignoreversion
 #endif
 #ifdef HyperSynthVst3Dir
-Source: "{#HyperSynthVst3Dir}\*"; Excludes: "desktop.ini,PlugIn.ico"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; Components: hypersynth; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#HyperSynthVst3Dir}\*"; Excludes: "desktop.ini,PlugIn.ico"; DestDir: "{code:Vst3Root}\HyperSynth.vst3"; Components: hypersynth; Flags: ignoreversion recursesubdirs createallsubdirs
 ; the bundle's folder icon in Explorer (Steinberg's VST3 layout: PlugIn.ico + desktop.ini, the folder marked system)
-Source: "{#Root}\assets\logos\hypersynth.ico"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; DestName: "PlugIn.ico"; Components: hypersynth; Attribs: hidden system; Flags: ignoreversion
-Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; DestName: "desktop.ini"; Components: hypersynth; Attribs: hidden system; Flags: ignoreversion
+Source: "{#Root}\assets\logos\hypersynth.ico"; DestDir: "{code:Vst3Root}\HyperSynth.vst3"; DestName: "PlugIn.ico"; Components: hypersynth; Attribs: hidden system; Flags: ignoreversion
+Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{code:Vst3Root}\HyperSynth.vst3"; DestName: "desktop.ini"; Components: hypersynth; Attribs: hidden system; Flags: ignoreversion
 Source: "{#HyperSynthExe}"; DestDir: "{app}\HyperSynth"; DestName: "HyperSynth.exe"; Components: hypersynth; Flags: ignoreversion
 ; the factory presets as .hsyn files, to look at, copy and share (the plugin has them built in as well)
 Source: "{#Root}\apps\plugin\hypersynth\presets\hsyn\*"; DestDir: "{app}\HyperSynth\Factory Presets"; Components: hypersynth; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -165,9 +174,7 @@ Filename: "{app}\VisuMaker\VisuMaker.exe"; Description: "Start VisuMaker"; Flags
 
 [UninstallDelete]
 ; only what the installer put there; libraries, projects, presets and logs in Documents stay
-Type: dirifempty; Name: "{commoncf64}\VST3\VisuPlayer.vst3"
-Type: dirifempty; Name: "{commoncf64}\VST3\NodeFX.vst3"
-Type: dirifempty; Name: "{commoncf64}\VST3\HyperSynth.vst3"
+; (the .vst3 folders go with their [Dirs] entries, wherever they were put)
 Type: dirifempty; Name: "{app}"
 
 [Code]
@@ -193,8 +200,128 @@ begin
   end;
 end;
 
+
+{ ---- the VST3 folder: its own page, after the parts are picked; remembered for the next update ---- }
+var
+  Vst3Page: TInputDirWizardPage;
+
+function StandardVst3(): String;
+begin
+  Result := ExpandConstant('{commoncf64}\VST3');
+end;
+
+{ whether any part with a VST3 plugin is picked }
+function AnyVst3(): Boolean;
+begin
+  Result := False;
+#ifdef Vst3Dir
+  if WizardIsComponentSelected('vst3') then Result := True;
+#endif
+#ifdef NodeFXVst3Dir
+  if WizardIsComponentSelected('nodefx') then Result := True;
+#endif
+#ifdef HyperSynthVst3Dir
+  if WizardIsComponentSelected('hypersynth') then Result := True;
+#endif
+end;
+
+function Vst3Root(Param: String): String;
+begin
+  Result := RemoveBackslashUnlessRoot(Trim(Vst3Page.Values[0]));
+  if Result = '' then Result := StandardVst3();
+end;
+
+procedure InitializeWizard();
+var
+  S: String;
+begin
+  Vst3Page := CreateInputDirPage(wpSelectComponents,
+    'Where should the VST3 plugins go?', 'Your DAW loads the plugins from this folder.',
+    'Each plugin goes in here as a .vst3 folder.' + #13#10#13#10 +
+    'The standard place is C:\Program Files\Common Files\VST3: every DAW looks there on its own. ' +
+    'If you pick another folder, add it to the plugin folders in your DAW''s settings and rescan.' + #13#10#13#10 +
+    'To continue, click Next. To pick another folder, click Browse.',
+    False, 'VST3');
+  Vst3Page.Add('');
+  S := ExpandConstant('{param:VST3DIR}');
+  if S = '' then S := GetPreviousData('Vst3Dir', StandardVst3());
+  Vst3Page.Values[0] := S;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = Vst3Page.ID) and not AnyVst3();
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID = Vst3Page.ID then
+  begin
+    if Trim(Vst3Page.Values[0]) = '' then
+    begin
+      MsgBox('Please pick a folder for the VST3 plugins.', mbError, MB_OK);
+      Result := False;
+    end
+    else if CompareText(Vst3Root(''), StandardVst3()) <> 0 then
+      Result := SuppressibleMsgBox('Your DAW will not find the plugins in this folder until you add it to its plugin folders.' + #13#10#13#10 +
+        'Use ' + Vst3Root('') + ' anyway?', mbConfirmation, MB_YESNO, IDYES) = IDYES;
+  end;
+end;
+
+procedure RegisterPreviousData(PreviousDataKey: Integer);
+begin
+  SetPreviousData(PreviousDataKey, 'Vst3Dir', Vst3Root(''));
+end;
+
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
+begin
+  Result := MemoDirInfo;
+  if AnyVst3() then Result := Result + NewLine + NewLine + 'VST3 plugins folder:' + NewLine + Space + Vst3Root('');
+  if MemoTypeInfo <> '' then Result := Result + NewLine + NewLine + MemoTypeInfo;
+  if MemoComponentsInfo <> '' then Result := Result + NewLine + NewLine + MemoComponentsInfo;
+  if MemoTasksInfo <> '' then Result := Result + NewLine + NewLine + MemoTasksInfo;
+end;
+
+{ An update to other folders moves the parts: what this setup put in the earlier folders goes, so a DAW does not
+  find two HyperSynths. Only the setup's own folders and files there; anything else in those folders stays. }
+procedure RemoveOldPlace(const Dir: String; const Names: array of String);
+var
+  I: Integer;
+begin
+  for I := 0 to GetArrayLength(Names) - 1 do
+    if DirExists(Dir + '\' + Names[I]) then
+    begin
+      Log('Moved: removing the earlier ' + Dir + '\' + Names[I]);
+      DelTree(Dir + '\' + Names[I], True, True, True);
+    end
+    else if FileExists(Dir + '\' + Names[I]) then
+    begin
+      Log('Moved: removing the earlier ' + Dir + '\' + Names[I]);
+      DeleteFile(Dir + '\' + Names[I]);
+    end;
+end;
+
+procedure MoveFromEarlierPlaces();
+var
+  OldApp, OldVst3: String;
+begin
+  OldVst3 := RemoveBackslashUnlessRoot(GetPreviousData('Vst3Dir', ''));
+  { setups before this choice existed always used the standard folder }
+  if (OldVst3 = '') and (WizardForm.PrevAppDir <> '') then OldVst3 := StandardVst3();
+  if (OldVst3 <> '') and (CompareText(OldVst3, Vst3Root('')) <> 0) then
+    RemoveOldPlace(OldVst3, ['VisuPlayer.vst3', 'NodeFX.vst3', 'HyperSynth.vst3']);
+  OldApp := RemoveBackslashUnlessRoot(WizardForm.PrevAppDir);
+  if (OldApp <> '') and (CompareText(OldApp, RemoveBackslashUnlessRoot(ExpandConstant('{app}'))) <> 0) then
+  begin
+    RemoveOldPlace(OldApp, ['VisuMaker', 'VisuPlayer', 'NodeFX', 'HyperSynth', 'LICENSE.txt', 'NOTICE.txt', 'TERMS.txt', 'unins000.exe', 'unins000.dat', 'unins000.msg']);
+    RemoveDir(OldApp);
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+  if CurStep = ssInstall then MoveFromEarlierPlaces();
 #ifdef MakerDir
   if (CurStep = ssInstall) and WizardIsComponentSelected('maker') then RemoveOldVisuMaker();
 #endif
