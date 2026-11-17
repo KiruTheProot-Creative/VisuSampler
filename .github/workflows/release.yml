@@ -26,13 +26,14 @@ jobs:
         shell: pwsh
         run: |
           foreach ($P in "HyperSynth") {
-            $vst = Get-ChildItem build -Recurse -Directory -Filter "$P.vst3" | Select-Object -First 1
+            # -Force: with an icon, JUCE marks the bundle folder "system" (for its desktop.ini), which PowerShell hides
+            $vst = Get-ChildItem build -Recurse -Force -Directory -Filter "$P.vst3" | Where-Object { Get-ChildItem $_.FullName -Recurse -Force -File -Filter "$P.vst3" } | Select-Object -First 1
             $exe = Get-ChildItem build -Recurse -Filter "$P.exe" | Where-Object { $_.FullName -match "Standalone" } | Select-Object -First 1
             if (-not $vst -or -not $exe) { throw "$P was not built" }
             New-Item -ItemType Directory -Force "out/$P", "parts/$P" | Out-Null
             Compress-Archive -Path $vst.FullName -DestinationPath "out/$P/$P-VST3-Windows.zip"
             Copy-Item $exe.FullName "parts/$P/$P.exe"
-            Copy-Item $vst.FullName "parts/$P/$P.vst3" -Recurse
+            Copy-Item $vst.FullName "parts/$P/$P.vst3" -Recurse -Force
           }
           Get-ChildItem out, parts -Recurse -Depth 1
       - uses: actions/upload-artifact@v4

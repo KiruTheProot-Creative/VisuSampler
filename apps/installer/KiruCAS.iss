@@ -95,21 +95,21 @@ Name: "{commoncf64}\VST3\HyperSynth.vst3"; Components: hypersynth; Attribs: syst
 Source: "{#MakerDir}\*"; DestDir: "{app}\VisuMaker"; Components: maker; Flags: ignoreversion recursesubdirs createallsubdirs
 #endif
 #ifdef Vst3Dir
-Source: "{#Vst3Dir}\*"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#Vst3Dir}\*"; Excludes: "desktop.ini,PlugIn.ico"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs createallsubdirs
 ; the bundle's folder icon in Explorer (Steinberg's VST3 layout: PlugIn.ico + desktop.ini, the folder marked system)
 Source: "{#Root}\assets\logos\visusampler.ico"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; DestName: "PlugIn.ico"; Components: vst3; Attribs: hidden system; Flags: ignoreversion
 Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{commoncf64}\VST3\VisuPlayer.vst3"; DestName: "desktop.ini"; Components: vst3; Attribs: hidden system; Flags: ignoreversion
 Source: "{#StandaloneExe}"; DestDir: "{app}\VisuPlayer"; DestName: "VisuPlayer.exe"; Components: standalone; Flags: ignoreversion
 #endif
 #ifdef NodeFXVst3Dir
-Source: "{#NodeFXVst3Dir}\*"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; Components: nodefx; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#NodeFXVst3Dir}\*"; Excludes: "desktop.ini,PlugIn.ico"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; Components: nodefx; Flags: ignoreversion recursesubdirs createallsubdirs
 ; the bundle's folder icon in Explorer (Steinberg's VST3 layout: PlugIn.ico + desktop.ini, the folder marked system)
 Source: "{#Root}\assets\logos\nodefx.ico"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; DestName: "PlugIn.ico"; Components: nodefx; Attribs: hidden system; Flags: ignoreversion
 Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{commoncf64}\VST3\NodeFX.vst3"; DestName: "desktop.ini"; Components: nodefx; Attribs: hidden system; Flags: ignoreversion
 Source: "{#NodeFXExe}"; DestDir: "{app}\NodeFX"; DestName: "NodeFX.exe"; Components: nodefx; Flags: ignoreversion
 #endif
 #ifdef HyperSynthVst3Dir
-Source: "{#HyperSynthVst3Dir}\*"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; Components: hypersynth; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#HyperSynthVst3Dir}\*"; Excludes: "desktop.ini,PlugIn.ico"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; Components: hypersynth; Flags: ignoreversion recursesubdirs createallsubdirs
 ; the bundle's folder icon in Explorer (Steinberg's VST3 layout: PlugIn.ico + desktop.ini, the folder marked system)
 Source: "{#Root}\assets\logos\hypersynth.ico"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; DestName: "PlugIn.ico"; Components: hypersynth; Attribs: hidden system; Flags: ignoreversion
 Source: "{#Root}\apps\installer\vst3-desktop.ini"; DestDir: "{commoncf64}\VST3\HyperSynth.vst3"; DestName: "desktop.ini"; Components: hypersynth; Attribs: hidden system; Flags: ignoreversion
